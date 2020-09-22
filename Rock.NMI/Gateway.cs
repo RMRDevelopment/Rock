@@ -25,8 +25,9 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-
 using RestSharp;
+
+//using RestSharp;
 
 using Rock.Attribute;
 using Rock.Financial;
@@ -194,7 +195,7 @@ namespace Rock.NMI
 
                 rootElement.Add(
                     new XElement( "ip-address", paymentInfo.IPAddress ),
-                    new XElement( "currency", "USD" ),
+                    new XElement( "currency", "BSD" ),
                     new XElement( "amount", paymentInfo.Amount.ToString() ),
                     new XElement( "order-description", paymentInfo.Description ),
                     new XElement( "tax-amount", "0.00" ),
@@ -437,7 +438,7 @@ namespace Rock.NMI
                 rootElement.Add(
                     new XElement( "start-date", schedule.StartDate.ToString( "yyyyMMdd" ) ),
                     new XElement( "order-description", paymentInfo.Description ),
-                    new XElement( "currency", "USD" ),
+                    new XElement( "currency", "BSD" ),
                     new XElement( "tax-amount", "0.00" ) );
 
                 bool isReferencePayment = ( paymentInfo is ReferencePaymentInfo );
