@@ -16,6 +16,7 @@
 //
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Data.SqlClient;
 using System.IO;
@@ -23,6 +24,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Web;
+
 using Quartz;
 
 using Rock.Attribute;
@@ -37,6 +39,9 @@ namespace Rock.Jobs
     /// Job to take care of schema changes ( dynamic attribute value fields ) and data updates to the BI related analytic tables
     /// </summary>
     /// <seealso cref="Quartz.IJob" />
+    [DisplayName( "Process BI Analytics" )]
+    [Description( "Job to take care of schema changes ( dynamic Attribute Value Fields ) and data updates to the BI related analytic tables." )]
+
     [DisallowConcurrentExecution]
     [BooleanField( "Process Person BI Analytics", "Do the BI Analytics tasks related to the Person Analytics tables", true, "", 1 )]
     [BooleanField( "Process Family BI Analytics", "Do the BI Analytics tasks related to the Family Analytics tables", true, "", 2 )]
@@ -170,7 +175,7 @@ namespace Rock.Jobs
             // "Refresh Power BI Account Tokens"
             if ( dataMap.GetString( "RefreshPowerBIAccountTokens" ).AsBoolean() )
             {
-                var powerBiAccountsDefinedType = DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.POWERBI_ACCOUNTS.AsGuid() );
+                var powerBiAccountsDefinedType = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.POWERBI_ACCOUNTS.AsGuid() );
                 if ( powerBiAccountsDefinedType?.DefinedValues?.Any() == true )
                 {
                     foreach ( var powerBiAccount in powerBiAccountsDefinedType.DefinedValues )
@@ -265,11 +270,14 @@ namespace Rock.Jobs
             var dataSet = DbService.GetDataSetSchema( $"SELECT * FROM [{analyticsTableName}] where 1=0", System.Data.CommandType.Text, null );
             var dataTable = dataSet.Tables[0];
 
+            // This is a list of fields that we do not want considered as an attribute field. By default any field not in
+            // analyticsSourceFields is considered an attribute which is not correct in some cases (e.g. HideFromReporting).
             var analyticsFieldNames = analyticsSourceFields.Select( a => a.Name ).ToList();
             analyticsFieldNames.Add( "ForeignId" );
             analyticsFieldNames.Add( "ForeignGuid" );
             analyticsFieldNames.Add( "ForeignKey" );
             analyticsFieldNames.Add( "Guid" );
+            analyticsFieldNames.Add( "TypeId" );
 
             var currentDatabaseAttributeFields = dataTable.Columns.OfType<DataColumn>().Where( a =>
                 !analyticsFieldNames.Contains( a.ColumnName ) ).ToList();
@@ -279,7 +287,7 @@ namespace Rock.Jobs
             const string NumericSqlFieldType = "[decimal](29,4)";
             const string DefaultSqlFieldType = "nvarchar(250)";
 
-            using ( var rockContext = new RockContext() )
+            using ( var rockContext = GetNewConfiguredDataContext() )
             {
                 // add any AttributeFields that aren't already fields on Analytics table
                 foreach ( var modelAttribute in modelAnalyticAttributes )
@@ -351,6 +359,13 @@ namespace Rock.Jobs
                 var modelAttributeColumnNames = modelAnalyticAttributes.Select( a => a.Key.RemoveSpecialCharacters() ).ToList();
                 foreach ( var databaseAttributeField in currentDatabaseAttributeFields )
                 {
+                    if ( IsEntityColumn( analyticsTableName, databaseAttributeField.ColumnName ) )
+                    {
+                        // We don't want to accidently delete an entity column just because it's not reportable or some such thing, that would be bad.
+                        ExceptionLogService.LogException( new Exception( $"The ProcessBIAnalytics job tried to delete column {analyticsTableName}.{databaseAttributeField.ColumnName} but was prevented by a check in the job." ) );
+                        continue;
+                    }
+
                     if ( !modelAttributeColumnNames.Contains( databaseAttributeField.ColumnName ) )
                     {
                         var dropColumnSql = $"ALTER TABLE [{analyticsTableName}] DROP COLUMN [{databaseAttributeField.ColumnName}]";
@@ -363,6 +378,28 @@ namespace Rock.Jobs
         }
 
         /// <summary>
+        /// Determines whether provided property name is a property of the provided entityName.
+        /// </summary>
+        /// <param name="entityName">Name of the entity.</param>
+        /// <param name="propertyName">Name of the property.</param>
+        /// <returns>
+        ///   <c>true</c> if [is entity column] [the specified entity name]; otherwise, <c>false</c>.
+        ///   Also returns false if the entity does not exist in the Rock.Model namespace.
+        /// </returns>
+        private bool IsEntityColumn( string entityName, string propertyName )
+        {
+            var entityType = Type.GetType( $"Rock.Model.{entityName}, Rock" );
+
+            if (entityType == null )
+            {
+                return false;
+            }
+
+            var prop = entityType.GetProperty( propertyName );
+            return prop != null ? true : false;
+        }
+
+        /// <summary>
         /// Updates the model attribute values (Just for Campus and Family; Person doesn't do it this way)
         /// </summary>
         /// <param name="modelAnalyticAttributes">The model analytic attributes.</param>
@@ -372,7 +409,7 @@ namespace Rock.Jobs
         /// <param name="hasCurrentRowIndicator">if set to <c>true</c> [has current row indicator].</param>
         private void UpdateModelAttributeValues( List<AttributeCache> modelAnalyticAttributes, string analyticsTableName, string analyticsTableModelIdColumnName, JobStats modelJobStats, bool hasCurrentRowIndicator )
         {
-            using ( var rockContext = new RockContext() )
+            using ( var rockContext = GetNewConfiguredDataContext() )
             {
                 var attributeValueService = new AttributeValueService( rockContext );
 
@@ -425,6 +462,19 @@ UPDATE [{analyticsTableName}]
             }
         }
 
+        /// <summary>
+        /// Get a new instance of the Rock data context that is configured for the current job settings.
+        /// </summary>
+        /// <returns>A configured RockContext instance.</returns>
+        private RockContext GetNewConfiguredDataContext()
+        {
+            var dataContext = new RockContext();
+
+            dataContext.Database.CommandTimeout = _commandTimeout;
+
+            return dataContext;
+        }
+
         #endregion Shared Methods
 
         #region Person Analytics
@@ -436,11 +486,30 @@ UPDATE [{analyticsTableName}]
         /// <param name="dataMap">The data map.</param>
         private void ProcessPersonBIAnalytics( IJobExecutionContext context, JobDataMap dataMap )
         {
-            List<EntityField> analyticsSourcePersonHistoricalFields = EntityHelper.GetEntityFields( typeof( Rock.Model.AnalyticsSourcePersonHistorical ), false, false );
+            List<EntityField> analyticsSourcePersonHistoricalFields = EntityHelper.GetEntityFields( typeof( Rock.Model.AnalyticsSourcePersonHistorical ),  false, false );
+            EntityField typeIdField = analyticsSourcePersonHistoricalFields.Where( f => f.Name == "TypeId" ).FirstOrDefault();
+
+            if ( typeIdField != null )
+            {
+                analyticsSourcePersonHistoricalFields.Remove( typeIdField );
+            }
+
+            typeIdField = analyticsSourcePersonHistoricalFields.Where( f => f.Name == "ForeignId" ).FirstOrDefault();
+            if ( typeIdField != null )
+            {
+                analyticsSourcePersonHistoricalFields.Remove( typeIdField );
+            }
+
+            typeIdField = analyticsSourcePersonHistoricalFields.Where( f => f.Name == "ForeignKey" ).FirstOrDefault();
+            if ( typeIdField != null )
+            {
+                analyticsSourcePersonHistoricalFields.Remove( typeIdField );
+            }
+
 
             List<AttributeCache> personAnalyticAttributes = EntityHelper.GetEntityFields( typeof( Rock.Model.Person ) )
                 .Where( a => a.FieldKind == FieldKind.Attribute && a.AttributeGuid.HasValue )
-                .Select( a => AttributeCache.Read( a.AttributeGuid.Value ) )
+                .Select( a => AttributeCache.Get( a.AttributeGuid.Value ) )
                 .Where( a => a != null )
                 .Where( a => a.IsAnalytic )
                 .ToList();
@@ -452,7 +521,7 @@ UPDATE [{analyticsTableName}]
 
                 // refresh the view definitions just in case the schema changed
                 // NOTE: Order is important!
-                using ( var rockContext = new RockContext() )
+                using ( var rockContext = GetNewConfiguredDataContext() )
                 {
                     rockContext.Database.ExecuteSqlCommand( "exec sp_refreshview [AnalyticsDimPersonHistorical]" );
                     rockContext.Database.ExecuteSqlCommand( "exec sp_refreshview [AnalyticsDimPersonCurrent]" );
@@ -488,7 +557,7 @@ UPDATE [{analyticsTableName}]
             List<SqlCommand> markAsHistoryUsingFormattedValueScripts = new List<SqlCommand>();
 
             // Compare "IsAnalyticHistory" attribute values to see if they have changed since the last ETL, using the FormatValue function
-            using ( var rockContext = new RockContext() )
+            using ( var rockContext = GetNewConfiguredDataContext() )
             {
                 var attributeValueService = new AttributeValueService( rockContext );
 
@@ -545,7 +614,7 @@ UPDATE [AnalyticsSourcePersonHistorical]
         private void UpdatePersonAttributeValueUsingFormattedValue( List<AttributeCache> personAnalyticAttributes )
         {
             // Update Attributes using GetFormattedValue...
-            using ( var rockContext = new RockContext() )
+            using ( var rockContext = GetNewConfiguredDataContext() )
             {
                 var attributeValueService = new Rock.Model.AttributeValueService( rockContext );
 
@@ -620,9 +689,9 @@ UPDATE [AnalyticsSourcePersonHistorical]
 
             List<string> populatePersonValueFROMClauses = new List<string>( populatePersonValueSELECTClauses );
 
-            const int MaxAttributeValueLength = 250;
+            const int maxAttributeValueLength = 250;
 
-            using ( var rockContext = new RockContext() )
+            using ( var rockContext = GetNewConfiguredDataContext() )
             {
                 // add any AttributeFields that aren't already fields on AnalyticsSourcePersonHistorical
                 foreach ( var personAttribute in personAnalyticAttributes.Where( a => !UseFormatValueForUpdate( a ) ) )
@@ -662,7 +731,7 @@ UPDATE [AnalyticsSourcePersonHistorical]
                     }
 
                     string lengthCondition = personAttributeValueFieldName == "Value"
-                        ? $"AND len(av{personAttribute.Id}.Value) <= {MaxAttributeValueLength}"
+                        ? $"AND len(av{personAttribute.Id}.Value) <= {maxAttributeValueLength}"
                         : null;
 
                     string populateAttributeValueFROMClause =
@@ -771,7 +840,7 @@ WHERE p.Id NOT IN (
         @EtlDate [EffectiveDate],
         @MaxExpireDate [ExpireDate],
         family.GroupId [PrimaryFamilyId],
-        convert(INT, (convert(CHAR(8), DateFromParts(BirthYear, BirthMonth, BirthDay), 112))) [BirthDateKey],
+        convert(INT, (convert(CHAR(8), BirthDate, 112))) [BirthDateKey],
         dbo.ufnCrm_GetAge(p.BirthDate) [Age], 
         1 [Count],
 " + populatePersonValueFROMClauses.Select( a => $"        [{a}]" ).ToList().AsDelimited( ",\n" ) + @",
@@ -891,7 +960,7 @@ WHERE asph.CurrentRowIndicator = 1 AND (";
 
             List<AttributeCache> familyAnalyticAttributes = EntityHelper.GetEntityFields( typeof( Rock.Model.Group ), false, false )
                 .Where( a => a.FieldKind == FieldKind.Attribute && a.AttributeGuid.HasValue )
-                .Select( a => AttributeCache.Read( a.AttributeGuid.Value ) )
+                .Select( a => AttributeCache.Get( a.AttributeGuid.Value ) )
                 .Where( a => a != null )
                 .Where( a => a.EntityTypeQualifierColumn == "GroupTypeId" && a.EntityTypeQualifierValue == groupTypeIdFamilyQualifier )
                 .Where( a => a.IsAnalytic )
@@ -902,7 +971,7 @@ WHERE asph.CurrentRowIndicator = 1 AND (";
                 // Ensure that the Schema of AnalyticsSourceFamilyHistorical matches the current fields for Attributes that are marked as IsAnalytic
                 UpdateAnalyticsSchemaForModel( analyticsSourceFamilyHistoricalFields, familyAnalyticAttributes, "AnalyticsSourceFamilyHistorical", _familyJobStats );
 
-                using ( var rockContext = new RockContext() )
+                using ( var rockContext = GetNewConfiguredDataContext() )
                 {
                     // refresh the view definitions just in case the schema changed
                     // NOTE: Order is important!
@@ -940,7 +1009,7 @@ WHERE asph.CurrentRowIndicator = 1 AND (";
         /// <param name="familyAnalyticAttributes">The family analytic attributes.</param>
         private void MarkFamilyAsHistoryUsingAttributeValues( List<AttributeCache> familyAnalyticAttributes )
         {
-            using ( var rockContext = new RockContext() )
+            using ( var rockContext = GetNewConfiguredDataContext() )
             {
                 var attributeValueService = new AttributeValueService( rockContext );
 
@@ -1007,7 +1076,7 @@ UPDATE [AnalyticsSourceFamilyHistorical]
 
             List<AttributeCache> campusAnalyticAttributes = EntityHelper.GetEntityFields( typeof( Rock.Model.Campus ), false, false )
                 .Where( a => a.FieldKind == FieldKind.Attribute && a.AttributeGuid.HasValue )
-                .Select( a => AttributeCache.Read( a.AttributeGuid.Value ) )
+                .Select( a => AttributeCache.Get( a.AttributeGuid.Value ) )
                 .Where( a => a != null )
                 .Where( a => a.IsAnalytic )
                 .ToList();

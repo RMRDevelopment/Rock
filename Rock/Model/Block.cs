@@ -18,6 +18,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
+using System.Data.Entity.Infrastructure;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
 
@@ -25,6 +27,7 @@ using Newtonsoft.Json;
 
 using Rock.Data;
 using Rock.Security;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -41,7 +44,7 @@ namespace Rock.Model
     [RockDomain( "CMS" )]
     [Table( "Block" )]
     [DataContract]
-    public partial class Block : Model<Block>, IOrdered
+    public partial class Block : Model<Block>, IOrdered, ICacheable
     {
 
         #region Entity Properties
@@ -182,6 +185,15 @@ namespace Rock.Model
         [Required]
         [DataMember( IsRequired = true )]
         public int OutputCacheDuration { get; set; }
+
+        /// <summary>
+        /// Gets or sets the additional settings.
+        /// </summary>
+        /// <value>
+        /// The additional settings.
+        /// </value>
+        [DataMember]
+        public string AdditionalSettings { get; set; }
 
         #endregion
 
@@ -325,6 +337,77 @@ namespace Rock.Model
         public override string ToString()
         {
             return this.Name;
+        }
+
+        #endregion
+
+        
+
+        #region ICacheable
+
+        private int? originalSiteId;
+        private int? originalLayoutId;
+        private int? originalPageId;
+
+        /// <summary>
+        /// Method that will be called on an entity immediately after the item is saved by context
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        /// <param name="entry">The entry.</param>
+        /// <param name="state">The state.</param>
+        public override void PreSaveChanges( Data.DbContext dbContext, DbEntityEntry entry, EntityState state )
+        {
+            if ( state == EntityState.Modified || state == EntityState.Deleted )
+            {
+                originalSiteId = entry.OriginalValues["SiteId"]?.ToString().AsIntegerOrNull();
+                originalLayoutId = entry.OriginalValues["LayoutId"]?.ToString().AsIntegerOrNull();
+                originalPageId = entry.OriginalValues["PageId"]?.ToString().AsIntegerOrNull();
+            }
+
+            base.PreSaveChanges( dbContext, entry, state );
+        }
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return BlockCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            BlockCache.UpdateCachedEntity( this.Id, entityState );
+
+            var model = this;
+
+            if ( model.SiteId.HasValue && model.SiteId != originalSiteId )
+            {
+                PageCache.FlushPagesForSite( model.SiteId.Value );
+            }
+            else if ( model.LayoutId.HasValue && model.LayoutId != originalLayoutId )
+            {
+                PageCache.FlushPagesForLayout( model.LayoutId.Value );
+            }
+
+            if ( originalSiteId.HasValue )
+            {
+                PageCache.FlushPagesForSite( originalSiteId.Value );
+            }
+            else if ( originalLayoutId.HasValue )
+            {
+                PageCache.FlushPagesForLayout( originalLayoutId.Value );
+            }
+            else if ( originalPageId.HasValue )
+            {
+                PageCache.FlushItem( originalPageId.Value );
+            }
         }
 
         #endregion

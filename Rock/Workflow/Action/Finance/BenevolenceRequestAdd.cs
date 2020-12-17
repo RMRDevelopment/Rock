@@ -19,12 +19,11 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Linq;
+
 using Rock.Attribute;
-using Rock.Communication;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
-using Rock.Web.UI;
 
 namespace Rock.Workflow.Action
 {
@@ -64,9 +63,9 @@ namespace Rock.Workflow.Action
 
             var mergeFields = GetMergeFields( action );
 
-            var homePhoneValueId = DefinedValueCache.Read( SystemGuid.DefinedValue.PERSON_PHONE_TYPE_HOME ).Id;
-            var mobilePhoneValueId = DefinedValueCache.Read( SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE ).Id;
-            var workPhoneValueId = DefinedValueCache.Read( SystemGuid.DefinedValue.PERSON_PHONE_TYPE_WORK ).Id;
+            var homePhoneValueId = DefinedValueCache.Get( SystemGuid.DefinedValue.PERSON_PHONE_TYPE_HOME ).Id;
+            var mobilePhoneValueId = DefinedValueCache.Get( SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE ).Id;
+            var workPhoneValueId = DefinedValueCache.Get( SystemGuid.DefinedValue.PERSON_PHONE_TYPE_WORK ).Id;
 
             // get requester
             var requestPerson = new PersonAliasService( rockContext ).Get( GetAttributeValue( action, "Person", true ).AsGuid() ).Person;
@@ -82,7 +81,7 @@ namespace Rock.Workflow.Action
             var caseWorker = new PersonAliasService( rockContext ).Get( GetAttributeValue( action, "CaseWorker", true ).AsGuid() )?.Person;
 
             // get request status
-            var statusValue = DefinedValueCache.Read( GetAttributeValue( action, "RequestStatus" ) );
+            var statusValue = DefinedValueCache.Get( GetAttributeValue( action, "RequestStatus" ) );
             if ( statusValue == null )
             {
                 var errorMessage = "Invalid request status provided.";
@@ -95,7 +94,7 @@ namespace Rock.Workflow.Action
             var requestDescription = GetAttributeValue( action, "RequestDescription", true ).ResolveMergeFields( mergeFields );
             if ( string.IsNullOrWhiteSpace( requestDescription ) )
             {
-                var errorMessage = "Request description is requried.";
+                var errorMessage = "Request description is required.";
                 errorMessages.Add( errorMessage );
                 action.AddLogEntry( errorMessage, true );
                 return false;
@@ -105,7 +104,7 @@ namespace Rock.Workflow.Action
             var governmentId = GetAttributeValue( action, "GovernmentId", true ).ResolveMergeFields( mergeFields );
 
             // get campus
-            int? campusId = CampusCache.Read( GetAttributeValue( action, "Campus" ).AsGuid() )?.Id;
+            int? campusId = CampusCache.Get( GetAttributeValue( action, "Campus" ).AsGuid() )?.Id;
 
             // create benevolence request
             BenevolenceRequestService benevolenceRequestService = new BenevolenceRequestService( rockContext );

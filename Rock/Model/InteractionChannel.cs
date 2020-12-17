@@ -14,9 +14,6 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity;
@@ -24,18 +21,19 @@ using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
 
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
 
     /// <summary>
-    /// Represents a Interation Channel.
+    /// Represents a Interaction Channel.
     /// </summary>
     [RockDomain( "Core" )]
     [NotAudited]
     [Table( "InteractionChannel" )]
     [DataContract]
-    public partial class InteractionChannel : Model<InteractionChannel>
+    public partial class InteractionChannel : Model<InteractionChannel>, IHasActiveFlag, ICacheable
     {
 
         #region Entity Properties
@@ -58,6 +56,15 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public string ChannelData { get; set; }
+
+        /// <summary>
+        /// Gets or sets the engagement strength.
+        /// </summary>
+        /// <value>
+        /// The engagement strength.
+        /// </value>
+        [DataMember]
+        public int? EngagementStrength { get; set; }
 
         /// <summary>
         /// Gets or sets the EntityTypeId for the <see cref="Rock.Model.EntityType"/> of entity that was modified.
@@ -111,10 +118,10 @@ namespace Rock.Model
         public int? RetentionDuration { get; set; }
 
         /// <summary>
-        /// Gets or sets the length of time that components of this channel should be cached
+        /// Gets or sets the length of time (in minutes) that components of this channel should be cached
         /// </summary>
         /// <value>
-        /// The duration of the component cache.
+        /// The duration (in minutes) of the component cache.
         /// </value>
         [DataMember]
         public int? ComponentCacheDuration { get; set; }
@@ -202,6 +209,82 @@ namespace Rock.Model
         [DataMember]
         public bool UsesSession { get; set; }
 
+        /// <summary>
+        /// Gets or sets a flag indicating if this is an active group. This value is required.
+        /// </summary>
+        /// <value>
+        /// A <see cref="System.Boolean"/> value that is <c>true</c> if this group is active, otherwise <c>false</c>.
+        /// </value>
+        [Required]
+        [DataMember( IsRequired = true )]
+        [Previewable]
+        public bool IsActive
+        {
+            get { return _isActive; }
+            set { _isActive = value; }
+        }
+
+        private bool _isActive = true;
+
+        /// <summary>
+        /// Gets or sets the interaction custom 1 label.
+        /// </summary>
+        /// <value>
+        /// The interaction custom 1 label.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string InteractionCustom1Label { get; set; }
+
+        /// <summary>
+        /// Gets or sets the interaction custom 2 label.
+        /// </summary>
+        /// <value>
+        /// The interaction custom 2 label.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string InteractionCustom2Label { get; set; }
+
+        /// <summary>
+        /// Gets or sets the interaction custom indexed 1 label.
+        /// </summary>
+        /// <value>
+        /// The interaction custom indexed 1 label.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string InteractionCustomIndexed1Label { get; set; }
+
+        /// <summary>
+        /// Gets or sets the component custom 1 label.
+        /// </summary>
+        /// <value>
+        /// The component custom 1 label.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string ComponentCustom1Label { get; set; }
+
+        /// <summary>
+        /// Gets or sets the component custom 2 label.
+        /// </summary>
+        /// <value>
+        /// The component custom 2 label.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string ComponentCustom2Label { get; set; }
+
+        /// <summary>
+        /// Gets or sets the component custom indexed 1 label.
+        /// </summary>
+        /// <value>
+        /// The component custom indexed 1 label.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string ComponentCustomIndexed1Label { get; set; }
 
         #endregion
 
@@ -244,9 +327,30 @@ namespace Rock.Model
         /// <param name="dbContext">The database context.</param>
         public override void PostSaveChanges( Data.DbContext dbContext )
         {
-            Web.Cache.InteractionChannelCache.Flush( this.Id );
-
             base.PostSaveChanges( dbContext );
+        }
+
+        #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return InteractionChannelCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            InteractionChannelCache.UpdateCachedEntity( this.Id, entityState );
         }
 
         #endregion

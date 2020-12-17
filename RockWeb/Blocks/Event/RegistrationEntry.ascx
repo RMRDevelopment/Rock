@@ -14,23 +14,45 @@
     <asp:HiddenField ID="hfTriggerScroll" runat="server" Value="" />
     <asp:HiddenField ID="hfAllowNavigate" runat="server" Value="" />
 
-    <asp:ValidationSummary ID="vsSummary" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+    <asp:ValidationSummary ID="vsSummary" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
     <Rock:NotificationBox ID="nbPaymentValidation" runat="server" NotificationBoxType="Danger" Visible="false" />
 
     <Rock:NotificationBox ID="nbMain" runat="server" Visible="false"></Rock:NotificationBox>
     <Rock:NotificationBox ID="nbWaitingList" runat="server" Visible="false" NotificationBoxType="Warning" />
 
-    <asp:Panel ID="pnlHowMany" runat="server" Visible="false" CssClass="registrationentry-intro">
+    <asp:Panel ID="pnlStart" runat="server" Visible="false" CssClass="registrationentry-intro">
+        <asp:Literal ID="lInstructions" runat="server" />
 
-        <h1>How many <asp:Literal ID="lRegistrantTerm" runat="server" /> will you be registering?</h1>
-        <Rock:NumberUpDown ID="numHowMany"  runat="server" CssClass="input-lg" OnNumberUpdated="numHowMany_NumberUpdated"  />
+        <asp:Panel ID="pnlHowMany" runat="server" Visible="false" CssClass="registrationentry-intro">
+            <h1>How many <asp:Literal ID="lRegistrantTerm" runat="server" /> will you be registering?</h1>
+            <Rock:NumberUpDown ID="numHowMany"  runat="server" CssClass="input-lg" OnNumberUpdated="numHowMany_NumberUpdated"  />
+        </asp:Panel>
 
+            <div class="actions">
+                <Rock:BootstrapButton ID="lbHowManyNext" runat="server" AccessKey="n" ToolTip="Alt+n" Text="Next" DataLoadingText="Next" CssClass="btn btn-primary pull-right" CausesValidation="true" OnClick="lbHowManyNext_Click" />
+            </div>
+    </asp:Panel>
+    <%-- Prompt for any Registration Attributes that should be prompted for before entering registrations--%>
+    <asp:Panel ID="pnlRegistrationAttributesStart" runat="server" Visible="false" CssClass="registrationentry-registration-attributes">
+
+        <h1><asp:Literal ID="lRegistrationAttributesStartTitle" runat="server" /></h1>
+
+        <asp:Panel ID="pnlRegistrationAttributesStartProgressBar" runat="server">
+            <div class="progress">
+                <div class="progress-bar" role="progressbar" aria-valuenow="<%=this.PercentComplete%>" aria-valuemin="0" aria-valuemax="100" style="width: <%=this.PercentComplete%>%;">
+                    <span class="sr-only"><%=this.PercentComplete%>% Complete</span>
+                </div>
+            </div>
+        </asp:Panel>
+
+        <Rock:AttributeValuesContainer ID="avcRegistrationAttributesStart" runat="server" />
         <div class="actions">
-            <Rock:BootstrapButton ID="lbHowManyNext" runat="server" AccessKey="n" ToolTip="Alt+n" Text="Next" DataLoadingText="Next" CssClass="btn btn-primary pull-right" CausesValidation="true" OnClick="lbHowManyNext_Click" />
+            <asp:LinkButton ID="btnRegistrationAttributesStartPrev" runat="server" AccessKey="p" ToolTip="Alt+p" Text="Previous" CssClass="btn btn-default" CausesValidation="false" OnClick="btnRegistrationAttributesStartPrev_Click" />
+            <Rock:BootstrapButton ID="btnRegistrationAttributesStartNext" runat="server" AccessKey="n" ToolTip="Alt+n" Text="Next" DataLoadingText="Next" CssClass="btn btn-primary pull-right" CausesValidation="true" OnClick="btnRegistrationAttributesStartNext_Click" />
         </div>
-
     </asp:Panel>
 
+    <%-- Prompt for information on each Registration --%>
     <asp:Panel ID="pnlRegistrant" runat="server" Visible="false" CssClass="registrationentry-registrant">
 
         
@@ -54,9 +76,9 @@
                 <Rock:RockRadioButtonList ID="rblFamilyOptions" runat="server" Label="Individual is in the same immediate family as" RepeatDirection="Vertical" Required="true" RequiredErrorMessage="Answer to which family is required." DataTextField="Value" DataValueField="Key" />
             </asp:Panel>
         
-            <asp:Panel ID="pnlFamilyMembers" runat="server" Visible="false" CssClass="row" >
+            <asp:Panel ID="pnlFamilyMembers" runat="server" CssClass="row" >
                 <div class="col-md-6">
-                    <Rock:RockDropDownList ID="ddlFamilyMembers" runat="server" Label="Family Member" AutoPostBack="true" OnSelectedIndexChanged="ddlFamilyMembers_SelectedIndexChanged" />
+                    <Rock:RockDropDownList ID="ddlFamilyMembers" runat="server" Label="Family Member to Register" AutoPostBack="true" OnSelectedIndexChanged="ddlFamilyMembers_SelectedIndexChanged" />
                 </div>
             </asp:Panel>
 
@@ -88,6 +110,27 @@
 
     </asp:Panel>
 
+    <%-- Prompt for any Registration Attributes that should be prompted for after entering registrations--%>
+    <asp:Panel ID="pnlRegistrationAttributesEnd" runat="server" Visible="false" CssClass="registrationentry-registration-attributes">
+
+        <h1><asp:Literal ID="lRegistrationAttributesEndTitle" runat="server" /></h1>
+
+        <asp:Panel ID="pnlRegistrationAttributesEndProgressBar" runat="server">
+            <div class="progress">
+                <div class="progress-bar" role="progressbar" aria-valuenow="<%=this.PercentComplete%>" aria-valuemin="0" aria-valuemax="100" style="width: <%=this.PercentComplete%>%;">
+                    <span class="sr-only"><%=this.PercentComplete%>% Complete</span>
+                </div>
+            </div>
+        </asp:Panel>
+
+        <Rock:AttributeValuesContainer ID="avcRegistrationAttributesEnd" runat="server" />
+        <div class="actions">
+            <asp:LinkButton ID="btnRegistrationAttributesEndPrev" runat="server" AccessKey="p" ToolTip="Alt+p" Text="Previous" CssClass="btn btn-default" CausesValidation="false" OnClick="btnRegistrationAttributesEndPrev_Click" />
+            <Rock:BootstrapButton ID="btnRegistrationAttributesEndNext" runat="server" AccessKey="n" ToolTip="Alt+n" Text="Next" DataLoadingText="Next" CssClass="btn btn-primary pull-right" CausesValidation="true" OnClick="btnRegistrationAttributesEndNext_Click" />
+        </div>
+    </asp:Panel>
+
+    <%-- Summary and Payment --%>
     <asp:Panel ID="pnlSummaryAndPayment" runat="server" Visible="false" CssClass="registrationentry-summary">
         
         <h1><asp:Literal ID="lSummaryAndPaymentTitle" runat="server" /></h1>
@@ -100,9 +143,9 @@
             </div>
         </asp:Panel>
         
-        <asp:Panel ID="pnlRegistrarInfo" runat="server" CssClass="well">
+        <asp:Panel ID="pnlRegistrarInfoPrompt" runat="server" CssClass="well">
             
-            <h4>This <asp:Literal id="lRegistrationTerm" runat="server" /> Was Completed By</h4>
+            <h4>This <asp:Literal id="lRegistrationTermPrompt" runat="server" /> Was Completed By</h4>
             <div class="row">
                 <div class="col-md-6">
                     <Rock:RockTextBox ID="tbYourFirstName" runat="server" Label="First Name" CssClass="js-your-first-name" Required="true" />
@@ -124,6 +167,26 @@
                 </div>
             </div>
 
+        </asp:Panel>
+
+        <asp:Panel ID="pnlRegistrarInfoUseLoggedInPerson" runat="server" CssClass="well" Visible="false">
+            <h4>This <asp:Literal id="lRegistrationTermLoggedInPerson" runat="server" /> Was Completed By</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <Rock:RockLiteral ID="lUseLoggedInPersonFirstName" runat="server" Label="First Name"/>
+                </div>
+                <div class="col-md-6">
+                    <Rock:RockLiteral ID="lUseLoggedInPersonLastName" runat="server" Label="Last Name" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <Rock:RockLiteral ID="lUseLoggedInPersonEmail" runat="server" Label="Email" />
+                    <Rock:EmailBox ID="tbUseLoggedInPersonEmail" runat="server" Label="Email" Required="true" />
+                </div>
+                <div class="col-md-6">
+                </div>
+            </div>
         </asp:Panel>
         
         <asp:Panel ID="pnlRegistrantsReview" CssClass="margin-b-md" runat="server" Visible="false">
@@ -157,7 +220,7 @@
                 <div id="divDiscountCode" runat="server" class="form-group pull-right">
                     <label class="control-label"><asp:Literal ID="lDiscountCodeLabel" runat="server" /></label>
                     <div class="input-group">
-                        <asp:TextBox ID="tbDiscountCode" runat="server" CssClass="form-control input-width-md input-sm"></asp:TextBox>
+                        <Rock:RockTextBox ID="tbDiscountCode" runat="server" CssClass="form-control input-width-md input-sm"></Rock:RockTextBox>
                         <asp:LinkButton ID="lbDiscountApply" runat="server" CssClass="btn btn-default btn-sm margin-l-sm" Text="Apply" OnClick="lbDiscountApply_Click" CausesValidation="false"></asp:LinkButton>
                     </div>
                 </div>
@@ -171,7 +234,7 @@
                                 <strong>Description</strong>
                             </div>
                                 
-                            <div runat="server" class="col-sm-3 fee-value" visible='<%# (RegistrationState.DiscountPercentage > 0.0m) %>'>
+                            <div runat="server" class="col-sm-3 fee-value" visible='<%# (RegistrationState.DiscountPercentage > 0.0m || RegistrationState.DiscountAmount > 0.0m) %>'>
                                 <strong>Discounted Amount</strong>
                             </div>
 
@@ -187,12 +250,13 @@
                                 <%# Eval("Description") %>
                             </div>
                                 
-                            <div runat="server" class="col-sm-3 fee-value" visible='<%# (RegistrationState.DiscountPercentage > 0.0m) %>'>
+                            <div runat="server" class="col-sm-3 fee-value" visible='<%# (RegistrationState.DiscountPercentage > 0.0m || RegistrationState.DiscountAmount > 0.0m) %>'>
+                                <Rock:HelpBlock runat="server" Text='This item is not eligible for the discount.' Visible='<%# ((RegistrationState.DiscountPercentage > 0.0m || RegistrationState.DiscountAmount > 0.0m) && ((decimal)Eval("Cost") == (decimal)Eval("DiscountedCost")) && ((decimal)Eval("Cost") > 0.0m)) %>'></Rock:HelpBlock>
                                 <span class="visible-xs-inline">Discounted Amount:</span> <%# Rock.Web.Cache.GlobalAttributesCache.Value( "CurrencySymbol" )%> <%# string.Format("{0:N}", Eval("DiscountedCost")) %> 
                             </div>
 
                             <div class="col-sm-3 fee-value">
-                                <span class="visible-xs-inline">Amount:</span> <%# Rock.Web.Cache.GlobalAttributesCache.Value( "CurrencySymbol" )%> <%# string.Format("{0:N}", Eval("Cost")) %> 
+                                <span class="visible-xs-inline">Amount:</span> <%# Rock.Web.Cache.GlobalAttributesCache.Value( "CurrencySymbol" )%> <%# string.Format("{0:N}", Eval("Cost")) %>
                             </div>
                                     
                         </div>
@@ -235,10 +299,14 @@
             <Rock:RockRadioButtonList ID="rblSavedCC" runat="server" CssClass="radio-list margin-b-lg" RepeatDirection="Vertical" DataValueField="Id" DataTextField="Name" />
             
             <div id="divNewCard" runat="server" class="radio-content">
-                <Rock:RockTextBox ID="txtCardFirstName" runat="server" Label="First Name on Card" Visible="false" ></Rock:RockTextBox>
-                <Rock:RockTextBox ID="txtCardLastName" runat="server" Label="Last Name on Card" Visible="false" ></Rock:RockTextBox>
-                <Rock:RockTextBox ID="txtCardName" runat="server" Label="Name on Card" Visible="false" ></Rock:RockTextBox>
-                <Rock:RockTextBox ID="txtCreditCard" runat="server" Label="Card Number" MaxLength="19" CssClass="credit-card" />
+                <div class="js-creditcard-validation-notification alert alert-validation" style="display:none;">
+                    <span class="js-notification-text"></span>
+                </div>
+
+                <Rock:RockTextBox ID="txtCardFirstName" runat="server" CssClass="js-creditcard-firstname" Label="First Name on Card" Visible="false"></Rock:RockTextBox>
+                <Rock:RockTextBox ID="txtCardLastName" runat="server" CssClass="js-creditcard-lastname" Label="Last Name on Card" Visible="false"></Rock:RockTextBox>
+                <Rock:RockTextBox ID="txtCardName" runat="server" Label="Name on Card" CssClass="js-creditcard-fullname" Visible="false"></Rock:RockTextBox>
+                <Rock:RockTextBox ID="txtCreditCard" runat="server" Label="Card Number"  CssClass="js-creditcard-number credit-card" MaxLength="19" />
                 <ul class="card-logos list-unstyled">
                     <li class="card-visa"></li>
                     <li class="card-mastercard"></li>
@@ -247,13 +315,13 @@
                 </ul>
                 <div class="row">
                     <div class="col-sm-6">
-                        <Rock:MonthYearPicker ID="mypExpiration" runat="server" Label="Expiration Date" />
+                        <Rock:MonthYearPicker ID="mypExpiration" runat="server" Label="Expiration Date" CssClass="js-creditcard-expiration" />
                     </div>
                     <div class="col-sm-6">
-                        <Rock:RockTextBox ID="txtCVV" Label="Card Security Code" CssClass="input-width-xs" runat="server" MaxLength="4" />
+                        <Rock:RockTextBox ID="txtCVV" Label="Card Security Code" CssClass="input-width-xs js-creditcard-cvv" runat="server" MaxLength="4" />
                     </div>
                 </div>
-                <Rock:AddressControl ID="acBillingAddress" runat="server" Label="Billing Address" UseStateAbbreviation="true" UseCountryAbbreviation="false" ShowAddressLine2="false" />
+                 <Rock:AddressControl ID="acBillingAddress" runat="server" Label="Billing Address" UseStateAbbreviation="true" UseCountryAbbreviation="false" ShowAddressLine2="false" CssClass="js-billingaddress-control"/>
             </div>
 
         </asp:Panel>
@@ -262,14 +330,14 @@
             <asp:LinkButton ID="lbSummaryPrev" runat="server" AccessKey="p" ToolTip="Alt+p" Text="Previous" CssClass="btn btn-default" CausesValidation="false" OnClick="lbSummaryPrev_Click" />
             <Rock:BootstrapButton ID="lbSummaryNext" runat="server" AccessKey="n" ToolTip="Alt+n" Text="Finish" DataLoadingText="Next" CssClass="btn btn-primary pull-right" CausesValidation="true" OnClick="lbSummaryNext_Click" />
             <asp:LinkButton ID="lbPaymentPrev" runat="server" AccessKey="p" ToolTip="Alt+p" Text="Previous" CssClass="btn btn-default" CausesValidation="false" OnClick="lbPaymentPrev_Click" />
-            <asp:Label ID="aStep2Submit" runat="server" ClientIDMode="Static" CssClass="btn btn-primary pull-right" Text="Finish" />
+            <asp:Label ID="aStep2Submit" runat="server" ClientIDMode="Static" CssClass="btn btn-primary pull-right js-step2-submit" Text="Finish" />
         </div>
 
-        <iframe id="iframeStep2" src="<%=this.Step2IFrameUrl%>" style="display:none"></iframe>
+        <iframe id="iframeStep2" class="js-step2-iframe" src="<%=this.Step2IFrameUrl%>" style="display:none"></iframe>
 
-        <asp:HiddenField ID="hfStep2AutoSubmit" runat="server" Value="false" />
-        <asp:HiddenField ID="hfStep2Url" runat="server" />
-        <asp:HiddenField ID="hfStep2ReturnQueryString" runat="server" />
+        <Rock:HiddenFieldWithClass ID="hfStep2AutoSubmit" CssClass="js-step2-autosubmit" runat="server" Value="false" />
+        <Rock:HiddenFieldWithClass ID="hfStep2Url" CssClass="js-step2-url" runat="server" />
+        <Rock:HiddenFieldWithClass ID="hfStep2ReturnQueryString" CssClass="js-step2-returnquerystring" runat="server" />
         <span style="display:none" >
             <asp:LinkButton ID="lbStep2Return" runat="server" Text="Step 2 Return" OnClick="lbStep2Return_Click" CausesValidation="false" ></asp:LinkButton>
         </span>

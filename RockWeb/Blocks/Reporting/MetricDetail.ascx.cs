@@ -70,9 +70,9 @@ namespace RockWeb.Blocks.Reporting
 
             btnDelete.Attributes["onclick"] = string.Format( "javascript: return Rock.dialogs.confirmDelete(event, '{0}');", Metric.FriendlyTypeName );
 
-            btnSecurity.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.Metric ) ).Id;
+            btnSecurity.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.Metric ) ).Id;
 
-            ddlDataView.Help = @"NOTE: When using DataView to populate Metrics, multiple partitions is not supported.
+            dvpDataView.Help = @"NOTE: When using DataView to populate Metrics, multiple partitions is not supported.
 
 When using a DataView as the Source Type, the Metric Values will based on the number of records returned by the DataView when the Calculate Metrics job processes this metric.
 
@@ -80,7 +80,7 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
 ";
 
             // Metric supports 0 or more Categories, so the entityType is actually MetricCategory, not Metric
-            cpMetricCategories.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.MetricCategory ) ).Id;
+            cpMetricCategories.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.MetricCategory ) ).Id;
 
             lcMetricsChart.Options.SetChartStyle( GetAttributeValue( "ChartStyle" ).AsGuidOrNull() );
 
@@ -230,7 +230,7 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
 
             metric.MetricPartitions = metric.MetricPartitions ?? new List<MetricPartition>();
 
-            if ( MetricPartitionsState.Count() > 1 && MetricPartitionsState.Any(a => !a.EntityTypeId.HasValue ))
+            if ( MetricPartitionsState.Count() > 1 && MetricPartitionsState.Any( a => !a.EntityTypeId.HasValue ) )
             {
                 mdMetricPartitionsEntityTypeWarning.Text = "If multiple partitions are defined for a metric, all the partitions must have an EntityType assigned";
                 mdMetricPartitionsEntityTypeWarning.Visible = true;
@@ -266,7 +266,7 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
                 metricPartition.Order = 0;
                 metric.MetricPartitions.Add( metricPartition );
             }
-            
+
             metric.Title = tbTitle.Text;
             metric.Subtitle = tbSubtitle.Text;
             metric.Description = tbDescription.Text;
@@ -276,9 +276,17 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
             metric.IsCumulative = cbIsCumulative.Checked;
             metric.EnableAnalytics = cbEnableAnalytics.Checked;
 
-            int sourceTypeDataView = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_DATAVIEW.AsGuid() ).Id;
-            int sourceTypeSQL = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_SQL.AsGuid() ).Id;
-            int sourceTypeLava = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_LAVA.AsGuid() ).Id;
+            avcEditAttributeValues.GetEditValues( metric );
+            // only save if everything saves:
+            rockContext.WrapTransaction( () =>
+            {
+                rockContext.SaveChanges();
+                metric.SaveAttributeValues();
+            } );
+
+            int sourceTypeDataView = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_DATAVIEW.AsGuid() ).Id;
+            int sourceTypeSQL = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_SQL.AsGuid() ).Id;
+            int sourceTypeLava = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_LAVA.AsGuid() ).Id;
 
             var personService = new PersonService( rockContext );
             var metricChampionPerson = personService.Get( ppMetricChampionPerson.SelectedValue ?? 0 );
@@ -306,7 +314,7 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
 
             if ( metric.SourceValueTypeId == sourceTypeDataView )
             {
-                metric.DataViewId = ddlDataView.SelectedValueAsId();
+                metric.DataViewId = dvpDataView.SelectedValueAsId();
             }
             else
             {
@@ -417,12 +425,12 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
                 }
 
                 rockContext.SaveChanges();
-                
+
                 metricService.EnsureMetricAnalyticsViews();
 
                 // delete any orphaned Unnamed metric schedules
                 var metricIdSchedulesQry = metricService.Queryable().Select( a => a.ScheduleId );
-                int? metricScheduleId = schedule != null ? schedule.Id : (int?)null;
+                int? metricScheduleId = schedule != null ? schedule.Id : ( int? ) null;
                 var orphanedSchedules = scheduleService.Queryable()
                     .Where( a => a.CategoryId == metricScheduleCategoryId && a.Name == string.Empty && a.Id != ( metricScheduleId ?? 0 ) )
                     .Where( s => !metricIdSchedulesQry.Any( m => m == s.Id ) );
@@ -537,6 +545,8 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
                 qryParams["CategoryId"] = parentCategoryId.ToString();
             }
 
+            qryParams["ExpandedIds"] = PageParameter( "ExpandedIds" );
+
             NavigateToPage( RockPage.Guid, qryParams );
         }
 
@@ -548,7 +558,7 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
         protected void ddlSourceType_SelectedIndexChanged( object sender, EventArgs e )
         {
             int? sourceValueTypeId = ddlSourceType.SelectedValueAsId();
-            var sourceValueType = DefinedValueCache.Read( sourceValueTypeId ?? 0 );
+            var sourceValueType = DefinedValueCache.Get( sourceValueTypeId ?? 0 );
             pnlSQLSourceType.Visible = false;
             pnlDataviewSourceType.Visible = false;
             if ( sourceValueType != null )
@@ -612,7 +622,7 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
                 // hide the panel drawer that show created and last modified dates
                 pdAuditDetails.Visible = false;
                 metric = new Metric { Id = 0, IsSystem = false };
-                metric.SourceValueTypeId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_MANUAL.AsGuid() ).Id;
+                metric.SourceValueTypeId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_MANUAL.AsGuid() ).Id;
                 metric.MetricCategories = new List<MetricCategory>();
                 if ( parentCategoryId.HasValue )
                 {
@@ -631,6 +641,7 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
 
             pnlDetails.Visible = true;
             hfMetricId.Value = metric.Id.ToString();
+            avcDisplayAttributeValues.AddDisplayControls( metric, Rock.Security.Authorization.VIEW, CurrentPerson );
 
             // render UI based on Authorized and IsSystem
             bool readOnly = false;
@@ -706,7 +717,7 @@ Example: Let's say you have a DataView called 'Small Group Attendance for Last W
             tbIconCssClass.Text = metric.IconCssClass;
             cpMetricCategories.SetValues( metric.MetricCategories.Select( a => a.Category ) );
 
-            int manualSourceType = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_MANUAL.AsGuid() ).Id;
+            int manualSourceType = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_MANUAL.AsGuid() ).Id;
 
             ddlSourceType.SetValue( metric.SourceValueTypeId ?? manualSourceType );
             tbYAxisLabel.Text = metric.YAxisLabel;
@@ -741,12 +752,13 @@ Simple metric with GroupId as the Partition.
 </ul>
 
 <pre>
-SELECT COUNT(*), [GroupId]
-FROM [Attendance] 
+SELECT COUNT(*), O.[GroupId]
+FROM [Attendance] A
+INNER JOIN [AttendanceOccurrence] O ON O.Id = A.OccurrenceId
 WHERE DidAttend = 1
   AND StartDateTime >= '{{ RunDateTime | Date:'MM/dd/yyyy' }}' 
   AND StartDateTime < '{{ RunDateTime | DateAdd:1,'d' | Date:'MM/dd/yyyy' }}' 
-GROUP BY [GroupId]
+GROUP BY O.[GroupId]
 </pre>
 
 <br />
@@ -760,12 +772,13 @@ A metric with multiple partitions.
     <li>The Nth Column will be the EntityId of the (N-1)th Partition </li>
 </ul>
 <pre>
-SELECT COUNT(*), [GroupId], [CampusId], [ScheduleId]
-FROM [Attendance] 
+SELECT COUNT(*), O.[GroupId], A.[CampusId], O.[ScheduleId]
+FROM [Attendance] A
+INNER JOIN [AttendanceOccurrence] O ON O.Id = A.OccurrenceId
 WHERE DidAttend = 1
   AND StartDateTime >= '{{ RunDateTime | Date:'MM/dd/yyyy' }}' 
   AND StartDateTime < '{{ RunDateTime | DateAdd:1,'d' | Date:'MM/dd/yyyy' }}' 
-GROUP BY [GroupId], [CampusId], [ScheduleId]
+GROUP BY O.[GroupId], A.[CampusId], O.[ScheduleId]
 </pre>
 
 <br />
@@ -782,12 +795,13 @@ A metric with multiple partitions with a specific MetricValueDateTime specified.
 -- get totals for the previous week
 {% assign weekEndDate = RunDateTime | SundayDate | DateAdd:-7,'d' %}
 
-SELECT COUNT(*), '{{ weekEndDate }}' [MetricValueDateTime], [GroupId], [CampusId], [ScheduleId]
-FROM [Attendance] 
+SELECT COUNT(*), '{{ weekEndDate }}' [MetricValueDateTime], O.[GroupId], A.[CampusId], O.[ScheduleId]
+FROM [Attendance] A
+INNER JOIN [AttendanceOccurrence] O ON O.Id = A.OccurrenceId
 WHERE DidAttend = 1
   AND StartDateTime >= '{{ weekEndDate | DateAdd:-6,'d' | Date:'MM/dd/yyyy' }}' 
   AND StartDateTime < '{{ weekEndDate | DateAdd:1,'d' | Date:'MM/dd/yyyy' }}'
-GROUP BY [GroupId], [CampusId], [ScheduleId]
+GROUP BY O.[GroupId], A.[CampusId], O.[ScheduleId]
 </pre>
 
 NOTE: If a [MetricValueDateTime] is specified and there is already a metric value, the value will get updated. This is handy if you have a weekly metric, but schedule it to calculate every day.
@@ -810,7 +824,7 @@ Simple metric with the default partition
 <br />
 Lava Template:
 <pre>{% attendance where:'DidAttend == true && GroupId == 56' count:'true' %}
-  {{ count }}            
+  {{ count }}
 {% endattendance %}</pre>
 
 Lava Output:
@@ -825,7 +839,7 @@ Simple metric with a MetricValueDateTime specified
 </ul>
 <br />
 Lava Template:
-<pre>{% webrequest url:'https://api.github.com/repos/SparkDevNetwork/Rock/subscribers'  %}
+<pre>{% webrequest url:'https://api.github.com/repos/SparkDevNetwork/Rock/subscribers' %}
     {{ results | Size }},{{ RunDateTime | SundayDate | DateAdd:-7 }} 
 {% endwebrequest %}</pre>
 
@@ -844,7 +858,7 @@ Lava that returns a Count and EntityIds for each Partition
 </ul>
 
 Lava Template:
-<pre>{% webrequest url:'https://api.example.com/statsByGroupAndCampus'  %}
+<pre>{% webrequest url:'https://api.example.com/statsByGroupAndCampus' %}
      {% for item in results %}
 	    item.Count,Item.GroupId,Item.CampusId
     {% endfor %}
@@ -922,7 +936,7 @@ The Lava can include Lava merge fields:";
                 ltLastRunDateTime.Text = "Never Run";
             }
 
-            ddlDataView.SetValue( metric.DataViewId );
+            dvpDataView.SetValue( metric.DataViewId );
 
             // make sure the control visibility is set based on SourceType
             ddlSourceType_SelectedIndexChanged( null, new EventArgs() );
@@ -937,6 +951,9 @@ The Lava can include Lava merge fields:";
             }
 
             BindMetricPartitionsGrid();
+
+            metric.LoadAttributes();
+            avcEditAttributeValues.AddEditControls( metric, Rock.Security.Authorization.EDIT, CurrentPerson );
         }
 
         /// <summary>
@@ -948,7 +965,7 @@ The Lava can include Lava merge fields:";
 
             var partitionList = MetricPartitionsState.OrderBy( a => a.Order ).ThenBy( a => a.Label ).Select( a =>
             {
-                var entityTypeCache = EntityTypeCache.Read( a.EntityTypeId ?? 0 );
+                var entityTypeCache = EntityTypeCache.Get( a.EntityTypeId ?? 0 );
                 string label;
                 if ( a.Order == 0 && !a.EntityTypeId.HasValue )
                 {
@@ -1017,7 +1034,7 @@ The Lava can include Lava merge fields:";
                 var singlePartition = metric.MetricPartitions.First();
                 if ( singlePartition.EntityTypeId.HasValue )
                 {
-                    var entityTypeCache = EntityTypeCache.Read( singlePartition.EntityTypeId.Value );
+                    var entityTypeCache = EntityTypeCache.Get( singlePartition.EntityTypeId.Value );
                     if ( entityTypeCache != null )
                     {
                         descriptionListMain.Add( "Partitioned by ", singlePartition.Label ?? entityTypeCache.FriendlyName );
@@ -1026,20 +1043,21 @@ The Lava can include Lava merge fields:";
             }
             else if ( metric.MetricPartitions.Count() > 1 )
             {
-                var partitionNameList = metric.MetricPartitions.OrderBy( a => a.Order ).ThenBy( a => a.Label ).Where( a => a.EntityTypeId.HasValue ).ToList().Select( a => {
-                    var entityTypeCache = EntityTypeCache.Read( a.EntityTypeId.Value );
+                var partitionNameList = metric.MetricPartitions.OrderBy( a => a.Order ).ThenBy( a => a.Label ).Where( a => a.EntityTypeId.HasValue ).ToList().Select( a =>
+                {
+                    var entityTypeCache = EntityTypeCache.Get( a.EntityTypeId.Value );
                     return new
                     {
                         Label = a.Label,
                         EntityTypeFriendlyName = entityTypeCache != null ? entityTypeCache.FriendlyName : string.Empty
                     };
-                });
+                } );
 
                 descriptionListMain.Add( "Partitioned by ", partitionNameList.Where( a => a != null ).Select( a => a.Label ?? a.EntityTypeFriendlyName ).ToList().AsDelimited( ", ", " and " ) );
             }
 
             // only show LastRun and Schedule label if SourceValueType is not Manual
-            int manualSourceType = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_MANUAL.AsGuid() ).Id;
+            int manualSourceType = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.METRIC_SOURCE_VALUE_TYPE_MANUAL.AsGuid() ).Id;
             ltLastRunDateTime.Visible = metric.SourceValueTypeId != manualSourceType;
             hlScheduleFriendlyText.Visible = metric.SourceValueTypeId != manualSourceType;
 
@@ -1105,18 +1123,6 @@ The Lava can include Lava merge fields:";
         private void LoadDropDowns()
         {
             RockContext rockContext = new RockContext();
-            ddlDataView.Items.Clear();
-            var dataviewList = new DataViewService( rockContext ).Queryable().Select(
-                s => new
-                {
-                    s.Id,
-                    s.Name
-                } ).OrderBy( a => a.Name ).ToList();
-
-            foreach ( var item in dataviewList )
-            {
-                ddlDataView.Items.Add( new ListItem( item.Name, item.Id.ToString() ) );
-            }
 
             ddlSourceType.Items.Clear();
             foreach ( var item in new DefinedValueService( rockContext ).GetByDefinedTypeGuid( Rock.SystemGuid.DefinedType.METRIC_SOURCE_TYPE.AsGuid() ) )
@@ -1224,7 +1230,7 @@ The Lava can include Lava merge fields:";
         {
             var rockContext = new RockContext();
             MetricPartitionService metricPartitionService = new MetricPartitionService( rockContext );
-            MetricPartition metricPartition = metricPartitionService.Get( (Guid)e.RowKeyValue );
+            MetricPartition metricPartition = metricPartitionService.Get( ( Guid ) e.RowKeyValue );
 
             if ( MetricPartitionsState.Count() == 1 )
             {
@@ -1242,7 +1248,7 @@ The Lava can include Lava merge fields:";
                 }
             }
 
-            Guid rowGuid = (Guid)e.RowKeyValue;
+            Guid rowGuid = ( Guid ) e.RowKeyValue;
             MetricPartitionsState.RemoveEntity( rowGuid );
 
             BindMetricPartitionsGrid();
@@ -1265,7 +1271,7 @@ The Lava can include Lava merge fields:";
         /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
         protected void gMetricPartitions_RowSelected( object sender, RowEventArgs e )
         {
-            gMetricPartitions_ShowEdit( (Guid)e.RowKeyValue );
+            gMetricPartitions_ShowEdit( ( Guid ) e.RowKeyValue );
         }
 
         /// <summary>
@@ -1373,7 +1379,7 @@ The Lava can include Lava merge fields:";
         }
 
         /// <summary>
-        /// Updates the type of the metric partion detail for entity.
+        /// Updates the type of the metric partition detail for entity.
         /// </summary>
         private void UpdateMetricPartionDetailForEntityType()
         {
@@ -1381,10 +1387,10 @@ The Lava can include Lava merge fields:";
             tbMetricPartitionEntityTypeQualifierColumn.ReadOnly = false;
             tbMetricPartitionEntityTypeQualifierValue.Visible = true;
             pwMetricPartitionAdvanced.Visible = etpMetricPartitionEntityType.SelectedEntityTypeId.HasValue;
-            
+
             if ( etpMetricPartitionEntityType.SelectedEntityTypeId.HasValue )
             {
-                var entityTypeCache = EntityTypeCache.Read( etpMetricPartitionEntityType.SelectedEntityTypeId.Value );
+                var entityTypeCache = EntityTypeCache.Get( etpMetricPartitionEntityType.SelectedEntityTypeId.Value );
                 if ( entityTypeCache != null )
                 {
                     if ( entityTypeCache.Id == EntityTypeCache.GetId<Rock.Model.DefinedValue>() )

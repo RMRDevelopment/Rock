@@ -15,10 +15,9 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
-using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -129,6 +128,33 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Returns a collection of blocks for a given page and block type. This will usually be one but in some cases may be more.
+        /// </summary>
+        /// <param name="pageGuid">The page unique identifier.</param>
+        /// <param name="blockTypeGuid">The block type unique identifier.</param>
+        /// <returns></returns>
+        public IQueryable<Block> GetByPageAndBlockType( Guid pageGuid, Guid blockTypeGuid )
+        {
+            int? pageId = PageCache.GetId( pageGuid ) ?? -1;
+            int? blockTypeId = BlockTypeCache.GetId( blockTypeGuid ) ?? -1;
+            return GetByPageAndBlockType( pageId.Value, blockTypeId.Value );
+        }
+
+        /// <summary>
+        /// Returns a collection of blocks for a given page and block type. This will usually be one but in some cases may be more.
+        /// </summary>
+        /// <param name="pageId">The page identifier.</param>
+        /// <param name="blockTypeId">The block type identifier.</param>
+        /// <returns></returns>
+        public IQueryable<Block> GetByPageAndBlockType( int pageId, int blockTypeId )
+        {
+            return Queryable()
+                .Where( b => b.PageId == pageId )
+                .Where( b => b.BlockTypeId == blockTypeId )
+                .OrderBy( b => b.Order );
+        }
+
+        /// <summary>
         /// Returns the next available position for a <see cref="Rock.Model.Block"/> in a given Zone.
         /// </summary>
         /// <param name="block">A <see cref="Rock.Model.Block"/> entity object.</param>
@@ -155,7 +181,7 @@ namespace Rock.Model
         /// <returns></returns>
         public override Guid? GetGuid( int id )
         {
-            var cacheItem = Rock.Web.Cache.BlockCache.Read( id );
+            var cacheItem = BlockCache.Get( id );
             if ( cacheItem != null )
             {
                 return cacheItem.Guid;

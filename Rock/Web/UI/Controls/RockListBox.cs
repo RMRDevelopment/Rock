@@ -14,13 +14,12 @@
 // limitations under the License.
 // </copyright>
 //
-using System.ComponentModel;
 using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using System;
-using System.Collections.Specialized;
 
 namespace Rock.Web.UI.Controls
 {
@@ -330,7 +329,7 @@ namespace Rock.Web.UI.Controls
         placeholder_text_multiple: '{1}',
         placeholder_text_single: ' '
     }});
-", this.ClientID, this.Placeholder.IsNotNullOrWhitespace() ? this.Placeholder : " " );
+", this.ClientID, this.Placeholder.IsNotNullOrWhiteSpace() ? this.Placeholder : " " );
 
             if ( DisplayDropAsAbsolute )
             {
@@ -415,11 +414,11 @@ namespace Rock.Web.UI.Controls
         protected override void LoadViewState( object savedState )
         {
             base.LoadViewState( savedState );
-            var savedAttributes = ViewState["ItemAttributes"] as List<Dictionary<string, string>>;
+            var savedAttributes = (ViewState["ItemAttributes"] as string).FromJsonOrNull<List<Dictionary<string, string>>>();
             int itemPosition = 0;
             
             // make sure the list has the same number of items as it did when ViewState was saved
-            if ( savedAttributes.Count == this.Items.Count )
+            if ( savedAttributes?.Count == this.Items.Count )
             {
                 // don't bother doing anything if nothing has any attributes
                 if ( savedAttributes.Any( a => a.Count > 0 ) )
@@ -444,7 +443,7 @@ namespace Rock.Web.UI.Controls
         /// </returns>
         protected override object SaveViewState()
         {
-            ViewState["ItemAttributes"] = this.Items.OfType<ListItem>().Select( a => a.Attributes.Keys.OfType<string>().ToDictionary( k => k, v => a.Attributes[v] ) ).ToList();
+            ViewState["ItemAttributes"] = this.Items.OfType<ListItem>().Select( a => a.Attributes.Keys.OfType<string>().ToDictionary( k => k, v => a.Attributes[v] ) ).ToList().ToJson();
             return base.SaveViewState();
         }
 

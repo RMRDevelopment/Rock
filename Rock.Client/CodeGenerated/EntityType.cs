@@ -38,6 +38,12 @@ namespace Rock.Client
         public string AssemblyName { get; set; }
 
         /// <summary />
+        public bool AttributesSupportPrePostHtml { get; set; }
+
+        /// <summary />
+        public bool AttributesSupportShowOnBulk { get; set; }
+
+        /// <summary />
         public Guid? ForeignGuid { get; set; }
 
         /// <summary />
@@ -51,6 +57,9 @@ namespace Rock.Client
 
         /// <summary />
         public string IndexResultTemplate { get; set; }
+
+        /// <summary />
+        public bool IsAchievementsEnabled { get; set; }
 
         /// <summary />
         public bool IsCommon { get; set; }
@@ -90,11 +99,14 @@ namespace Rock.Client
         {
             this.Id = source.Id;
             this.AssemblyName = source.AssemblyName;
+            this.AttributesSupportPrePostHtml = source.AttributesSupportPrePostHtml;
+            this.AttributesSupportShowOnBulk = source.AttributesSupportShowOnBulk;
             this.ForeignGuid = source.ForeignGuid;
             this.ForeignKey = source.ForeignKey;
             this.FriendlyName = source.FriendlyName;
             this.IndexDocumentUrl = source.IndexDocumentUrl;
             this.IndexResultTemplate = source.IndexResultTemplate;
+            this.IsAchievementsEnabled = source.IsAchievementsEnabled;
             this.IsCommon = source.IsCommon;
             this.IsEntity = source.IsEntity;
             this.IsIndexingEnabled = source.IsIndexingEnabled;

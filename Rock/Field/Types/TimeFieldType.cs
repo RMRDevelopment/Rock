@@ -105,14 +105,16 @@ namespace Rock.Field.Types
         /// <returns></returns>
         public override string GetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues )
         {
-            if ( control != null && control is TimePicker )
+            var picker = control as TimePicker;
+            if ( picker != null )
             {
-                var tp = control as TimePicker;
-                if ( tp != null && tp.SelectedTime.HasValue )
+                if ( picker.SelectedTime.HasValue )
                 {
-                    // serialize the time using culture-insensitive "constant" fromat
-                    return tp.SelectedTime.Value.ToString("c");
+                    // serialize the time using culture-insensitive "constant" format
+                    return picker.SelectedTime.Value.ToString( "c" );
                 }
+
+                return string.Empty;
             }
 
             return null;
@@ -126,17 +128,10 @@ namespace Rock.Field.Types
         /// <param name="value">The value.</param>
         public override void SetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
-            var timeValue = TimeSpan.MinValue;
-            if ( TimeSpan.TryParse( value, out timeValue ) )
+            var picker = control as TimePicker;
+            if ( picker != null )
             {
-                if ( control != null && control is TimePicker )
-                {
-                    var tp = control as TimePicker;
-                    if ( tp != null )
-                    {
-                        tp.SelectedTime = timeValue;
-                    }
-                }
+                picker.SelectedTime = value.AsTimeSpan();
             }
         }
 
@@ -170,6 +165,29 @@ namespace Rock.Field.Types
                 return timeValue;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Determines whether this FieldType supports doing PostBack for the editControl
+        /// </summary>
+        /// <param name="editControl">The edit control.</param>
+        /// <returns>
+        ///   <c>true</c> if [has change handler] [the specified control]; otherwise, <c>false</c>.
+        /// </returns>
+        public override bool HasChangeHandler( Control editControl )
+        {
+            // the TimePicker can cause a postback loop if OnChange and AutoPostback is enabled, so disable the HasChangeHandler
+            return false;
+        }
+
+        /// <summary>
+        /// Specifies an action to perform when the EditControl's Value is changed. See also <seealso cref="HasChangeHandler(Control)" />
+        /// </summary>
+        /// <param name="editControl">The edit control.</param>
+        /// <param name="action">The action.</param>
+        public override void AddChangeHandler( Control editControl, Action action )
+        {
+            // the TimePicker can cause a postback loop if OnChange and AutoPostback is enabled, so disable the HasChangeHandler
         }
 
         #endregion

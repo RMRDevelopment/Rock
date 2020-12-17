@@ -14,15 +14,16 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
+using System.Linq;
 using System.Runtime.Serialization;
 
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -115,6 +116,48 @@ namespace Rock.Model
         [DataMember]
         public int DaysUntilRequestIdle { get; set; }
 
+        /// <summary>
+        /// Gets or sets a value indicating whether this instance is active.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this instance is active; otherwise, <c>false</c>.
+        /// </value>
+        [Required]
+        [DataMember]
+        public bool IsActive
+        {
+            get { return _isActive; }
+            set { _isActive = value; }
+        }
+        private bool _isActive = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether [enable request security].
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [enable request security]; otherwise, <c>false</c>.
+        /// </value>
+        [Required]
+        public bool EnableRequestSecurity { get; set; }
+
+        /// <summary>
+        /// Gets or sets the connection request detail page identifier.
+        /// </summary>
+        /// <value>
+        /// The connection request detail page identifier.
+        /// </value>
+        [DataMember]
+        public int? ConnectionRequestDetailPageId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the connection request detail page route identifier.
+        /// </summary>
+        /// <value>
+        /// The connection request detail page route identifier.
+        /// </value>
+        [DataMember]
+        public int? ConnectionRequestDetailPageRouteId { get; set; }
+
         #endregion
 
         #region Virtual Properties
@@ -127,6 +170,24 @@ namespace Rock.Model
         /// </value>
         [LavaInclude]
         public virtual PersonAlias OwnerPersonAlias { get; set; }
+
+        /// <summary>
+        /// Gets or sets the connection request detail page.
+        /// </summary>
+        /// <value>
+        /// The connection request detail page.
+        /// </value>
+        [LavaInclude]
+        public virtual Page ConnectionRequestDetailPage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the connection request detail page route.
+        /// </summary>
+        /// <value>
+        /// The connection request detail page route.
+        /// </value>
+        [DataMember]
+        public virtual PageRoute ConnectionRequestDetailPageRoute { get; set; }
 
         /// <summary>
         /// Gets or sets a collection containing the <see cref="Rock.Model.ConnectionStatus">ConnectionStatuses</see> who are associated with the ConnectionType.
@@ -193,6 +254,39 @@ namespace Rock.Model
         #region overrides
 
         /// <summary>
+        /// Gets a list of all attributes defined for the ConnectionTypes specified that
+        /// match the entityTypeQualifierColumn and the ConnectionRequest Ids.
+        /// </summary>
+        /// <param name="rockContext">The database context to operate in.</param>
+        /// <param name="entityTypeId">The Entity Type Id for which Attributes to load.</param>
+        /// <param name="entityTypeQualifierColumn">The EntityTypeQualifierColumn value to match against.</param>
+        /// <returns>A list of attributes defined in the inheritance tree.</returns>
+        public List<AttributeCache> GetInheritedAttributesForQualifier( Rock.Data.RockContext rockContext, int entityTypeId, string entityTypeQualifierColumn )
+        {
+            var attributes = new List<AttributeCache>();
+            //
+            // Walk each group type and generate a list of matching attributes.
+            //
+            foreach ( var entityAttributes in AttributeCache.GetByEntity( entityTypeId ) )
+            {
+                // group type ids exist and qualifier is for a group type id
+                if ( string.Compare( entityAttributes.EntityTypeQualifierColumn, entityTypeQualifierColumn, true ) == 0 )
+                {
+                    int groupTypeIdValue = int.MinValue;
+                    if ( int.TryParse( entityAttributes.EntityTypeQualifierValue, out groupTypeIdValue ) &&  this.Id == groupTypeIdValue )
+                    {
+                        foreach ( int attributeId in entityAttributes.AttributeIds )
+                        {
+                            attributes.Add( AttributeCache.Get( attributeId ) );
+                        }
+                    }
+                }
+            }
+
+            return attributes.OrderBy( a => a.Order ).ToList();
+        }
+
+        /// <summary>
         /// Returns a <see cref="System.String" /> that represents this instance.
         /// </summary>
         /// <returns>
@@ -219,6 +313,8 @@ namespace Rock.Model
         public ConnectionTypeConfiguration()
         {
             this.HasOptional( p => p.OwnerPersonAlias ).WithMany().HasForeignKey( p => p.OwnerPersonAliasId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.ConnectionRequestDetailPage ).WithMany().HasForeignKey( p => p.ConnectionRequestDetailPageId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.ConnectionRequestDetailPageRoute ).WithMany().HasForeignKey( p => p.ConnectionRequestDetailPageRouteId ).WillCascadeOnDelete( false );
         }
     }
 

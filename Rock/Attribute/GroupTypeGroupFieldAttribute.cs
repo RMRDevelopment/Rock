@@ -15,9 +15,6 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
 
 namespace Rock.Attribute
 {
@@ -43,6 +40,25 @@ namespace Rock.Attribute
             : base( name, description, required, defaultValue, category, order, key, typeof( Rock.Field.Types.GroupTypeGroupFieldType ).FullName )
         {
             FieldConfigurationValues.Add( Rock.Field.Types.GroupTypeGroupFieldType.CONFIG_GROUP_PICKER_LABEL, new Field.ConfigurationValue( groupPickerLabel ) );
+        }
+
+        /// <summary>
+        /// Gets or sets the group picker label.
+        /// </summary>
+        /// <value>
+        /// The group picker label.
+        /// </value>
+        public string GroupPickerLabel
+        {
+            get
+            {
+                if(FieldConfigurationValues.ContainsKey( Rock.Field.Types.GroupTypeGroupFieldType.CONFIG_GROUP_PICKER_LABEL ) )
+                {
+                    return FieldConfigurationValues[Rock.Field.Types.GroupTypeGroupFieldType.CONFIG_GROUP_PICKER_LABEL].Value;
+                }
+                return string.Empty;
+            }
+            set => FieldConfigurationValues[Rock.Field.Types.GroupTypeGroupFieldType.CONFIG_GROUP_PICKER_LABEL] = new Field.ConfigurationValue( value );
         }
     }
 }

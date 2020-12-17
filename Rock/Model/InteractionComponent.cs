@@ -14,12 +14,16 @@
 // limitations under the License.
 // </copyright>
 //
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.Infrastructure;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
+
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -30,7 +34,7 @@ namespace Rock.Model
     [NotAudited]
     [Table( "InteractionComponent" )]
     [DataContract]
-    public partial class InteractionComponent : Model<InteractionComponent>
+    public partial class InteractionComponent : Model<InteractionComponent>, ICacheable
     {
 
         #region Entity Properties
@@ -64,7 +68,7 @@ namespace Rock.Model
         public string ComponentSummary { get; set; }
 
         /// <summary>
-        /// Gets or sets the Id of the entity that this interaction component is related to.
+        /// Gets or sets the Id of the entity that this interaction component is related to (determined by Channel.ComponentEntityType)
         /// For example:
         ///  if this is a Page View:
         ///     InteractionComponent.EntityId is the SiteId of the page that was viewed
@@ -85,7 +89,37 @@ namespace Rock.Model
         /// </value>
         [DataMember( IsRequired = true )]
         [Required]
-        public int ChannelId { get; set; }
+        public int InteractionChannelId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the channel custom 1.
+        /// </summary>
+        /// <value>
+        /// The channel custom 1.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string ChannelCustom1 { get; set; }
+
+        /// <summary>
+        /// Gets or sets the channel custom 2.
+        /// </summary>
+        /// <value>
+        /// The channel custom 2.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string ChannelCustom2 { get; set; }
+
+        /// <summary>
+        /// Gets or sets the channel custom indexed 1.
+        /// </summary>
+        /// <value>
+        /// The channel custom indexed 1.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string ChannelCustomIndexed1 { get; set; }
 
         #endregion
 
@@ -98,10 +132,10 @@ namespace Rock.Model
         /// The channel.
         /// </value>
         [DataMember]
-        public virtual InteractionChannel Channel { get; set; }
+        public virtual InteractionChannel InteractionChannel { get; set; }
 
         [NotMapped]
-        private System.Data.Entity.EntityState SaveState { get; set; }
+        private EntityState SaveState { get; set; }
 
         #endregion
 
@@ -112,7 +146,7 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext"></param>
         /// <param name="entry"></param>
-        public override void PreSaveChanges( DbContext dbContext, DbEntityEntry entry )
+        public override void PreSaveChanges( Data.DbContext dbContext, DbEntityEntry entry )
         {
             this.SaveState = entry.State;
             base.PreSaveChanges( dbContext, entry );
@@ -124,15 +158,12 @@ namespace Rock.Model
         /// <param name="dbContext">The database context.</param>
         public override void PostSaveChanges( Data.DbContext dbContext )
         {
-            Web.Cache.InteractionComponentCache.Flush( this.Id );
-
-            if ( this.SaveState == System.Data.Entity.EntityState.Added ||
-                this.SaveState == System.Data.Entity.EntityState.Deleted )
+            if ( this.SaveState == EntityState.Added || this.SaveState == EntityState.Deleted )
             {
-                var channel = Web.Cache.InteractionChannelCache.Read( this.ChannelId );
+                var channel = InteractionChannelCache.Get( this.InteractionChannelId );
                 if ( channel != null )
                 {
-                    if ( this.SaveState == System.Data.Entity.EntityState.Added )
+                    if ( this.SaveState == EntityState.Added )
                     {
                         channel.AddComponentId( this.Id );
                     }
@@ -148,6 +179,64 @@ namespace Rock.Model
 
         #endregion
 
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return InteractionComponentCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            InteractionComponentCache.UpdateCachedEntity( this.Id, this.SaveState );
+        }
+
+        #endregion
+
+        #region Obsolete Properties
+        
+        /// <summary>
+        /// Gets or sets the Id of the <see cref="Rock.Model.InteractionChannel"/> channel that that is associated with this Component.
+        /// </summary>
+        /// <value>
+        /// An <see cref="System.Int32"/> representing the Id of the <see cref="Rock.Model.InteractionChannel"/> channel that this Component is associated with.
+        /// </value>
+        [LavaInclude]
+        [NotMapped]
+        [RockObsolete( "1.11" )]
+        [Obsolete( "Use InteractionChannelId instead", false )]
+        public int ChannelId
+        {
+            get { return InteractionChannelId; }
+            set { InteractionChannelId = value; }
+        }
+        
+        /// <summary>
+        /// Gets or sets the channel.
+        /// </summary>
+        /// <value>
+        /// The channel.
+        /// </value>
+        [LavaInclude]
+        [NotMapped]
+        [RockObsolete( "1.11" )]
+        [Obsolete( "Use InteractionChannel instead", false )]
+        public virtual InteractionChannel Channel
+        {
+            get { return InteractionChannel; }
+            set { InteractionChannel = value; }
+        }
+
+        #endregion
     }
 
     #region Entity Configuration
@@ -162,10 +251,9 @@ namespace Rock.Model
         /// </summary>
         public InteractionComponentConfiguration()
         {
-            this.HasRequired( r => r.Channel ).WithMany().HasForeignKey( r => r.ChannelId ).WillCascadeOnDelete( false );
+            this.HasRequired( r => r.InteractionChannel ).WithMany().HasForeignKey( r => r.InteractionChannelId ).WillCascadeOnDelete( false );
         }
     }
 
     #endregion
-
 }

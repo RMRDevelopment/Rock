@@ -9,15 +9,16 @@
             <div class="panel-heading">
                 <h1 class="panel-title"><i class="fa fa-envelope"></i> <asp:Literal ID="lActionTitle" runat="server" /></h1>
             </div>
+            <Rock:PanelDrawer ID="pdAuditDetails" runat="server"></Rock:PanelDrawer>
             <div class="panel-body">
 
-                <asp:ValidationSummary ID="valSummaryTop" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                <asp:ValidationSummary ID="valSummaryTop" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                 <div class="row">
                     <div class="col-md-6">
                         <Rock:DataTextBox ID="tbTitle" runat="server" SourceTypeName="Rock.Model.SystemEmail, Rock" PropertyName="Title" />
-                        <Rock:DataTextBox ID="tbFromName" runat="server" SourceTypeName="Rock.Model.SystemEmail, Rock" PropertyName="FromName" Label="From Name" />
-                        <Rock:DataTextBox ID="tbFrom" runat="server" SourceTypeName="Rock.Model.SystemEmail, Rock" PropertyName="From" Label="From Address" />
+                        <Rock:DataTextBox ID="tbFromName" runat="server" SourceTypeName="Rock.Model.SystemEmail, Rock" PropertyName="FromName" Label="From Name" Help="<small><span class='tip tip-lava'></span></small>" />
+                        <Rock:DataTextBox ID="tbFrom" runat="server" SourceTypeName="Rock.Model.SystemEmail, Rock" PropertyName="From" Label="From Address" Help="<small><span class='tip tip-lava'></span></small>"/>
                         <Rock:DataTextBox ID="tbTo" runat="server" SourceTypeName="Rock.Model.SystemEmail, Rock" PropertyName="To" />
                     </div>
                     <div class="col-md-6">
@@ -28,7 +29,7 @@
                 </div>
 
                 <Rock:DataTextBox ID="tbSubject" runat="server" SourceTypeName="Rock.Model.SystemEmail, Rock" PropertyName="Subject" Help="<small><span class='tip tip-lava'></span></small>" />
-                <Rock:CodeEditor ID="tbBody" EditorHeight="500" Label="Message Body" EditorMode="Lava" EditorTheme="Rock" runat="server" SourceTypeName="Rock.Model.SystemEmail, Rock" PropertyName="Body" />
+                <Rock:CodeEditor ID="tbBody" EditorHeight="500" Label="Message Body" EditorMode="Lava" EditorTheme="Rock" runat="server" SourceTypeName="Rock.Model.SystemEmail, Rock" PropertyName="Body" Required="true" />
 
                 <Rock:NotificationBox ID="nbMessage" runat="server" Title="Error" NotificationBoxType="Danger" Visible="false" />
 

@@ -27,6 +27,7 @@ using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
+using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
 
@@ -51,19 +52,26 @@ namespace RockWeb.Blocks.Examples
         protected override void OnInit( EventArgs e )
         {
             base.OnInit( e );
+            RockPage.AddScriptLink( "~/Scripts/bootstrap-toc/bootstrap-toc.min.js" );
+            RockPage.AddCSSLink( "~/Scripts/bootstrap-toc/bootstrap-toc.css" );
+
             InitSyntaxHighlighting();
 
             gExample.DataKeyNames = new string[] { "Id" };
             gExample.GridRebind += gExample_GridRebind;
 
-            geopExamplePoint.SelectGeography += geoPicker_SelectGeography;
-            geopExamplePolygon.SelectGeography += geoPicker1_SelectGeography;
+            geopExamplePoint.SelectGeography += geopExamplePoint_SelectGeography;
+            geopExamplePolygon.SelectGeography += geopExamplePolygon_SelectGeography;
             geopExamplePoint.MapStyleValueGuid = GetAttributeValue( "MapStyle" ).AsGuid();
 
             htmlEditorLight.MergeFields.Add( "GlobalAttribute" );
             htmlEditorLight.MergeFields.Add( "Rock.Model.Person" );
 
             mfpExample.MergeFields.Add( "GlobalAttribute,Rock.Model.Person" );
+
+            var selectableAccountIds = new FinancialAccountService( new RockContext() ).Queryable().Where( a => a.ParentAccountId == null ).Take( 4 ).Select( a => a.Id ).ToArray();
+            caapExampleSingleAccount.SelectableAccountIds = selectableAccountIds;
+            caapExampleMultiAccount.SelectableAccountIds = selectableAccountIds;
 
             List<string> list = ReadExamples();
             int i = -1;
@@ -93,14 +101,14 @@ namespace RockWeb.Blocks.Examples
         /// </summary>
         private void InitSyntaxHighlighting()
         {
-            RockPage.AddCSSLink( ResolveUrl( "~/Blocks/Examples/prettify.css" ) );
+            RockPage.AddCSSLink( "~/Blocks/Examples/prettify.css" );
             RockPage.AddScriptLink( "//cdnjs.cloudflare.com/ajax/libs/prettify/r298/prettify.js", false );
         }
 
         /// <summary>
         /// Reads this block to find embedded examples and returns them in a indexed list.
         /// </summary>
-        /// <returns>code examples by postion index</returns>
+        /// <returns>code examples by position index</returns>
         private List<string> ReadExamples()
         {
             var list = new List<string>();
@@ -169,11 +177,14 @@ namespace RockWeb.Blocks.Examples
 
             if ( !Page.IsPostBack )
             {
+                List<ListItem> exampleListItems = new List<ListItem>();
+                exampleListItems.Add( new ListItem( "Pickles", "44" ) );
+                exampleListItems.Add( new ListItem( "Onions", "88" ) );
+                exampleListItems.Add( new ListItem( "Ketchup", "150" ) );
+                exampleListItems.Add( new ListItem( "Mustard", "654" ) );
+
                 bddlExample.Items.Clear();
-                bddlExample.Items.Add( new ListItem( "Pickles", "44" ) );
-                bddlExample.Items.Add( new ListItem( "Onions", "88" ) );
-                bddlExample.Items.Add( new ListItem( "Ketchup", "150" ) );
-                bddlExample.Items.Add( new ListItem( "Mustard", "654" ) );
+                bddlExample.Items.AddRange( exampleListItems.ToArray() );
                 bddlExample.SelectedValue = "44";
 
                 bddlExampleCheckmark.Items.Clear();
@@ -182,16 +193,22 @@ namespace RockWeb.Blocks.Examples
                 bddlExampleCheckmark.Items.Add( new ListItem( "Large", "150" ) );
                 bddlExampleCheckmark.Items.Add( new ListItem( "Software Developer", "654" ) );
 
-                ddlDataExample.Items.AddRange( bddlExample.Items.OfType<ListItem>().ToArray() );
+                ddlDataExample.Items.AddRange( exampleListItems.ToArray() );
 
-                cblExample.Items.AddRange( bddlExample.Items.OfType<ListItem>().ToArray() );
-                cblExampleHorizontal.Items.AddRange( bddlExample.Items.OfType<ListItem>().ToArray() );
-                rblExample.Items.AddRange( bddlExample.Items.OfType<ListItem>().ToArray() );
-                rblExampleHorizontal.Items.AddRange( bddlExample.Items.OfType<ListItem>().ToArray() );
+                cblExample.Items.AddRange( exampleListItems.ToArray() );
+                cblExampleHorizontal.Items.AddRange( exampleListItems.ToArray() );
+                rblExample.Items.AddRange( exampleListItems.ToArray() );
+                rblExampleHorizontal.Items.AddRange( exampleListItems.ToArray() );
 
-                campExample.Campuses = Rock.Web.Cache.CampusCache.All();
-                campsExample.Campuses = Rock.Web.Cache.CampusCache.All();
-                
+                lbExampleListBox.Items.AddRange( exampleListItems.ToArray() );
+                lbExampleListBox.SetValues( exampleListItems.Select( a => a.Value ).Take( 3 ).ToList() );
+
+
+                liExample.Value = "[{'Value':'Small'},{'Value':'Medium'},{'Value':'Large'}]";
+
+                campExample.Campuses = CampusCache.All();
+                campsExample.Campuses = CampusCache.All();
+
                 var rockContext = new RockContext();
                 var allGroupTypes = new GroupTypeService( rockContext ).Queryable().OrderBy( a => a.Name ).ToList();
                 gpGroupType.GroupTypes = allGroupTypes;
@@ -212,7 +229,6 @@ namespace RockWeb.Blocks.Examples
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnShowAttributeEditor_Click( object sender, EventArgs e )
         {
-            edtExample.FieldTypeId = Rock.Web.Cache.FieldTypeCache.Read( Rock.SystemGuid.FieldType.TEXT ).Id;
             pnlAttributeEditor.Visible = !pnlAttributeEditor.Visible;
         }
 
@@ -267,7 +283,7 @@ namespace RockWeb.Blocks.Examples
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         private class ExampleDataItem
         {
@@ -372,23 +388,23 @@ namespace RockWeb.Blocks.Examples
         }
 
         /// <summary>
-        /// Handles the SelectGeography event of the geoPicker1 control.
+        /// Handles the SelectGeography event of the geopExamplePolygon control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        protected void geoPicker1_SelectGeography( object sender, EventArgs e )
+        protected void geopExamplePolygon_SelectGeography( object sender, EventArgs e )
         {
-            string debug = geopExamplePoint.SelectedValue.AsText();
+            string debug = geopExamplePolygon.SelectedValue.AsText();
         }
 
         /// <summary>
-        /// Handles the SelectGeography event of the geoPicker control.
+        /// Handles the SelectGeography event of the geopExamplePoint control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        protected void geoPicker_SelectGeography( object sender, EventArgs e )
+        protected void geopExamplePoint_SelectGeography( object sender, EventArgs e )
         {
-            string debug = geopExamplePolygon.SelectedValue.AsText();
+            string debug = geopExamplePoint.SelectedValue.AsText();
         }
 
         /// <summary>
@@ -431,6 +447,18 @@ namespace RockWeb.Blocks.Examples
         protected void btnMarkdownPreview_Click( object sender, EventArgs e )
         {
             lMarkdownHtml.Text = mdMarkdownEditor.Text.ConvertMarkdownToHtml(true);
+        }
+
+        /// <summary>
+        /// Handles the Changed event of the caapExample control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void caapExample_Changed( object sender, EventArgs e )
+        {
+            var financialAccountService = new FinancialAccountService( new RockContext() );
+            lCaapExampleSingleAccountResultAccount.Text = financialAccountService.GetByIds( caapExampleSingleAccount.SelectedAccountIds.ToList() ).Select( a => a.PublicName ).ToList().AsDelimited( ", " );
+            lCaapExampleMultiAccountResultAccount.Text = financialAccountService.GetByIds( caapExampleMultiAccount.SelectedAccountIds.ToList() ).Select( a => a.PublicName ).ToList().AsDelimited( ", " );
         }
     }
 }

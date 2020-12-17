@@ -51,6 +51,8 @@ namespace Rock.Model
         public bool CanDelete( FinancialPersonSavedAccount item, out string errorMessage )
         {
             errorMessage = string.Empty;
+            
+            // ignoring FinancialPaymentDetail,FinancialPersonSavedAccountId 
             return true;
         }
     }
@@ -92,7 +94,10 @@ namespace Rock.Model
             target.FinancialPaymentDetailId = source.FinancialPaymentDetailId;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
+            target.GatewayPersonIdentifier = source.GatewayPersonIdentifier;
             target.GroupId = source.GroupId;
+            target.IsDefault = source.IsDefault;
+            target.IsSystem = source.IsSystem;
             target.Name = source.Name;
             target.PersonAliasId = source.PersonAliasId;
             target.ReferenceNumber = source.ReferenceNumber;

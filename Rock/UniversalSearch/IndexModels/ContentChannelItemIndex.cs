@@ -16,9 +16,7 @@
 //
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.UniversalSearch.IndexModels.Attributes;
@@ -113,6 +111,15 @@ namespace Rock.UniversalSearch.IndexModels
         public string Permalink { get; set; }
 
         /// <summary>
+        /// Gets or sets the slug.
+        /// </summary>
+        /// <value>
+        /// The slug.
+        /// </value>
+        [RockIndexField( Type = IndexFieldType.String, Index = IndexType.NotIndexed )]
+        public string PrimarySlug { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether this instance is approved.
         /// </summary>
         /// <value>
@@ -164,6 +171,7 @@ namespace Rock.UniversalSearch.IndexModels
             contentChannelItemIndex.IsApproved = false;
             contentChannelItemIndex.ContentChannel = contentChannelItem.ContentChannel.Name;
             contentChannelItemIndex.DocumentName = contentChannelItem.Title;
+            contentChannelItemIndex.PrimarySlug = contentChannelItem.PrimarySlug;
 
             if ( contentChannelItem.ContentChannel != null && ((contentChannelItem.ContentChannel.RequiresApproval && contentChannelItem.ApprovedDateTime != null) || contentChannelItem.ContentChannelType.DisableStatus ) )
             {
@@ -220,7 +228,7 @@ namespace Rock.UniversalSearch.IndexModels
                 {
                     url = channel.ItemUrl;
 
-                    if ( url.IsNotNullOrWhitespace() )
+                    if ( url.IsNotNullOrWhiteSpace() )
                     {
                         if ( mergeFields == null )
                         {
@@ -231,6 +239,7 @@ namespace Rock.UniversalSearch.IndexModels
                         mergeFields.AddOrReplace( "Id", this.Id );
                         mergeFields.AddOrReplace( "Title", this.Title );
                         mergeFields.AddOrReplace( "ContentChannelId", this.ContentChannelId );
+                        mergeFields.AddOrReplace( "Slug", this.PrimarySlug );
 
                         if (displayOptions == null )
                         {

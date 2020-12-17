@@ -34,7 +34,12 @@ namespace RockWeb.Blocks.Cms
     [Category( "CMS" )]
     [Description( "Lists HTML content blocks that need approval." )]
 
-    [SecurityAction( Authorization.APPROVE, "The roles and/or users that have access to approve HTML content." )]
+    #region Block Attributes
+    [SecurityAction(
+        Authorization.APPROVE,
+        "The roles and/or users that have access to approve HTML content." )]
+
+    #endregion Block Attributes
     public partial class HtmlContentApproval : Rock.Web.UI.RockBlock
     {
         #region Fields
@@ -249,8 +254,8 @@ namespace RockWeb.Blocks.Cms
         {
             var rockContext = new RockContext();
 
-            int entityTypeIdBlock = EntityTypeCache.Read( typeof( Rock.Model.Block ), true, rockContext ).Id;
-            string entityTypeQualifier = BlockTypeCache.Read( Rock.SystemGuid.BlockType.HTML_CONTENT.AsGuid(), rockContext ).Id.ToString();
+            int entityTypeIdBlock = EntityTypeCache.Get( typeof( Rock.Model.Block ), true, rockContext ).Id;
+            string entityTypeQualifier = BlockTypeCache.Get( Rock.SystemGuid.BlockType.HTML_CONTENT.AsGuid(), rockContext ).Id.ToString();
             var htmlContentService = new HtmlContentService( rockContext );
             var attributeValueQry = new AttributeValueService( rockContext ).Queryable()
                 .Where( a => a.Attribute.Key == "RequireApproval" && a.Attribute.EntityTypeId == entityTypeIdBlock )
@@ -307,7 +312,7 @@ namespace RockWeb.Blocks.Cms
                 BlockSiteId = a.Block.SiteId,
             } );
 
-            gContentList.EntityTypeId = EntityTypeCache.Read<HtmlContent>().Id;
+            gContentList.EntityTypeId = EntityTypeCache.Get<HtmlContent>().Id;
 
             // Filter by Site
             if ( ddlSiteFilter.SelectedIndex > 0 )

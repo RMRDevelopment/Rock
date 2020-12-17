@@ -21,7 +21,7 @@
             <div class="panel-body">
 
                 <Rock:NotificationBox ID="nbEditModeMessage" runat="server" NotificationBoxType="Info" CssClass="margin-t-md" />
-                <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                 <div id="pnlEditDetails" runat="server">
 
@@ -59,6 +59,9 @@
                             <Rock:RockCheckBox ID="cbIsCumulative" runat="server" Label="Cumulative" Help="Helps to calculate year to date metrics." />
                             <Rock:RockCheckBox ID="cbEnableAnalytics" runat="server" Label="Enable Analytics" Help="If this is enabled, a SQL View named 'AnalyticsFactMetric{{Metric.Name}}' will be made available that can be used by Analytic tools, such as Power BI" />
                         </div>
+                        <div class="col-xs-12">
+                            <Rock:AttributeValuesContainer ID="avcEditAttributeValues" runat="server" />
+                        </div>
                     </div>
 
                     <div class="well">
@@ -77,12 +80,12 @@
                                         <div class="alert alert-info js-sourcelava-help" id="nbLavaHelp" runat="server" style="display: none;"></div>
                                         <Rock:CodeEditor ID="ceSourceLava" runat="server" EditorMode="Lava" />
                                     </asp:Panel>
-                            
+
                                     <asp:Panel ID="pnlDataviewSourceType" runat="server">
-                                        <Rock:RockDropDownList ID="ddlDataView" runat="server" Label="Source DataView" EnhanceForLongLists="true" />
+                                        <Rock:DataViewItemPicker ID="dvpDataView" runat="server" Label="Source Data View" />
                                         <Rock:NotificationBox ID="nbDataViewHelp" runat="server" Visible="false" />
                                     </asp:Panel>
-                            
+
                                     <Rock:RockControlWrapper ID="rcwSchedule" runat="server" Label="Schedule" Help="Select the schedule of when the metric values should be calculated.">
                                         <Rock:RockRadioButtonList ID="rblScheduleSelect" runat="server" CssClass="margin-b-sm" OnSelectedIndexChanged="rblScheduleSelect_SelectedIndexChanged" AutoPostBack="true" RepeatDirection="Horizontal" />
 
@@ -128,6 +131,11 @@
                             <asp:Literal ID="lblMainDetails" runat="server" />
                         </div>
                     </div>
+                    <div class="row">
+                        <div class="col-xs-12">
+                            <Rock:AttributeValuesContainer ID="avcDisplayAttributeValues" runat="server" />
+                        </div>
+                    </div>
 
                     <div class="actions">
                         <asp:LinkButton ID="btnEdit" runat="server" AccessKey="e" ToolTip="Alt+e" Text="Edit" CssClass="btn btn-primary" OnClick="btnEdit_Click" CausesValidation="false" />
@@ -144,7 +152,7 @@
             <Rock:ModalDialog ID="mdMetricPartitionDetail" runat="server" Title="Series Partition" ValidationGroup="vg-series-partition" OnSaveClick="mdMetricPartitionDetail_SaveClick">
                 <Content>
                     <asp:HiddenField ID="hfMetricPartitionGuid" runat="server" />
-                    
+
                     <div class="row">
                         <div class="col-md-6">
                             <Rock:RockTextBox ID="tbMetricPartitionLabel" runat="server" Label="Label" Required="true" ValidationGroup="vg-series-partition" />

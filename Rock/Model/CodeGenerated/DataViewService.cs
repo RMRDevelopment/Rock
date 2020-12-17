@@ -51,10 +51,12 @@ namespace Rock.Model
         public bool CanDelete( DataView item, out string errorMessage )
         {
             errorMessage = string.Empty;
+            
+            // ignoring DataViewFilter,DataViewId 
  
-            if ( new Service<Group>( Context ).Queryable().Any( a => a.SyncDataViewId == item.Id ) )
+            if ( new Service<DataViewFilter>( Context ).Queryable().Any( a => a.RelatedDataViewId == item.Id ) )
             {
-                errorMessage = string.Format( "This {0} is assigned to a {1}.", DataView.FriendlyTypeName, Group.FriendlyTypeName );
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", DataView.FriendlyTypeName, DataViewFilter.FriendlyTypeName );
                 return false;
             }  
  
@@ -70,6 +72,12 @@ namespace Rock.Model
                 return false;
             }  
  
+            if ( new Service<GroupSync>( Context ).Queryable().Any( a => a.SyncDataViewId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", DataView.FriendlyTypeName, GroupSync.FriendlyTypeName );
+                return false;
+            }  
+ 
             if ( new Service<Metric>( Context ).Queryable().Any( a => a.DataViewId == item.Id ) )
             {
                 errorMessage = string.Format( "This {0} is assigned to a {1}.", DataView.FriendlyTypeName, Metric.FriendlyTypeName );
@@ -79,6 +87,18 @@ namespace Rock.Model
             if ( new Service<Report>( Context ).Queryable().Any( a => a.DataViewId == item.Id ) )
             {
                 errorMessage = string.Format( "This {0} is assigned to a {1}.", DataView.FriendlyTypeName, Report.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<StepType>( Context ).Queryable().Any( a => a.AudienceDataViewId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", DataView.FriendlyTypeName, StepType.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<StepType>( Context ).Queryable().Any( a => a.AutoCompleteDataViewId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", DataView.FriendlyTypeName, StepType.FriendlyTypeName );
                 return false;
             }  
             return true;
@@ -124,8 +144,16 @@ namespace Rock.Model
             target.EntityTypeId = source.EntityTypeId;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
+            target.IncludeDeceased = source.IncludeDeceased;
             target.IsSystem = source.IsSystem;
+            target.LastRunDateTime = source.LastRunDateTime;
             target.Name = source.Name;
+            target.PersistedLastRefreshDateTime = source.PersistedLastRefreshDateTime;
+            target.PersistedLastRunDurationMilliseconds = source.PersistedLastRunDurationMilliseconds;
+            target.PersistedScheduleIntervalMinutes = source.PersistedScheduleIntervalMinutes;
+            target.RunCount = source.RunCount;
+            target.RunCountLastRefreshDateTime = source.RunCountLastRefreshDateTime;
+            target.TimeToRunDurationMilliseconds = source.TimeToRunDurationMilliseconds;
             target.TransformEntityTypeId = source.TransformEntityTypeId;
             target.CreatedDateTime = source.CreatedDateTime;
             target.ModifiedDateTime = source.ModifiedDateTime;

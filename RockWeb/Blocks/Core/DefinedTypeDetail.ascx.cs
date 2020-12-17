@@ -39,9 +39,18 @@ namespace RockWeb.Blocks.Core
     [Category( "Core" )]
     [Description( "Displays the details of the given defined type." )]
 
-    [DefinedTypeField( "Defined Type", "If a Defined Type is set, only details for it will be displayed (regardless of the querystring parameters).", required: false, defaultValue: "" )]
+    [DefinedTypeField( "Defined Type",
+        Description = "If a Defined Type is set, only details for it will be displayed (regardless of the querystring parameters).",
+        IsRequired = false,
+        Key = AttributeKey.DefinedType )]
+
     public partial class DefinedTypeDetail : RockBlock, IDetailBlock
     {
+        public static class AttributeKey
+        {
+            public const string DefinedType = "DefinedType";
+        }
+
 
         #region Fields
 
@@ -109,7 +118,7 @@ namespace RockWeb.Blocks.Core
         /// <returns>An <see cref="System.Int32"/> of the Id for a <see cref="Rock.Model.DefinedType"/> or null if it was not found.</returns>
         private int? InitItemId()
         {
-            Guid? definedTypeGuid = GetAttributeValue( "DefinedType" ).AsGuidOrNull();
+            Guid? definedTypeGuid = GetAttributeValue( AttributeKey.DefinedType ).AsGuidOrNull();
             int? itemId = null;
 
             // A configured defined type takes precedence over any definedTypeId param value that is passed in.
@@ -123,8 +132,8 @@ namespace RockWeb.Blocks.Core
                 gDefinedTypeAttributes.Columns[3].Visible = false;
                 gDefinedTypeAttributes.Actions.ShowAdd = false;
 
-                itemId = DefinedTypeCache.Read( definedTypeGuid.Value ).Id;
-                var definedType = DefinedTypeCache.Read( definedTypeGuid.Value );
+                itemId = DefinedTypeCache.Get( definedTypeGuid.Value ).Id;
+                var definedType = DefinedTypeCache.Get( definedTypeGuid.Value );
                 if ( definedType != null )
                 {
                     itemId = definedType.Id;
@@ -137,7 +146,7 @@ namespace RockWeb.Blocks.Core
                 gDefinedTypeAttributes.Columns[3].Visible = true;
                 gDefinedTypeAttributes.Actions.ShowAdd = true;
 
-                itemId = PageParameter( "definedTypeId" ).AsIntegerOrNull();
+                itemId = PageParameter( "DefinedTypeId" ).AsIntegerOrNull();
             }
 
             return itemId;
@@ -189,11 +198,10 @@ namespace RockWeb.Blocks.Core
             }
             else
             {
-                DefinedTypeCache.Flush( definedTypeId );
                 definedType = typeService.Get( definedTypeId );
             }
 
-            definedType.FieldTypeId = FieldTypeCache.Read( Rock.SystemGuid.FieldType.TEXT ).Id;
+            definedType.FieldTypeId = FieldTypeCache.Get( Rock.SystemGuid.FieldType.TEXT ).Id;
             definedType.Name = tbTypeName.Text;
             definedType.CategoryId = cpCategory.SelectedValueAsInt();
             definedType.Description = tbTypeDescription.Text;
@@ -208,7 +216,7 @@ namespace RockWeb.Blocks.Core
             rockContext.SaveChanges();
 
             var qryParams = new Dictionary<string, string>();
-            qryParams["definedTypeId"] = definedType.Id.ToString();
+            qryParams["DefinedTypeId"] = definedType.Id.ToString();
             NavigateToPage( RockPage.Guid, qryParams );
         }
 
@@ -262,7 +270,7 @@ namespace RockWeb.Blocks.Core
             else
             {
                 // Cancelling on Edit.  Return to Details
-                DefinedTypeService definedTypeService = new DefinedTypeService(new RockContext());
+                DefinedTypeService definedTypeService = new DefinedTypeService( new RockContext() );
                 DefinedType definedType = definedTypeService.Get( hfDefinedTypeId.ValueAsInt() );
                 ShowReadonlyDetails( definedType );
             }
@@ -280,7 +288,7 @@ namespace RockWeb.Blocks.Core
             tbTypeName.Text = definedType.Name;
 
             lTitle.Text = definedType.Name.FormatAsHtmlTitle();
-            lDescription.Text = definedType.Description;
+            lDescription.Text = definedType.Description.ConvertMarkdownToHtml();
 
             if ( !string.IsNullOrWhiteSpace( definedType.HelpText ) )
             {
@@ -294,7 +302,7 @@ namespace RockWeb.Blocks.Core
 
             definedType.LoadAttributes();
 
-            if (!_isStandAlone && definedType.Category != null )
+            if ( !_isStandAlone && definedType.Category != null )
             {
                 lblMainDetails.Text = new DescriptionList()
                     .Add( "Category", definedType.Category.Name )
@@ -418,10 +426,10 @@ namespace RockWeb.Blocks.Core
                 }
             }
 
-            BindDefinedTypeAttributesGrid();         
-  
+            BindDefinedTypeAttributesGrid();
+
         }
-                
+
         #endregion
 
         #region DefinedTypeAttributes Grid and Picker
@@ -443,7 +451,7 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gDefinedTypeAttributes_Edit( object sender, RowEventArgs e )
         {
-            Guid attributeGuid = (Guid)e.RowKeyValue;
+            Guid attributeGuid = ( Guid ) e.RowKeyValue;
             gDefinedTypeAttributes_ShowEdit( attributeGuid );
         }
 
@@ -461,7 +469,7 @@ namespace RockWeb.Blocks.Core
             if ( attributeGuid.Equals( Guid.Empty ) )
             {
                 attribute = new Attribute();
-                attribute.FieldTypeId = FieldTypeCache.Read( Rock.SystemGuid.FieldType.TEXT ).Id;
+                attribute.FieldTypeId = FieldTypeCache.Get( Rock.SystemGuid.FieldType.TEXT ).Id;
                 edtDefinedTypeAttributes.ActionTitle = ActionTitle.Add( "attribute for defined type " + tbTypeName.Text );
             }
             else
@@ -472,11 +480,11 @@ namespace RockWeb.Blocks.Core
             }
 
             edtDefinedTypeAttributes.ReservedKeyNames = new AttributeService( new RockContext() )
-                .GetByEntityTypeId( new DefinedValue().TypeId ).AsQueryable()
+                .GetByEntityTypeId( new DefinedValue().TypeId, true ).AsQueryable()
                 .Where( a =>
                     a.EntityTypeQualifierColumn.Equals( "DefinedTypeId", StringComparison.OrdinalIgnoreCase ) &&
                     a.EntityTypeQualifierValue.Equals( hfDefinedTypeId.Value ) &&
-                    !a.Guid.Equals(attributeGuid) )
+                    !a.Guid.Equals( attributeGuid ) )
                 .Select( a => a.Key )
                 .Distinct()
                 .ToList();
@@ -500,7 +508,7 @@ namespace RockWeb.Blocks.Core
 
             int order = 0;
             var attributes = attributeService
-                .GetByEntityTypeId( new DefinedValue().TypeId ).AsQueryable()
+                .GetByEntityTypeId( new DefinedValue().TypeId, true ).AsQueryable()
                 .Where( a =>
                     a.EntityTypeQualifierColumn.Equals( "DefinedTypeId", StringComparison.OrdinalIgnoreCase ) &&
                     a.EntityTypeQualifierValue.Equals( qualifierValue ) )
@@ -511,9 +519,8 @@ namespace RockWeb.Blocks.Core
             foreach ( var attribute in attributes )
             {
                 attribute.Order = order++;
-                AttributeCache.Flush( attribute.Id );
             }
-            
+
             var movedItem = attributes.Where( a => a.Order == e.OldIndex ).FirstOrDefault();
             if ( movedItem != null )
             {
@@ -548,7 +555,7 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gDefinedTypeAttributes_Delete( object sender, RowEventArgs e )
         {
-            Guid attributeGuid = (Guid)e.RowKeyValue;
+            Guid attributeGuid = ( Guid ) e.RowKeyValue;
             var rockContext = new RockContext();
             AttributeService attributeService = new AttributeService( rockContext );
             Attribute attribute = attributeService.Get( attributeGuid );
@@ -562,14 +569,11 @@ namespace RockWeb.Blocks.Core
                     return;
                 }
 
-                AttributeCache.Flush( attribute.Id );
                 attributeService.Delete( attribute );
                 rockContext.SaveChanges();
             }
 
-            AttributeCache.FlushEntityAttributes();
-
-            BindDefinedTypeAttributesGrid();            
+            BindDefinedTypeAttributesGrid();
         }
 
         /// <summary>
@@ -589,19 +593,17 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void btnSaveDefinedTypeAttribute_Click( object sender, EventArgs e )
         {
-            var attribute = Rock.Attribute.Helper.SaveAttributeEdits( 
-                edtDefinedTypeAttributes, EntityTypeCache.Read( typeof( DefinedValue ) ).Id, "DefinedTypeId", hfDefinedTypeId.Value );
+            var attribute = Rock.Attribute.Helper.SaveAttributeEdits(
+                edtDefinedTypeAttributes, EntityTypeCache.Get( typeof( DefinedValue ) ).Id, "DefinedTypeId", hfDefinedTypeId.Value );
 
             // Attribute will be null if it was not valid
-            if (attribute == null)
+            if ( attribute == null )
             {
                 return;
             }
 
             pnlDetails.Visible = true;
             pnlDefinedTypeAttributes.Visible = false;
-
-            AttributeCache.FlushEntityAttributes();
 
             BindDefinedTypeAttributesGrid();
 
@@ -628,7 +630,7 @@ namespace RockWeb.Blocks.Core
         {
             string qualifierValue = hfDefinedTypeId.Value;
             var attributes = new AttributeService( new RockContext() )
-                .GetByEntityTypeId( new DefinedValue().TypeId ).AsQueryable()
+                .GetByEntityTypeId( new DefinedValue().TypeId, true ).AsQueryable()
                 .Where( a =>
                     a.EntityTypeQualifierColumn.Equals( "DefinedTypeId", StringComparison.OrdinalIgnoreCase ) &&
                     a.EntityTypeQualifierValue.Equals( qualifierValue ) )

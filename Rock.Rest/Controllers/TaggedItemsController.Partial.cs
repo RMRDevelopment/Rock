@@ -50,18 +50,17 @@ namespace Rock.Rest.Controllers
         {
             SetProxyCreation( true );
 
-            var person = GetPerson();
-            var personAlias = GetPersonAlias();
+            var person = GetPerson( ( Rock.Data.RockContext ) Service.Context );
 
-            var tagService = new TagService( (Rock.Data.RockContext)Service.Context );
+            var tagService = new TagService( ( Rock.Data.RockContext ) Service.Context );
 
             var tag = tagService.Get( entityTypeId, entityQualifier, entityQualifierValue, ownerId, name, categoryGuid, includeInactive );
-            if ( tag == null || !tag.IsAuthorized( "Tag", person ) )
+            if ( tag == null || !tag.IsAuthorized( Rock.Security.Authorization.TAG, person ) )
             {
                 int? categoryId = null;
                 if ( categoryGuid.HasValue )
                 {
-                    var category = CategoryCache.Read( categoryGuid.Value );
+                    var category = CategoryCache.Get( categoryGuid.Value );
                     categoryId = category != null ? category.Id : (int?)null;
                 }
 
@@ -70,7 +69,7 @@ namespace Rock.Rest.Controllers
                 tag.CategoryId = categoryId;
                 tag.EntityTypeQualifierColumn = entityQualifier;
                 tag.EntityTypeQualifierValue = entityQualifierValue;
-                tag.OwnerPersonAliasId = new PersonAliasService( (Rock.Data.RockContext)Service.Context ).GetPrimaryAliasId( ownerId );
+                tag.OwnerPersonAliasId = new PersonAliasService( ( Rock.Data.RockContext ) Service.Context ).GetPrimaryAliasId( ownerId );
                 tag.Name = name;
                 tagService.Add( tag );
             }
@@ -87,7 +86,7 @@ namespace Rock.Rest.Controllers
                 tag.TaggedItems.Add( taggedItem );
             }
 
-            System.Web.HttpContext.Current.Items.Add( "CurrentPerson", person );
+            System.Web.HttpContext.Current.AddOrReplaceItem( "CurrentPerson", person );
             Service.Context.SaveChanges();
 
             return ControllerContext.Request.CreateResponse( HttpStatusCode.Created, tag.Id );
@@ -112,8 +111,9 @@ namespace Rock.Rest.Controllers
         {
             SetProxyCreation( true );
 
-            var personAlias = GetPersonAlias();
-
+            // Deserialize the tag properties
+            // This logic needs to sync with C# code in TagList.SerializeTag:
+            // $"{name}^{tagCssClass}^{iconCssClass}^{backgroundColor}";
             if ( name.Contains( '^' ) )
             {
                 name = name.Split( '^' )[0];
@@ -121,7 +121,7 @@ namespace Rock.Rest.Controllers
 
             TaggedItem taggedItem = null;
 
-            var tagService = new TagService( (Rock.Data.RockContext)Service.Context );
+            var tagService = new TagService( ( Rock.Data.RockContext ) Service.Context );
             var tag = tagService.Get( entityTypeId, entityQualifier, entityQualifierValue, ownerId, name, categoryGuid, includeInactive );
             if ( tag != null )
             {
@@ -133,7 +133,7 @@ namespace Rock.Rest.Controllers
                 throw new HttpResponseException( HttpStatusCode.NotFound );
             }
 
-            if ( !taggedItem.IsAuthorized( "Tag", GetPerson() ))
+            if ( !taggedItem.IsAuthorized( Rock.Security.Authorization.TAG, GetPerson( ( Rock.Data.RockContext ) Service.Context ) ))
             {
                 throw new HttpResponseException( HttpStatusCode.Unauthorized );
             }

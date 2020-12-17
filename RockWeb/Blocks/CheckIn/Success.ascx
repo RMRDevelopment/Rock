@@ -9,18 +9,13 @@
     </div>
 
     <div class="checkin-body">
-        
         <div class="checkin-scroll-panel">
-            <div class="scroller">           
-                <ol class="checkin-summary checkin-body-container">
-                    <asp:PlaceHolder ID="phResults" runat="server"></asp:PlaceHolder>
-                </ol>
-
+            <div class="scroller">
+                <asp:Literal ID="lCheckinResultsHtml" runat="server" />
+                <asp:Literal ID="lCheckinQRCodeHtml" runat="server" />
             </div>
         </div>
-
     </div>
-
 
     <div class="checkin-footer">   
         <div class="checkin-actions">

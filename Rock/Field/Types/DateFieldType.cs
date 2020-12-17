@@ -21,7 +21,7 @@ using System.Linq.Expressions;
 using System.Web.UI;
 using System.Web.UI.WebControls;
 
-using Rock;
+using Rock.Data;
 using Rock.Model;
 using Rock.Reporting;
 using Rock.Web.UI.Controls;
@@ -73,31 +73,6 @@ namespace Rock.Field.Types
         }
 
         /// <summary>
-        /// The DateFormat configuration control
-        /// </summary>
-        protected RockTextBox _tbDateFormat;
-
-        /// <summary>
-        /// The 'Display as Elapsed Time' configuration control
-        /// </summary>
-        protected RockCheckBox _cbDisplayDiff;
-        
-        /// <summary>
-        /// The Date Picker Control Type configuration control
-        /// </summary>
-        protected RockDropDownList _ddlDatePickerMode;
-        
-        /// <summary>
-        /// The Display Current configuration control
-        /// </summary>
-        protected RockCheckBox _cbDisplayCurrent;
-
-        /// <summary>
-        /// The future year count (for the date parts picker)
-        /// </summary>
-        protected NumberBox _nbFutureYearCount;
-
-        /// <summary>
         /// Creates the HTML controls required to configure this type of field
         /// </summary>
         /// <returns></returns>
@@ -105,40 +80,50 @@ namespace Rock.Field.Types
         {
             var controls = base.ConfigurationControls();
 
-            _tbDateFormat = new RockTextBox();
-            controls.Add( _tbDateFormat );
-            _tbDateFormat.Label = "Date Format";
-            _tbDateFormat.Help = "The format string to use for date (default is system short date).";
+            var tbDateFormat = new RockTextBox();
+            controls.Add( tbDateFormat );
+            tbDateFormat.Label = "Date Format";
+            tbDateFormat.Help = "The format string to use for date (default is system short date).";
 
-            _cbDisplayDiff = new RockCheckBox();
-            controls.Add( _cbDisplayDiff );
-            _cbDisplayDiff.Label = "Display as Elapsed Time";
-            _cbDisplayDiff.Text = "Yes";
-            _cbDisplayDiff.Help = "Display value as an elapsed time.";
+            var cbDisplayDiff = new RockCheckBox();
+            controls.Add( cbDisplayDiff );
+            cbDisplayDiff.Label = "Display as Elapsed Time";
+            cbDisplayDiff.Text = "Yes";
+            cbDisplayDiff.Help = "Display value as an elapsed time.";
 
-            _ddlDatePickerMode = new RockDropDownList();
-            controls.Add( _ddlDatePickerMode );
-            _ddlDatePickerMode.Items.Clear();
-            _ddlDatePickerMode.Items.Add( new ListItem( "Date Picker", DatePickerControlType.DatePicker.ConvertToString() ) );
-            _ddlDatePickerMode.Items.Add( new ListItem( "Date Parts Picker", DatePickerControlType.DatePartsPicker.ConvertToString() ) );
-            _ddlDatePickerMode.Label = "Control Type";
-            _ddlDatePickerMode.Help = "Select 'Date Picker' to use a DatePicker, or 'Date Parts Picker' to select Month, Day and Year individually";
-            _ddlDatePickerMode.AutoPostBack = true;
-            _ddlDatePickerMode.SelectedIndexChanged += OnQualifierUpdated;
+            var ddlDatePickerMode = new RockDropDownList();
+            controls.Add( ddlDatePickerMode );
+            ddlDatePickerMode.Items.Clear();
+            ddlDatePickerMode.Items.Add( new ListItem( "Date Picker", DatePickerControlType.DatePicker.ConvertToString() ) );
+            ddlDatePickerMode.Items.Add( new ListItem( "Date Parts Picker", DatePickerControlType.DatePartsPicker.ConvertToString() ) );
+            ddlDatePickerMode.Label = "Control Type";
+            ddlDatePickerMode.Help = "Select 'Date Picker' to use a DatePicker, or 'Date Parts Picker' to select Month, Day and Year individually";
+            ddlDatePickerMode.AutoPostBack = true;
+            ddlDatePickerMode.SelectedIndexChanged += OnQualifierUpdated;
 
-            _cbDisplayCurrent = new RockCheckBox();
-            controls.Add( _cbDisplayCurrent );
-            _cbDisplayCurrent.AutoPostBack = true;
-            _cbDisplayCurrent.CheckedChanged += OnQualifierUpdated;
-            _cbDisplayCurrent.Label = "Display Current Option";
-            _cbDisplayCurrent.Text = "Yes";
-            _cbDisplayCurrent.Help = "Include option to specify value as the current date.";
+            var cbDisplayCurrent = new RockCheckBox();
+            controls.Add( cbDisplayCurrent );
+            cbDisplayCurrent.AutoPostBack = true;
+            cbDisplayCurrent.CheckedChanged += OnQualifierUpdated;
+            cbDisplayCurrent.Label = "Display Current Option";
+            cbDisplayCurrent.Text = "Yes";
+            cbDisplayCurrent.Help = "Include option to specify value as the current date.";
 
-            _nbFutureYearCount = new NumberBox();
-            controls.Add( _nbFutureYearCount );
-            _nbFutureYearCount.Label = "Future Years";
-            _nbFutureYearCount.Text = "";
-            _nbFutureYearCount.Help = "The number of years in the future in include the year picker. Set to 0 to limit to current year. Leaving it blank will default to 50.";
+            var nbFutureYearCount = new NumberBox();
+            controls.Add( nbFutureYearCount );
+            nbFutureYearCount.Label = "Future Years";
+            nbFutureYearCount.Text = "";
+            nbFutureYearCount.Help = "The number of years in the future in include the year picker. Set to 0 to limit to current year. Leaving it blank will default to 50.";
+
+            // if this is the child type of DateTimeFieldType, change the labels and visibility of the controls as needed
+            if ( this is DateTimeFieldType )
+            {
+                tbDateFormat.Label = "Date Time Format";
+                tbDateFormat.Help = "The format string to use for date (default is system short date and time).";
+                ddlDatePickerMode.Visible = false;
+                nbFutureYearCount.Visible = false;
+                cbDisplayCurrent.Help = "Include option to specify value as the current time.";
+            }
 
             return controls;
         }
@@ -152,7 +137,7 @@ namespace Rock.Field.Types
         {
             base.SetConfigurationValues( controls, configurationValues );
 
-            if ( controls != null && controls.Count > 3 )
+            if ( controls != null && controls.Count > 5 )
             {
                 var tbDateFormat = controls[0] as RockTextBox;
                 var cbDisplayDiff = controls[1] as RockCheckBox;
@@ -383,6 +368,10 @@ namespace Rock.Field.Types
                 {
                     return datePicker.SelectedDate.Value.ToString( "o" );
                 }
+                else
+                {
+                    return string.Empty;
+                }
             }
             else if ( datePartsPicker != null )
             {
@@ -390,9 +379,13 @@ namespace Rock.Field.Types
                 {
                     return datePartsPicker.SelectedDate.Value.ToString( "o" );
                 }
+                else
+                {
+                    return string.Empty;
+                }
             }
 
-            return string.Empty;
+            return null;
         }
 
         /// <summary>
@@ -574,22 +567,25 @@ namespace Rock.Field.Types
             var filterValues = value.Split( new string[] { "\t" }, StringSplitOptions.None );
 
             var dateFiltersPanel = control as Panel;
-            var datePicker = dateFiltersPanel.ControlsOfTypeRecursive<DatePicker>().FirstOrDefault();
-            if ( datePicker != null && filterValues.Length > 0 )
+            if ( dateFiltersPanel != null )
             {
-                this.SetEditValue( datePicker, configurationValues, filterValues[0] );
-            }
+                var datePicker = dateFiltersPanel.ControlsOfTypeRecursive<DatePicker>().FirstOrDefault();
+                if ( datePicker != null && filterValues.Length > 0 )
+                {
+                    this.SetEditValue( datePicker, configurationValues, filterValues[0] );
+                }
 
-            var datePartsPicker = dateFiltersPanel.ControlsOfTypeRecursive<DatePartsPicker>().FirstOrDefault();
-            if ( datePartsPicker != null && filterValues.Length > 0 )
-            {
-                this.SetEditValue( datePartsPicker, configurationValues, filterValues[0] );
-            }
+                var datePartsPicker = dateFiltersPanel.ControlsOfTypeRecursive<DatePartsPicker>().FirstOrDefault();
+                if ( datePartsPicker != null && filterValues.Length > 0 )
+                {
+                    this.SetEditValue( datePartsPicker, configurationValues, filterValues[0] );
+                }
 
-            var slidingDateRangePicker = dateFiltersPanel.ControlsOfTypeRecursive<SlidingDateRangePicker>().FirstOrDefault();
-            if ( slidingDateRangePicker != null && filterValues.Length > 1 )
-            {
-                slidingDateRangePicker.DelimitedValues = filterValues[1];
+                var slidingDateRangePicker = dateFiltersPanel.ControlsOfTypeRecursive<SlidingDateRangePicker>().FirstOrDefault();
+                if ( slidingDateRangePicker != null && filterValues.Length > 1 )
+                {
+                    slidingDateRangePicker.DelimitedValues = filterValues[1];
+                }
             }
         }
         
@@ -630,7 +626,7 @@ namespace Rock.Field.Types
                     if ( comparisonType == ComparisonType.Between && filterValueValues.Length > 1 )
                     {
                         var dateRangeText = SlidingDateRangePicker.FormatDelimitedValues( filterValueValues[1] );
-                        return string.Format("during '{0}'", dateRangeText);
+                        return dateRangeText.IsNotNullOrWhiteSpace() ? string.Format( "During '{0}'", dateRangeText ) : null;
                     }
                     else
                     {
@@ -665,7 +661,7 @@ namespace Rock.Field.Types
                 filterValueValues[0] = ParseRelativeValue( filterValueValues[0] );
             
                 string comparisonValue = filterValues[0];
-                if ( comparisonValue != "0" )
+                if ( comparisonValue != "0" && comparisonValue.IsNotNullOrWhiteSpace() )
                 {
                     ComparisonType comparisonType = comparisonValue.ConvertToEnum<ComparisonType>( ComparisonType.EqualTo );
                     MemberExpression propertyExpression = Expression.Property( parameterExpression, propertyName );
@@ -674,19 +670,60 @@ namespace Rock.Field.Types
                         var dateRange = SlidingDateRangePicker.CalculateDateRangeFromDelimitedValues( filterValueValues[1] );
                         ConstantExpression constantExpressionLower = dateRange.Start.HasValue 
                             ? Expression.Constant( dateRange.Start, typeof( DateTime ) )
-                            : Expression.Constant( null );
+                            : null;
 
                         ConstantExpression constantExpressionUpper = dateRange.End.HasValue
                             ? Expression.Constant( dateRange.End, typeof( DateTime ) )
-                            : Expression.Constant( null );
+                            : null;
 
-                        return ComparisonHelper.ComparisonExpression( comparisonType, propertyExpression, constantExpressionLower, constantExpressionUpper );
+                        if ( constantExpressionLower == null && constantExpressionUpper == null )
+                        {
+                            return new NoAttributeFilterExpression();
+                        }
+                        else
+                        {
+                            /*
+                             * Convert expressions to int if the property type is an int
+                             */
+                            if(propertyType == typeof( int ) || propertyType == typeof( int? ) )
+                            {
+                                if( constantExpressionLower != null )
+                                {
+                                    constantExpressionLower = Expression.Constant( Convert.ToDateTime( constantExpressionLower.Value ).ToString( "yyyyMMdd" ).AsInteger(), typeof( int ) );
+                                }
+                                if ( constantExpressionUpper != null )
+                                {
+                                    constantExpressionUpper = Expression.Constant( Convert.ToDateTime( constantExpressionUpper.Value ).ToString( "yyyyMMdd" ).AsInteger(), typeof( int ) );
+                                }
+                            }
+
+                            return ComparisonHelper.ComparisonExpression( comparisonType, propertyExpression, constantExpressionLower, constantExpressionUpper );
+                        }
                     }
                     else
                     {
-                        var dateTime = filterValueValues[0].AsDateTime() ?? DateTime.MinValue;
-                        ConstantExpression constantExpression = Expression.Constant( dateTime, typeof( DateTime ) );
-                        return ComparisonHelper.ComparisonExpression( comparisonType, propertyExpression, constantExpression );
+                        var dateTime = filterValueValues[0].AsDateTime();
+                        if ( dateTime.HasValue )
+                        {
+                            ConstantExpression constantExpression = Expression.Constant( dateTime, typeof( DateTime ) );
+                            if (propertyType == typeof( int ) || propertyType == typeof( int? ) )
+                            {
+                                constantExpression = Expression.Constant( dateTime?.ToString( "yyyyMMdd" ).AsInteger(), typeof( int ) );
+                            } 
+                            
+                            return ComparisonHelper.ComparisonExpression( comparisonType, propertyExpression, constantExpression );
+                        }
+                        else
+                        {
+                            if ( comparisonType == ComparisonType.IsBlank || comparisonType == ComparisonType.IsNotBlank )
+                            {
+                                return ComparisonHelper.ComparisonExpression( comparisonType, propertyExpression, null );
+                            }
+                            else
+                            {
+                                return new NoAttributeFilterExpression();
+                            }
+                        }
                     }
                 }
             }
@@ -703,7 +740,61 @@ namespace Rock.Field.Types
         /// <returns></returns>
         public override Expression AttributeFilterExpression( Dictionary<string, ConfigurationValue> configurationValues, List<string> filterValues, ParameterExpression parameterExpression )
         {
-            return PropertyFilterExpression( configurationValues, filterValues, parameterExpression, "ValueAsDateTime", typeof( DateTime? ) );
+            var comparison = PropertyFilterExpression( configurationValues, filterValues, parameterExpression, "ValueAsDateTime", typeof( DateTime? ) );
+
+            if ( comparison == null )
+            {
+                return new Rock.Data.NoAttributeFilterExpression();
+            }
+
+            return comparison;
+        }
+
+        /// <summary>
+        /// Determines whether the filter's comparison type and filter compare value(s) evaluates to true for the specified value
+        /// </summary>
+        /// <param name="filterValues">The filter values.</param>
+        /// <param name="value">The value.</param>
+        /// <returns>
+        ///   <c>true</c> if [is compared to value] [the specified filter values]; otherwise, <c>false</c>.
+        /// </returns>
+        public override bool IsComparedToValue( List<string> filterValues, string value )
+        {
+            if ( filterValues == null || filterValues.Count < 2 )
+            {
+                return false;
+            }
+
+            ComparisonType? filterComparisonType = filterValues[0].ConvertToEnumOrNull<ComparisonType>();
+
+            if (filterComparisonType == null )
+            {
+                return false;
+            }
+
+            ComparisonType? equalToCompareValue = GetEqualToCompareValue().ConvertToEnumOrNull<ComparisonType>();
+            DateTime? valueAsDateTime = value.AsDateTime();
+
+            // uses Tab Delimited since slidingDateRangePicker is | delimited
+            var filterValueValues = filterValues[1].Split( new string[] { "\t" }, StringSplitOptions.None );
+
+            // Parse for RelativeValue of DateTime (if specified)
+            filterValueValues[0] = ParseRelativeValue( filterValueValues[0] );
+            DateTime? filterValueAsDateTime1;
+            DateTime? filterValueAsDateTime2 = null;
+            if ( filterComparisonType == ComparisonType.Between )
+            {
+                var dateRange = SlidingDateRangePicker.CalculateDateRangeFromDelimitedValues( filterValueValues[1] );
+                filterValueAsDateTime1 = dateRange.Start;
+                filterValueAsDateTime2 = dateRange.End;
+            }
+            else
+            {
+                filterValueAsDateTime1 = filterValueValues[0].AsDateTime();
+                filterValueAsDateTime2 = null;
+            }
+
+            return ComparisonHelper.CompareNumericValues( filterComparisonType.Value, valueAsDateTime?.Ticks, filterValueAsDateTime1?.Ticks, filterValueAsDateTime2?.Ticks );
         }
 
         /// <summary>

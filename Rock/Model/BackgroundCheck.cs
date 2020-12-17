@@ -19,7 +19,6 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
-using System.Text;
 
 using Rock.Data;
 
@@ -188,16 +187,6 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public virtual Rock.Model.EntityType ProcessorEntityType { get; set; }
-
-        /// <summary>
-        /// Gets or sets the response XML.
-        /// </summary>
-        /// <value>
-        /// The response XML.
-        /// </value>
-        [NotMapped]
-        [Obsolete( "Use ResponseData Instead" )]
-        public virtual string ResponseXml { get; set; }
 
         #endregion
     }

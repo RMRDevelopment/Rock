@@ -15,19 +15,21 @@
 // </copyright>
 //
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data.Entity;
 using System.Linq;
 using System.Web.UI;
+using System.Web.UI.WebControls;
+
 using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
-using Rock.Web.UI;
-using Rock.Web.UI.Controls;
-using System.ComponentModel;
 using Rock.Security;
 using Rock.Web.Cache;
-using System.Collections.Generic;
-using System.Web.UI.WebControls;
+using Rock.Web.UI;
+using Rock.Web.UI.Controls;
 
 namespace RockWeb.Blocks.Cms
 {
@@ -38,9 +40,48 @@ namespace RockWeb.Blocks.Cms
     [Category( "CMS" )]
     [Description( "Lists content channels." )]
 
-    [LinkedPage( "Detail Page" )]
+    #region Block Attributes
+
+    [LinkedPage(
+        "Detail Page",
+        Key = AttributeKey.DetailPage )]
+
+    #endregion Block Attributes
     public partial class ContentChannelList : RockBlock, ISecondaryBlock, ICustomGridColumns
     {
+        #region Attribute Keys
+
+        private static class AttributeKey
+        {
+            public const string DetailPage = "DetailPage";
+        }
+
+        #endregion Attribute Keys
+
+        #region UserPreferenceKeys
+
+        private static class UserPreferenceKey
+        {
+            public const string Type = "Type";
+            public const string Categories = "Categories";
+        }
+
+        #endregion UserPreferanceKeys
+
+        #region Page Parameter Keys
+
+        /// <summary>
+        /// The keys used in page parameters.
+        /// </summary>
+        private class PageParameterKey
+        {
+            /// <summary>
+            /// The member identifier key.
+            /// </summary>
+            public const string ContentChannelId = "ContentChannelId";
+        }
+
+        #endregion
 
         #region Control Methods
 
@@ -67,7 +108,7 @@ namespace RockWeb.Blocks.Cms
             var securityField = gContentChannels.Columns.OfType<SecurityField>().FirstOrDefault();
             if ( securityField != null )
             {
-                securityField.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.ContentChannel ) ).Id;
+                securityField.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.ContentChannel ) ).Id;
             }
 
             // this event gets fired after block settings are updated. it's nice to repaint the screen if these settings would alter it
@@ -103,7 +144,30 @@ namespace RockWeb.Blocks.Cms
         {
             switch ( e.Key )
             {
-                case "Type":
+                case UserPreferenceKey.Categories:
+                    {
+                        var categories = new List<string>();
+
+                        foreach ( var idVal in e.Value.SplitDelimitedValues() )
+                        {
+                            int id = int.MinValue;
+                            if ( int.TryParse( idVal, out id ) )
+                            {
+                                if ( id != 0 )
+                                {
+                                    var category = CategoryCache.Get( id );
+                                    if ( category != null )
+                                    {
+                                        categories.Add( CategoryCache.Get( id ).Name );
+                                    }
+                                }
+                            }
+                        }
+
+                        e.Value = categories.AsDelimited( ", " );
+                        break;
+                    }
+                case UserPreferenceKey.Type:
                     {
                         int? typeId = e.Value.AsIntegerOrNull();
                         if ( typeId.HasValue )
@@ -131,7 +195,14 @@ namespace RockWeb.Blocks.Cms
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         void gfFilter_ApplyFilterClick( object sender, EventArgs e )
         {
-            gfFilter.SaveUserPreference( "Type", ddlType.SelectedValue );
+            gfFilter.SaveUserPreference( UserPreferenceKey.Type, ddlType.SelectedValue );
+            string categoryFilterValue = cpCategories.SelectedValuesAsInt()
+                .Where( v => v != 0 )
+                .Select( c => c.ToString() )
+                .ToList()
+                .AsDelimited( "," );
+
+            gfFilter.SaveUserPreference( UserPreferenceKey.Categories, categoryFilterValue );
             BindGrid();
         }
 
@@ -142,7 +213,7 @@ namespace RockWeb.Blocks.Cms
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void gContentChannels_Add( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "contentChannelId", 0 );
+            NavigateToLinkedPage( AttributeKey.DetailPage, PageParameterKey.ContentChannelId, 0 );
         }
 
         /// <summary>
@@ -152,7 +223,7 @@ namespace RockWeb.Blocks.Cms
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gContentChannels_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "contentChannelId", e.RowKeyId );
+            NavigateToLinkedPage( AttributeKey.DetailPage, PageParameterKey.ContentChannelId, e.RowKeyId );
         }
 
         /// <summary>
@@ -172,7 +243,7 @@ namespace RockWeb.Blocks.Cms
                 string errorMessage;
                 if ( !contentChannelService.CanDelete( contentChannel, out errorMessage ) )
                 {
-                    mdGridWarning.Show( errorMessage, ModalAlertType.Information );
+                    mdGridWarning.Show( errorMessage, ModalAlertType.Warning );
                     return;
                 }
 
@@ -239,12 +310,22 @@ namespace RockWeb.Blocks.Cms
         {
             ContentChannelService contentChannelService = new ContentChannelService( new RockContext() );
             SortProperty sortProperty = gContentChannels.SortProperty;
-            var qry = contentChannelService.Queryable( "ContentChannelType,Items" );
+            var qry = contentChannelService.Queryable()
+                .Include( a => a.ContentChannelType )
+                .Include( a => a.Items )
+                .Where( a => a.ContentChannelType.ShowInChannelList == true );
 
-            int? typeId = gfFilter.GetUserPreference( "Type" ).AsIntegerOrNull();
+            int? typeId = gfFilter.GetUserPreference( UserPreferenceKey.Type ).AsIntegerOrNull();
             if ( typeId.HasValue )
             {
                 qry = qry.Where( c => c.ContentChannelTypeId == typeId.Value );
+            }
+
+            var selectedCategoryIds = new List<int>();
+            gfFilter.GetUserPreference( UserPreferenceKey.Categories ).SplitDelimitedValues().ToList().ForEach( s => selectedCategoryIds.Add( int.Parse( s ) ) );
+            if ( selectedCategoryIds.Any() )
+            {
+                qry = qry.Where( a => a.Categories.Any( c => selectedCategoryIds.Contains( c.Id ) ) );
             }
 
             gContentChannels.ObjectList = new Dictionary<string, object>();
@@ -277,7 +358,7 @@ namespace RockWeb.Blocks.Cms
                     ).Count()
             } ).AsQueryable();
 
-            gContentChannels.EntityTypeId = EntityTypeCache.Read<ContentChannel>().Id;
+            gContentChannels.EntityTypeId = EntityTypeCache.Get<ContentChannel>().Id;
 
             if ( sortProperty != null )
             {

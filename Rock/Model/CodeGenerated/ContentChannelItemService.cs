@@ -55,6 +55,8 @@ namespace Rock.Model
             // ignoring ContentChannelItemAssociation,ChildContentChannelItemId 
             
             // ignoring ContentChannelItemAssociation,ContentChannelItemId 
+            
+            // ignoring ContentChannelItemSlug,ContentChannelItemId 
             return true;
         }
     }
@@ -100,11 +102,13 @@ namespace Rock.Model
             target.ExpireDateTime = source.ExpireDateTime;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
+            target.ItemGlobalKey = source.ItemGlobalKey;
             target.Order = source.Order;
             target.Permalink = source.Permalink;
             target.Priority = source.Priority;
             target.StartDateTime = source.StartDateTime;
             target.Status = source.Status;
+            target.StructuredContent = source.StructuredContent;
             target.Title = source.Title;
             target.CreatedDateTime = source.CreatedDateTime;
             target.ModifiedDateTime = source.ModifiedDateTime;

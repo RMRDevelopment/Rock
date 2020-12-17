@@ -33,11 +33,23 @@ namespace Rock.SystemGuid
         #endregion DataView Categories
 
         #region Defined Type Categories
+
         /// <summary>
-        /// History changes for an event registration
+        /// Campus Category
+        /// </summary>
+        public const string DEFINEDTYPE_CAMPUS = "4503C83E-4171-4EAE-99C1-A3647E065181";
+
+        /// <summary>
+        /// CMS Category
         /// </summary>
         public const string DEFINEDTYPE_CMS = "6B1B3106-B7F5-BBA2-4F81-8300F21F6661";
-        #endregion    
+
+        /// <summary>
+        /// CMS Settings Category
+        /// </summary>
+        public const string DEFINEDTYPE_CMS_SETTINGS = "262313F6-5D66-41CE-9B6F-D36567D9AB9D";
+
+        #endregion
 
         #region History Categories
 
@@ -97,6 +109,11 @@ namespace Rock.SystemGuid
         public const string HISTORY_PERSON_ANALYTICS = "C1524D2E-3E8F-3D83-45F8-526B749D79F0";
 
         /// <summary>
+        /// Parent group for Group History
+        /// </summary>
+        public const string HISTORY_GROUP = "180C5767-8769-4C51-865F-FEE29AEF80A0";
+
+        /// <summary>
         /// History of group changes
         /// </summary>
         public const string HISTORY_GROUP_CHANGES = "089EB47D-D0EF-493E-B867-DC51BCDEF319";
@@ -120,19 +137,29 @@ namespace Rock.SystemGuid
         #region Person Attributes
 
         /// <summary>
-        /// The person attributes Social guid
+        /// The category for person attributes Social guid
         /// </summary>
         public const string PERSON_ATTRIBUTES_SOCIAL = "DD8F467D-B83C-444F-B04C-C681167046A1";
-        
+
         /// <summary>
-        /// The person attribute for ERA
+        /// The category for person attribute for ERA
         /// </summary>
         public const string PERSON_ATTRIBUTES_ERA = "266A1EA8-425C-7BB0-4191-C2E234D60086";
 
         /// <summary>
-        /// The person attribute for Finance Internal
+        /// The category for person attribute for Finance Internal
         /// </summary>
         public const string PERSON_ATTRIBUTES_FINANCE_INTERNAL = "3030B3E2-91EE-4833-BACE-47F775FA98A0";
+
+        /// <summary>
+        /// The category for person attributes for DISC
+        /// </summary>
+        public const string PERSON_ATTRIBUTES_DISC = "0B187C81-2106-4875-82B6-FBF1277AE23B";
+
+        /// <summary>
+        /// The category for person attributes for Personality Assessment Data
+        /// </summary>
+        public const string PERSON_ATTRIBUTES_PERSONALITY_ASSESSMENT_DATA = "B08A3096-FCFA-4DA0-B95D-1F3F11CC9969";
 
         #endregion
 
@@ -159,7 +186,19 @@ namespace Rock.SystemGuid
         /// <summary>
         /// The System Email Workflow Category guid
         /// </summary>
+        [Obsolete( "Use SYSTEM_COMMUNICATION_WORKFLOW instead." )]
+        [RockObsolete("1.10")]
         public const string SYSTEM_EMAIL_WORKFLOW = "C7B9B5F1-9D90-485F-93E4-5D7D81EC2B12";
+
+        /// <summary>
+        /// The System Communication Workflow Category guid
+        /// </summary>
+        public const string SYSTEM_COMMUNICATION_WORKFLOW = "D8EC958D-ADD5-48FC-B539-CB919F5C9D32";
+
+        /// <summary>
+        /// The System Communication RSVP Confirmation Category guid
+        /// </summary>
+        public const string SYSTEM_COMMUNICATION_RSVP_CONFIRMATION = "19024818-E456-4642-8858-F50C8B6DB5ED";
 
         #endregion
 
@@ -169,8 +208,30 @@ namespace Rock.SystemGuid
         /// The Personal Merge Template Category guid
         /// </summary>
         public const string PERSONAL_MERGE_TEMPLATE = "A9F2F544-660B-4176-ACAD-88898416A66E";
-        
+
         #endregion
 
+        #region Registration Attributes
+
+        /// <summary>
+        /// The registration attribute category that indicates Registration Attributes that should be prompted for at the start of the registration process.
+        /// </summary>
+        public const string REGISTRATION_ATTRIBUTE_START_OF_REGISTRATION = "27808664-97E7-432B-A1E7-D02F6DE5977A";
+
+        /// <summary>
+        /// The registration attribute category that indicates Registration Attributes that should be prompted for at the end of the registration process.
+        /// </summary>
+        public const string REGISTRATION_ATTRIBUTE_END_OF_REGISTRATION = "4648196E-CEB8-4D76-8F27-273EBBC35A08";
+
+        #endregion
+
+        #region Metric Categories
+
+        /// <summary>
+        /// Hosting Metrics Metric Category Guid
+        /// </summary>
+        public const string METRIC_HOSTING_METRICS = "370FBBD8-7766-4B3F-81A9-F13EE819A832";
+
+        #endregion
     }
 }

@@ -18,11 +18,10 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
-using System.Linq;
 using System.Data.Entity;
+using System.Linq;
 
 using Rock;
-using Rock.Workflow;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
@@ -79,7 +78,7 @@ namespace Rock.Workflow.Action
             Guid? filterValueGuid = filterValue.AsGuidOrNull();
             if ( filterValueGuid.HasValue )
             {
-                filterValue = action.GetWorklowAttributeValue( filterValueGuid.Value );
+                filterValue = action.GetWorkflowAttributeValue( filterValueGuid.Value );
             }
             else
             {
@@ -113,15 +112,15 @@ namespace Rock.Workflow.Action
                 Guid selectPersonGuid = GetAttributeValue( action, "SelectedPerson" ).AsGuid();
                 if ( !selectPersonGuid.IsEmpty() )
                 {
-                    var selectedPersonAttribute = AttributeCache.Read( selectPersonGuid, rockContext );
+                    var selectedPersonAttribute = AttributeCache.Get( selectPersonGuid, rockContext );
                     if ( selectedPersonAttribute != null )
                     {
                         // If this is a person type attribute
-                        if ( selectedPersonAttribute.FieldTypeId == FieldTypeCache.Read( Rock.SystemGuid.FieldType.PERSON.AsGuid(), rockContext ).Id )
+                        if ( selectedPersonAttribute.FieldTypeId == FieldTypeCache.Get( Rock.SystemGuid.FieldType.PERSON.AsGuid(), rockContext ).Id )
                         {
                             SetWorkflowAttributeValue( action, selectPersonGuid, selectedGroupMember.PrimaryAliasGuid.ToString() );
                         }
-                        else if ( selectedPersonAttribute.FieldTypeId == FieldTypeCache.Read( Rock.SystemGuid.FieldType.TEXT.AsGuid(), rockContext ).Id )
+                        else if ( selectedPersonAttribute.FieldTypeId == FieldTypeCache.Get( Rock.SystemGuid.FieldType.TEXT.AsGuid(), rockContext ).Id )
                         {
                             SetWorkflowAttributeValue( action, selectPersonGuid, Person.FormatFullName(selectedGroupMember.NickName, selectedGroupMember.LastName, selectedGroupMember.SuffixValueId)  );
                         }

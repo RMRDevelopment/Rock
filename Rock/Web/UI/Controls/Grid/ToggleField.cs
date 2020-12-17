@@ -17,7 +17,6 @@
 using System;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using System.Web.UI.HtmlControls;
 
 namespace Rock.Web.UI.Controls
 {
@@ -34,6 +33,7 @@ namespace Rock.Web.UI.Controls
             : base()
         {
             this.ItemStyle.HorizontalAlign = HorizontalAlign.Center;
+            this.HeaderStyle.HorizontalAlign = HorizontalAlign.Center;
         }
 
         /// <summary>

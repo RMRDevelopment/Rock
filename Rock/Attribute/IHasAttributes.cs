@@ -16,8 +16,6 @@
 //
 using System.Collections.Generic;
 
-using Rock.Web.Cache;
-
 namespace Rock.Attribute
 {
     /// <summary>
@@ -38,7 +36,7 @@ namespace Rock.Attribute
         /// <value>
         /// The attributes.
         /// </value>
-        Dictionary<string, AttributeCache> Attributes { get; set; }
+        Dictionary<string, Web.Cache.AttributeCache> Attributes { get; set; }
 
         /// <summary>
         /// Dictionary of all attributes and their value.  Key is the attribute key, and value is the associated attribute value
@@ -46,7 +44,7 @@ namespace Rock.Attribute
         /// <value>
         /// The attribute values.
         /// </value>
-        Dictionary<string, AttributeValueCache> AttributeValues { get; set; }
+        Dictionary<string, Web.Cache.AttributeValueCache> AttributeValues { get; set; }
 
         /// <summary>
         /// Gets the attribute value defaults.  This property can be used by a subclass to override the parent class's default

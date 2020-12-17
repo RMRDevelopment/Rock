@@ -3,14 +3,14 @@
 <asp:UpdatePanel ID="upnlContent" runat="server">
     <ContentTemplate>
 
-        <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+        <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
         <Rock:NotificationBox ID="nbInvalid" runat="server" NotificationBoxType="Danger" Visible="false" />
         <Rock:NotificationBox ID="nbWarningMessage" runat="server" NotificationBoxType="Warning" />
 
         <asp:Panel ID="pnlAddPledge" runat="server" CssClass="panel panel-block">
 
             <div class="panel-heading">
-                <h3 class="panel-title"></h3>
+                <h1 class="panel-title"></h1>
             </div>
             <div class="panel-body">
                 <fieldset>

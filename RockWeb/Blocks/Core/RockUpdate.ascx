@@ -20,6 +20,13 @@
                      <p>As of Rock McKinley v6, Rock requires Microsoft .NET Framework 4.5.2 or greater on the hosting server.
                         This framework version was released by Microsoft on May 5th, 2014.</p>
                  </Rock:NotificationBox>
+                 <Rock:NotificationBox ID="nbSqlServerVersionIssue" runat="server" NotificationBoxType="Danger" Visible="false">
+                    <h2><i class="fa fa-exclamation-triangle"></i> Microsoft SQL Server Update Required</h2>
+                    <p>
+                        As of Rock McKinley v11, Rock requires SQL Server 2014 or greater.
+                        You will need to upgrade your database in order to proceed with that update.
+                    </p>
+                 </Rock:NotificationBox>
                  <asp:Panel ID="pnlNoUpdates" runat="server">
                     <div class="well well-message">
                         <h1>Everything Is Shipshape</h1>
@@ -49,18 +56,18 @@
 
                 <!-- Early Access Messages -->
                 <div class="well">
-                    <div class="row margin-b-lg">
-                        <div class="col-xs-4 col-sm-2 col-md-2 col-lg-2">
+                    <div class="row d-md-flex justify-content-center align-items-center">
+                        <div class="col-sm-3 col-md-2 mb-2 mb-md-0 clearfix">
                             <Rock:HighlightLabel runat="server" ID="hlblEarlyAccess" LabelType="Warning" Text="Early Access: Not Enabled" CssClass="padding-all-sm"></Rock:Highlightlabel>
                         </div>
-                        <div class="col-xs-8 col-sm-10 col-md-10 col-lg-10">
+                        <div class="col-sm-9 col-md-10">
                             <!-- Early Access Not Enabled -->
-                            <asp:Panel runat="server" ID="pnlEarlyAccessNotEnabled" Visible="true"> 
+                            <asp:Panel runat="server" ID="pnlEarlyAccessNotEnabled" Visible="true">
                                 <p>
                                     Community Contributors have early access to major releases of Rock. Find out
                                 <a href="http://www.rockrms.com/earlyaccess">how to get early access to releases as a Community Contributor</a>.
-                                   
-                                    If you are already a Community Contributor and are having trouble with your access, 
+
+                                    If you are already a Community Contributor and are having trouble with your access,
                                     <asp:Hyperlink ID="btnIssues" runat="server">let us know so we can resolve the problem</asp:Hyperlink>.
                                 </p>
                             </asp:Panel>
@@ -70,7 +77,7 @@
                         </div>
                     </div>
                 </div>
-                    
+
                 <asp:Panel ID="pnlUpdates" runat="server" Visible="false">
 
                     <div class="row margin-b-md">
@@ -135,15 +142,15 @@
 
                 <asp:Panel ID="pnlError" runat="server" Visible="false">
                     <div class="well well-message well-message-danger">
-                        <h1>Whoa... That Wasn't Suppose To Happen</h1>
+                        <h1>Whoa... That Wasn't Supposed To Happen</h1>
                         <i class="fa fa-exclamation-circle"></i>
-                        <p>An error ocurred during the update process.</p>
+                        <p>An error occurred during the update process.</p>
                     </div>
-            
+
                     <asp:Literal ID="lMessage" runat="server"></asp:Literal>
-                
+
                     <Rock:NotificationBox ID="nbErrors" runat="server" NotificationBoxType="Danger" Heading="Here's what happened..." />
-                </asp:Panel>       
+                </asp:Panel>
             </div>
         </div>
 

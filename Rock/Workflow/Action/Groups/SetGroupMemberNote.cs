@@ -68,7 +68,7 @@ namespace Rock.Workflow.Action
 
             if ( !groupAttributeGuid.IsEmpty() )
             {
-                groupGuid = action.GetWorklowAttributeValue( groupAttributeGuid ).AsGuidOrNull();
+                groupGuid = action.GetWorkflowAttributeValue( groupAttributeGuid ).AsGuidOrNull();
 
                 if ( groupGuid.HasValue )
                 {
@@ -92,10 +92,10 @@ namespace Rock.Workflow.Action
             Guid guid = personAttribute.AsGuid();
             if ( !guid.IsEmpty() )
             {
-                var attribute = AttributeCache.Read( guid, rockContext );
+                var attribute = AttributeCache.Get( guid, rockContext );
                 if ( attribute != null )
                 {
-                    string value = action.GetWorklowAttributeValue( guid );
+                    string value = action.GetWorkflowAttributeValue( guid );
                     personAliasGuid = value.AsGuid();
                 }
 
@@ -126,7 +126,7 @@ namespace Rock.Workflow.Action
             }
             else
             {
-                var workflowAttributeValue = action.GetWorklowAttributeValue( guid );
+                var workflowAttributeValue = action.GetWorkflowAttributeValue( guid );
 
                 if ( workflowAttributeValue != null )
                 {

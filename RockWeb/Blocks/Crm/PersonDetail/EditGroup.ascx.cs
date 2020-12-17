@@ -34,30 +34,117 @@ using Rock.Web.UI.Controls;
 namespace RockWeb.Blocks.Crm.PersonDetail
 {
     /// <summary>
-    /// The main Person Profile block the main information about a peron 
+    /// The main Person Profile block the main information about a person 
     /// </summary>
     [DisplayName( "Edit Group" )]
     [Category( "CRM > Person Detail" )]
     [Description( "Allows you to edit a group that person belongs to." )]
 
-    [DefinedValueField( Rock.SystemGuid.DefinedType.PERSON_CONNECTION_STATUS, "Default Connection Status",
-        "The connection status that should be set by default", false, false, Rock.SystemGuid.DefinedValue.PERSON_CONNECTION_STATUS_VISITOR, "", 0 )]
-    [BooleanField( "Require Campus", "Determines if a campus is required.", true, "", 1 )]
-    [BooleanField( "Require Birthdate", "Determines if a birthdate should be required.", false, "", 2 )]
-    [BooleanField( "Hide Title", "Should Title field be hidden when entering new people?.", false, "", 3 )]
-    [BooleanField( "Hide Suffix", "Should Suffix field be hidden when entering new people?.", false, "", 4 )]
-    [BooleanField( "Hide Grade", "Should Grade field be hidden when entering new people?.", false, "", 5 )]
-    [BooleanField( "Show Age", "Should Age of Family Members be displayed?.", false, "", 6 )]
-    [DefinedValueField( Rock.SystemGuid.DefinedType.PERSON_PHONE_TYPE, "New Person Phone", "The Phone Type to prompt for when adding a new person to family (if any).", false, false, "", "", 7)]
-    [BooleanField("New Person Email", "Should an Email field be displayed when adding a new person to the family?", false, "", 8 )]
+    #region Block Attributes
+
+    [DefinedValueField(
+        "Default Connection Status",
+        Key = AttributeKey.DefaultConnectionStatus,
+        Description = "The connection status that should be set by default",
+        DefinedTypeGuid = Rock.SystemGuid.DefinedType.PERSON_CONNECTION_STATUS,
+        IsRequired = false,
+        AllowMultiple = false,
+        DefaultValue = Rock.SystemGuid.DefinedValue.PERSON_CONNECTION_STATUS_VISITOR,
+        Order = 0 )]
+
+    [BooleanField(
+        "Require Campus",
+        Key = AttributeKey.RequireCampus,
+        Description = "Determines if a campus is required.",
+        DefaultBooleanValue = true,
+        Order = 1 )]
+
+    [BooleanField(
+        "Require Birthdate",
+        Key = AttributeKey.RequireBirthdate,
+        Description = "Determines if a birthdate should be required.",
+        DefaultBooleanValue = false,
+        Order = 2 )]
+
+    [BooleanField(
+        "Hide Title",
+        Key = AttributeKey.HideTitle,
+        Description = "Should Title field be hidden when entering new people?.",
+        DefaultBooleanValue = false,
+        Order = 3 )]
+
+    [BooleanField(
+        "Hide Suffix",
+        Key = AttributeKey.HideSuffix,
+        Description = "Should Suffix field be hidden when entering new people?.",
+        DefaultBooleanValue = false,
+        Order = 4 )]
+
+    [BooleanField(
+        "Hide Grade",
+        Key = AttributeKey.HideGrade,
+        Description = "Should Grade field be hidden when entering new people?.",
+        DefaultBooleanValue = false,
+        Order = 5 )]
+
+    [BooleanField(
+        "Show Age",
+        Key = AttributeKey.ShowAge,
+        Description = "Should Age of Family Members be displayed?.",
+        DefaultBooleanValue = false,
+        Order = 6 )]
+
+    [BooleanField(
+        "Show County",
+        Key = AttributeKey.ShowCounty,
+        Description = "Should County be displayed when editing an address?",
+        DefaultBooleanValue = false,
+        Order = 7 )]
+
+    [DefinedValueField(
+        "New Person Phone",
+        Key = AttributeKey.NewPersonPhone,
+        Description = "The Phone Type to prompt for when adding a new person to family (if any).",
+        DefinedTypeGuid = Rock.SystemGuid.DefinedType.PERSON_PHONE_TYPE,
+        IsRequired = false,
+        AllowMultiple = false,
+        Order = 8 )]
+
+    [BooleanField(
+        "New Person Email",
+        Key = AttributeKey.NewPersonEmail,
+        Description = "Should an Email field be displayed when adding a new person to the family?",
+        DefaultBooleanValue = false,
+        Order = 9 )]
+
+    #endregion Block Attributes
+
     public partial class EditGroup : PersonBlock
     {
+        #region Attribute Keys
+        private static class AttributeKey
+        {
+            public const string DefaultConnectionStatus = "DefaultConnectionStatus";
+            public const string RequireCampus = "RequireCampus";
+            public const string RequireBirthdate = "RequireBirthdate";
+            public const string HideTitle = "HideTitle";
+            public const string HideSuffix = "HideSuffix";
+            public const string HideGrade = "HideGrade";
+            public const string ShowAge = "ShowAge";
+            public const string ShowCounty = "ShowCounty";
+            public const string NewPersonPhone = "NewPersonPhone";
+            public const string NewPersonEmail = "NewPersonEmail";
+        }
+        #endregion Attribute Keys
+
+
         private GroupTypeCache _groupType = null;
         private bool _isFamilyGroupType = false;
         private Group _group = null;
         private bool _canEdit = false;
         private bool _showAge = false;
         private bool _showEmail = false;
+        private bool _showCounty = false;
         private DefinedValueCache _showPhoneType = null;
 
         protected string basePersonUrl { get; set; }
@@ -108,6 +195,15 @@ namespace RockWeb.Blocks.Crm.PersonDetail
             }
         }
 
+        private string DefaultCountry
+        {
+            get
+            {
+                var globalAttributesCache = GlobalAttributesCache.Get();
+                return globalAttributesCache.OrganizationCountry;
+            }
+        }
+
         /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Init" /> event.
         /// </summary>
@@ -116,7 +212,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
         {
             base.OnInit( e );
 
-            _showAge = GetAttributeValue( "ShowAge" ).AsBoolean();
+            _showAge = GetAttributeValue( AttributeKey.ShowAge ).AsBoolean();
 
             var rockContext = new RockContext();
 
@@ -138,7 +234,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
             }
             else
             {
-                _groupType = GroupTypeCache.Read( _group.GroupTypeId );
+                _groupType = GroupTypeCache.Get( _group.GroupTypeId );
 
                 rblNewPersonRole.DataSource = _groupType.Roles.OrderBy( r => r.Order ).ToList();
                 rblNewPersonRole.DataBind();
@@ -170,26 +266,33 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 
             var campusi = CampusCache.All();
             cpCampus.Campuses = campusi;
-            cpCampus.Visible = campusi.Any();
 
             if ( _isFamilyGroupType )
             {
-                cpCampus.Required = GetAttributeValue( "RequireCampus" ).AsBoolean( true );
+                cpCampus.Required = GetAttributeValue( AttributeKey.RequireCampus ).AsBoolean( true );
 
-                ddlRecordStatus.Visible = true;
-                ddlRecordStatus.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.PERSON_RECORD_STATUS.AsGuid() ), true );
-                ddlReason.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.PERSON_RECORD_STATUS_REASON.AsGuid() ), true );
+                dvpRecordStatus.Visible = true;
+                dvpRecordStatus.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.PERSON_RECORD_STATUS.AsGuid() ).Id;
+                dvpReason.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.PERSON_RECORD_STATUS_REASON.AsGuid() ).Id;
             }
             else
             {
                 cpCampus.Required = false;
-                ddlRecordStatus.Visible = false;
+                dvpRecordStatus.Visible = false;
             }
 
-            ddlNewPersonTitle.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.PERSON_TITLE.AsGuid() ), true );
-            ddlNewPersonSuffix.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.PERSON_SUFFIX.AsGuid() ), true );
-            ddlNewPersonMaritalStatus.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.PERSON_MARITAL_STATUS.AsGuid() ), true );
-            ddlNewPersonConnectionStatus.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.PERSON_CONNECTION_STATUS.AsGuid() ), true );
+            dvpGroupStatus.DefinedTypeId = _groupType.GroupStatusDefinedTypeId;
+            if ( _groupType.GroupStatusDefinedType != null )
+            {
+                dvpGroupStatus.Label = _groupType.GroupStatusDefinedType.ToString();
+            }
+
+            dvpGroupStatus.Visible = _groupType.GroupStatusDefinedTypeId.HasValue;
+
+            dvpNewPersonTitle.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.PERSON_TITLE.AsGuid() ).Id;
+            dvpNewPersonSuffix.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.PERSON_SUFFIX.AsGuid() ).Id;
+            dvpNewPersonMaritalStatus.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.PERSON_MARITAL_STATUS.AsGuid() ).Id;
+            dvpNewPersonConnectionStatus.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.PERSON_CONNECTION_STATUS.AsGuid() ).Id;
 
             lvMembers.DataKeyNames = new string[] { "Index" };
             lvMembers.ItemDataBound += lvMembers_ItemDataBound;
@@ -221,8 +324,10 @@ namespace RockWeb.Blocks.Crm.PersonDetail
             btnSave.OnClientClick = string.Format( "javascript:$('#{0}').val('');return true;", confirmExit.ClientID );
             btnCancel.OnClientClick = string.Format( "javascript:$('#{0}').val('');return true;", confirmExit.ClientID );
 
-            _showEmail = GetAttributeValue( "NewPersonEmail" ).AsBoolean();
-            _showPhoneType = DefinedValueCache.Read( GetAttributeValue( "NewPersonPhone" ).AsGuid() );
+            _showEmail = GetAttributeValue( AttributeKey.NewPersonEmail ).AsBoolean();
+            _showPhoneType = DefinedValueCache.Get( GetAttributeValue( AttributeKey.NewPersonPhone ).AsGuid() );
+            _showCounty = GetAttributeValue( AttributeKey.ShowCounty ).AsBoolean();
+            this.BlockUpdated += Block_BlockUpdated;
         }
 
         /// <summary>
@@ -295,37 +400,39 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                         // If all group members have the same record status, display that value
                         if ( _group.Members.Select( m => m.Person.RecordStatusValueId ).Distinct().Count() == 1 )
                         {
-                            ddlRecordStatus.SetValue( _group.Members.Select( m => m.Person.RecordStatusValueId ).FirstOrDefault() );
+                            dvpRecordStatus.SetValue( _group.Members.Select( m => m.Person.RecordStatusValueId ).FirstOrDefault() );
                         }
                         else
                         {
-                            ddlRecordStatus.Warning = String.Format( "{0} members have different record statuses", _groupType.Name );
+                            dvpRecordStatus.Warning = String.Format( "{0} members have different record statuses", _groupType.Name );
                         }
 
                         // If all group members have the same inactive reason, set that value
                         if ( _group.Members.Select( m => m.Person.RecordStatusReasonValueId ).Distinct().Count() == 1 )
                         {
-                            ddlReason.SetValue( _group.Members.Select( m => m.Person.RecordStatusReasonValueId ).FirstOrDefault() );
+                            dvpReason.SetValue( _group.Members.Select( m => m.Person.RecordStatusReasonValueId ).FirstOrDefault() );
                         }
                         else
                         {
-                            if ( String.IsNullOrWhiteSpace( ddlRecordStatus.Warning ) )
+                            if ( String.IsNullOrWhiteSpace( dvpRecordStatus.Warning ) )
                             {
-                                ddlRecordStatus.Warning = String.Format( "{0} members have different record status reasons", _groupType.Name );
+                                dvpRecordStatus.Warning = String.Format( "{0} members have different record status reasons", _groupType.Name );
                             }
                             else
                             {
-                                ddlRecordStatus.Warning += " and record status reasons";
+                                dvpRecordStatus.Warning += " and record status reasons";
                             }
                         }
 
                         // Does the family have any deceased members?
-                        var inactiveStatus = DefinedValueCache.Read( new Guid( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE ) ).Id;
+                        var inactiveStatus = DefinedValueCache.Get( new Guid( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE ) ).Id;
                         if ( _group.Members.Where( m => m.Person.RecordStatusValueId == inactiveStatus ).Any() )
                         {
                             HasDeceasedMembers = true;
                         }
                     }
+
+                    dvpGroupStatus.SetValue( _group.StatusValueId );
 
                     // Get all the group members
                     GroupMembers = new List<GroupMemberInfo>();
@@ -335,7 +442,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                     }
 
                     // Figure out which ones are in another group
-                    var groupMemberPersonIds = GroupMembers.Select( m => m.Id ).ToList();
+                    var groupMemberPersonIds = GroupMembers.Select( m => m.PersonId ).ToList();
                     var otherGroupPersonIds = new GroupMemberService( new RockContext() ).Queryable()
                         .Where( m =>
                             groupMemberPersonIds.Contains( m.PersonId ) &&
@@ -344,7 +451,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                         .Select( m => m.PersonId )
                         .Distinct();
                     GroupMembers
-                        .Where( m => otherGroupPersonIds.Contains( m.Id ) )
+                        .Where( m => otherGroupPersonIds.Contains( m.PersonId ) )
                         .ToList()
                         .ForEach( m => m.IsInOtherGroups = true );
 
@@ -355,12 +462,12 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                         .Where( l => l.GroupLocationTypeValue != null )
                         .OrderBy( l => l.GroupLocationTypeValue.Order ) )
                     {
-                        GroupAddresses.Add( new GroupAddressInfo( groupLocation ) );
+                        GroupAddresses.Add( new GroupAddressInfo( groupLocation, _showCounty ) );
                     }
                     foreach ( var groupLocation in _group.GroupLocations
                         .Where( l => l.GroupLocationTypeValue == null ) )
                     {
-                        GroupAddresses.Add( new GroupAddressInfo( groupLocation ) );
+                        GroupAddresses.Add( new GroupAddressInfo( groupLocation, _showCounty ) );
                     }
 
                     BindLocations();
@@ -435,7 +542,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                     tbNewPersonLastName.ClientID,                                   // {3}
                     rblNewPersonRole.RequiredFieldValidator.ClientID,               // {4}
                     rblNewPersonGender.RequiredFieldValidator.ClientID,             // {5}
-                    ddlNewPersonConnectionStatus.ClientID,                          // {6}
+                    dvpNewPersonConnectionStatus.ClientID,                          // {6}
                     valSummaryAddPerson.ClientID,                                   // {7}
                     divExistingPerson.ClientID,                                     // {8}
                     hfActiveTab.ClientID,                                           // {9}
@@ -444,6 +551,17 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 
                 ScriptManager.RegisterStartupScript( modalAddPerson, modalAddPerson.GetType(), "modaldialog-validation", script, true );
             }
+        }
+
+        /// <summary>
+        /// Handles the BlockUpdated event of the control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void Block_BlockUpdated( object sender, EventArgs e )
+        {
+            // Currently we need to go through the whole page cycle to get all of the data.
+            NavigateToCurrentPageReference();
         }
 
         #region Events
@@ -475,13 +593,13 @@ namespace RockWeb.Blocks.Crm.PersonDetail
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void ddlRecordStatus_SelectedIndexChanged( object sender, EventArgs e )
         {
-            var inactiveStatus = DefinedValueCache.Read( new Guid( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE ) ).Id;
-            if ( HasDeceasedMembers && ddlRecordStatus.SelectedValueAsInt() != inactiveStatus )
+            var inactiveStatus = DefinedValueCache.Get( new Guid( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE ) ).Id;
+            if ( HasDeceasedMembers && dvpRecordStatus.SelectedValueAsInt() != inactiveStatus )
             {
-                ddlRecordStatus.Warning = "Note: the status of deceased people will not be changed.";
+                dvpRecordStatus.Warning = "Note: the status of deceased people will not be changed.";
             }
 
-            ddlReason.Visible = ddlRecordStatus.SelectedValueAsInt() == inactiveStatus;
+            dvpReason.Visible = dvpRecordStatus.SelectedValueAsInt() == inactiveStatus;
             confirmExit.Enabled = true;
         }
 
@@ -491,6 +609,16 @@ namespace RockWeb.Blocks.Crm.PersonDetail
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void ddlReason_SelectedIndexChanged( object sender, EventArgs e )
+        {
+            confirmExit.Enabled = true;
+        }
+
+        /// <summary>
+        /// Handles the SelectedIndexChanged event of the dvpGroupStatus control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="System.EventArgs" /> instance containing the event data.</param>
+        protected void dvpGroupStatus_SelectedIndexChanged( object sender, EventArgs e )
         {
             confirmExit.Enabled = true;
         }
@@ -514,9 +642,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                     HtmlControl divPersonImage = e.Item.FindControl( "divPersonImage" ) as HtmlControl;
                     if ( divPersonImage != null )
                     {
-                        divPersonImage.Style.Add( "background-image", @String.Format( @"url({0})", Person.GetPersonPhotoUrl( groupMember.Id, groupMember.PhotoId, groupMember.Age, groupMember.Gender, null ) + "&width=65" ) );
-                        divPersonImage.Style.Add( "background-size", "cover" );
-                        divPersonImage.Style.Add( "background-position", "50%" );
+                        divPersonImage.Style.Add( "background-image", @String.Format( @"url({0})", Person.GetPersonPhotoUrl( groupMember.PersonId, groupMember.PhotoId, groupMember.Age, groupMember.Gender, groupMember.RecordTypeValueGuid, groupMember.AgeClassification ) + "&width=65" ) );
                     }
 
                     var rblRole = e.Item.FindControl( "rblRole" ) as RadioButtonList;
@@ -602,14 +728,14 @@ namespace RockWeb.Blocks.Crm.PersonDetail
             tbNewPersonLastName.Required = true;
             rblNewPersonRole.Required = true;
             rblNewPersonGender.Required = true;
-            ddlNewPersonConnectionStatus.Required = true;
-            var connectionStatusGuid = GetAttributeValue( "DefaultConnectionStatus" ).AsGuidOrNull();
+            dvpNewPersonConnectionStatus.Required = true;
+            var connectionStatusGuid = GetAttributeValue( AttributeKey.DefaultConnectionStatus ).AsGuidOrNull();
             if ( connectionStatusGuid.HasValue )
             {
-                var defaultConnectionStatus = DefinedValueCache.Read( connectionStatusGuid.Value );
+                var defaultConnectionStatus = DefinedValueCache.Get( connectionStatusGuid.Value );
                 if ( defaultConnectionStatus != null )
                 {
-                    ddlNewPersonConnectionStatus.SetValue( defaultConnectionStatus.Id );
+                    dvpNewPersonConnectionStatus.SetValue( defaultConnectionStatus.Id );
                 }
             }
 
@@ -618,8 +744,8 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 
             ppPerson.SetValue( null );
 
-            ddlNewPersonTitle.SelectedIndex = 0;
-            ddlNewPersonTitle.Visible = !GetAttributeValue( "HideTitle" ).AsBoolean();
+            dvpNewPersonTitle.SelectedIndex = 0;
+            dvpNewPersonTitle.Visible = !GetAttributeValue( AttributeKey.HideTitle ).AsBoolean();
 
             tbNewPersonFirstName.Text = string.Empty;
 
@@ -634,25 +760,25 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                 tbNewPersonLastName.Text = string.Empty;
             }
 
-            ddlNewPersonSuffix.SelectedIndex = 0;
-            ddlNewPersonSuffix.Visible = !GetAttributeValue( "HideSuffix" ).AsBoolean();
+            dvpNewPersonSuffix.SelectedIndex = 0;
+            dvpNewPersonSuffix.Visible = !GetAttributeValue( AttributeKey.HideSuffix ).AsBoolean();
 
             foreach ( ListItem li in rblNewPersonRole.Items )
             {
                 li.Selected = false;
             }
 
-            ddlNewPersonMaritalStatus.SelectedIndex = 0;
+            dvpNewPersonMaritalStatus.SelectedIndex = 0;
             foreach ( ListItem li in rblNewPersonGender.Items )
             {
                 li.Selected = false;
             }
 
             dpNewPersonBirthDate.SelectedDate = null;
-            dpNewPersonBirthDate.Required = GetAttributeValue( "RequireBirthdate" ).AsBoolean( true );
+            dpNewPersonBirthDate.Required = GetAttributeValue( AttributeKey.RequireBirthdate ).AsBoolean( true );
 
             ddlGradePicker.SelectedIndex = 0;
-            ddlGradePicker.Visible = !GetAttributeValue( "HideGrade" ).AsBoolean();
+            ddlGradePicker.Visible = !GetAttributeValue( AttributeKey.HideGrade ).AsBoolean();
 
             tbNewPersonEmail.Visible = _showEmail;
             pnNewPersonPhoneNumber.Visible = _showPhoneType != null;
@@ -681,20 +807,29 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                 {
                     isValid = false;
                 }
-                else if ( dpNewPersonBirthDate.IsValid && !birthdate.HasValue && GetAttributeValue( "RequireBirthdate" ).AsBoolean() )
+                else if ( dpNewPersonBirthDate.IsValid && !birthdate.HasValue && GetAttributeValue( AttributeKey.RequireBirthdate ).AsBoolean() )
                 {
                     validationMessages.Add( "Birthdate is Required." );
                     isValid = false;
                 }
             }
 
-            if ( isValid )
-        {
+            if ( !isValid )
+            {
+                if ( validationMessages.Any() )
+                {
+                    nbAddPerson.Text = "<ul><li>" + validationMessages.AsDelimited( "</li><li>" ) + "</li></lu>";
+                    nbAddPerson.Visible = true;
+                }
+
+                return;
+            }
+
             if ( hfActiveTab.Value == "Existing" )
             {
                 if ( ppPerson.PersonId.HasValue )
                 {
-                    var existingGroupMember = GroupMembers.Where( m => m.Id == ppPerson.PersonId.Value ).FirstOrDefault();
+                    var existingGroupMember = GroupMembers.Where( m => m.PersonId == ppPerson.PersonId.Value ).FirstOrDefault();
                     if ( existingGroupMember != null )
                     {
                         existingGroupMember.Removed = false;
@@ -734,13 +869,13 @@ namespace RockWeb.Blocks.Crm.PersonDetail
             else
             {
                 var groupMember = new GroupMemberInfo();
-                groupMember.TitleValueId = ddlNewPersonTitle.SelectedValueAsId();
+                groupMember.TitleValueId = dvpNewPersonTitle.SelectedValueAsId();
                 groupMember.FirstName = tbNewPersonFirstName.Text;
                 groupMember.NickName = tbNewPersonFirstName.Text;
                 groupMember.LastName = tbNewPersonLastName.Text;
-                groupMember.SuffixValueId = ddlNewPersonSuffix.SelectedValueAsId();
+                groupMember.SuffixValueId = dvpNewPersonSuffix.SelectedValueAsId();
                 groupMember.Gender = rblNewPersonGender.SelectedValueAsEnum<Gender>();
-                groupMember.MaritalStatusValueId = ddlNewPersonMaritalStatus.SelectedValueAsInt();
+                groupMember.MaritalStatusValueId = dvpNewPersonMaritalStatus.SelectedValueAsInt();
 
                 if ( _showEmail )
                 {
@@ -757,19 +892,10 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                 }
 
                 DateTime? birthdate = dpNewPersonBirthDate.SelectedDate;
-                //if ( birthdate.HasValue )
-                //{
-                //    // If setting a future birthdate, subtract a century until birthdate is not greater than today.
-                //    var today = RockDateTime.Today;
-                //    while ( birthdate.Value.CompareTo( today ) > 0 )
-                //    {
-                //        birthdate = birthdate.Value.AddYears( -100 );
-                //    }
-                //}
 
                 groupMember.BirthDate = birthdate;
                 groupMember.GradeOffset = ddlGradePicker.SelectedValueAsInt();
-                groupMember.ConnectionStatusValueId = ddlNewPersonConnectionStatus.SelectedValueAsId();
+                groupMember.ConnectionStatusValueId = dvpNewPersonConnectionStatus.SelectedValueAsId();
                 var role = _groupType.Roles.Where( r => r.Id == ( rblNewPersonRole.SelectedValueAsInt() ?? 0 ) ).FirstOrDefault();
                 if ( role != null )
                 {
@@ -786,7 +912,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
             tbNewPersonLastName.Required = false;
             rblNewPersonRole.Required = false;
             rblNewPersonGender.Required = false;
-            ddlNewPersonConnectionStatus.Required = false;
+            dvpNewPersonConnectionStatus.Required = false;
 
             confirmExit.Enabled = true;
 
@@ -795,15 +921,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
             modalAddPerson.Hide();
 
             BindMembers();
-        }
-            else
-            {
-                if ( validationMessages.Any() )
-                {
-                    nbAddPerson.Text = "<ul><li>" + validationMessages.AsDelimited( "</li><li>" ) + "</li></lu>";
-                    nbAddPerson.Visible = true;
-                }
-            }
+
         }
 
         #endregion
@@ -846,8 +964,10 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                     LocationTypeName = homeLocType.Value,
                     LocationIsDirty = true,
                     State = DefaultState,
+                    Country = DefaultCountry,
                     IsMailing = true,
-                    IsLocation = setLocation
+                    IsLocation = setLocation,
+                    ShowCounty = _showCounty
                 } );
 
                 gLocations.EditIndex = GroupAddresses.Count - 1;
@@ -885,12 +1005,14 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                         {
                             acAddress.UseStateAbbreviation = true;
                             acAddress.UseCountryAbbreviation = false;
+                            acAddress.ShowCounty = _showCounty;
                             acAddress.Country = groupAddress.Country;
                             acAddress.Street1 = groupAddress.Street1;
                             acAddress.Street2 = groupAddress.Street2;
                             acAddress.City = groupAddress.City;
                             acAddress.State = groupAddress.State;
                             acAddress.PostalCode = groupAddress.PostalCode;
+                            acAddress.County = groupAddress.County;
                         }
                     }
                 }
@@ -915,7 +1037,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void gLocations_Add( object sender, EventArgs e )
         {
-            GroupAddresses.Add( new GroupAddressInfo { State = DefaultState, IsMailing = true } );
+            GroupAddresses.Add( new GroupAddressInfo { State = DefaultState, Country = DefaultCountry, IsMailing = true, ShowCounty = _showCounty } );
             gLocations.EditIndex = GroupAddresses.Count - 1;
 
             BindLocations();
@@ -951,9 +1073,10 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                 groupAddress.State = acAddress.State;
                 groupAddress.PostalCode = acAddress.PostalCode;
                 groupAddress.Country = acAddress.Country;
+                groupAddress.County = acAddress.County;
                 groupAddress.IsMailing = cbMailing.Checked;
 
-                // If setting this location to be a map location, unselect all the other loctions
+                // If setting this location to be a map location, unselect all the other locations
                 if ( !groupAddress.IsLocation && cbLocation.Checked )
                 {
                     foreach ( var otherAddress in GroupAddresses )
@@ -1075,15 +1198,16 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 	                    _group = groupService.Get( _group.Id );
 	
 	                    _group.Name = tbGroupName.Text;
-                        _group.CampusId = cpCampus.SelectedValueAsInt(); ;
+                        _group.CampusId = cpCampus.SelectedValueAsInt();
+                        _group.StatusValueId = dvpGroupStatus.SelectedValueAsId();
 	
 	                    rockContext.SaveChanges();
 	
 	                    // SAVE GROUP MEMBERS
-	                    var recordStatusInactiveId = DefinedValueCache.Read( new Guid( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE ) ).Id;
-	                    var reasonStatusReasonDeceasedId = DefinedValueCache.Read( new Guid( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_REASON_DECEASED ) ).Id;
-	                    int? recordStatusValueID = ddlRecordStatus.SelectedValueAsInt();
-	                    int? reasonValueId = ddlReason.SelectedValueAsInt();
+	                    var recordStatusInactiveId = DefinedValueCache.Get( new Guid( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE ) ).Id;
+	                    var reasonStatusReasonDeceasedId = DefinedValueCache.Get( new Guid( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_REASON_DECEASED ) ).Id;
+	                    int? recordStatusValueID = dvpRecordStatus.SelectedValueAsInt();
+	                    int? reasonValueId = dvpReason.SelectedValueAsInt();
 	                    var newGroups = new List<Group>();
 	
 	                    foreach ( var groupMemberInfo in GroupMembers )
@@ -1100,7 +1224,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 	                        if ( !groupMemberInfo.ExistingGroupMember )
 	                        {
 	                            Person person = null;
-	                            if ( groupMemberInfo.Id == -1 )
+	                            if ( groupMemberInfo.PersonId == -1 )
 	                            {
 	                                person = new Person();
 	
@@ -1145,11 +1269,11 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 	
 	                                person.IsEmailActive = true;
 	                                person.EmailPreference = EmailPreference.EmailAllowed;
-	                                person.RecordTypeValueId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
+	                                person.RecordTypeValueId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
 	                            }
 	                            else
 	                            {
-	                                person = personService.Get( groupMemberInfo.Id );
+	                                person = personService.Get( groupMemberInfo.PersonId );
 	                            }
 	
 	                            if ( person == null )
@@ -1172,13 +1296,13 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                                 }
 	
 	                            PersonService.AddPersonToGroup( person, person.Id == 0, _group.Id, role.Id, rockContext );
-	                            groupMemberInfo.Id = person.Id;
+	                            groupMemberInfo.PersonId = person.Id;
 	                        }
 	                        else
 	                        {
 	                            // existing group members
 	                            var groupMember = groupMemberService.Queryable( "Person", true ).Where( m =>
-	                                m.PersonId == groupMemberInfo.Id &&
+	                                m.PersonId == groupMemberInfo.PersonId &&
 	                                m.Group.GroupTypeId == _groupType.Id &&
 	                                m.GroupId == _group.Id ).FirstOrDefault();
 	
@@ -1207,7 +1331,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 	                                        // If this person is 18 or older, create them as an Adult in their new group
 	                                        if ((groupMember.Person.Age ?? 0) >= 18)
 	                                        {
-	                                            var familyGroupType = GroupTypeCache.Read( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() );
+	                                            var familyGroupType = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() );
 	                                            groupMember.GroupRoleId = familyGroupType.Roles.First( a => a.Guid == Rock.SystemGuid.GroupRole.GROUPROLE_FAMILY_MEMBER_ADULT.AsGuid() ).Id;
 	                                        }
 	
@@ -1257,7 +1381,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 	                        // Remove anyone that was moved from another family
 	                        if ( groupMemberInfo.RemoveFromOtherGroups )
 	                        {
-	                            PersonService.RemovePersonFromOtherFamilies( _group.Id, groupMemberInfo.Id, rockContext );
+	                            PersonService.RemovePersonFromOtherFamilies( _group.Id, groupMemberInfo.PersonId, rockContext );
 	                        }
 	                    }
 	
@@ -1296,7 +1420,11 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 	                        if ( groupAddressInfo.LocationIsDirty )
 	                        {
 	                            updatedAddress = new LocationService( rockContext ).Get( groupAddressInfo.Street1, groupAddressInfo.Street2, groupAddressInfo.City, groupAddressInfo.State, groupAddressInfo.PostalCode, groupAddressInfo.Country );
-	                        }
+                                if( _showCounty )
+                                {
+                                    updatedAddress.County = groupAddressInfo.County;
+                                }
+                            }
 	
 	                        GroupLocation groupLocation = null;
 	                        if ( groupAddressInfo.Id > 0 )
@@ -1432,6 +1560,11 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 
         #region Private Methods
 
+        private void InitializeValues()
+        {
+
+        }
+
         /// <summary>
         /// Sets the active tab.
         /// </summary>
@@ -1497,7 +1630,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
         /// </summary>
         private void BindLocations()
         {
-            int homeLocationTypeId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuid() ).Id;
+            int homeLocationTypeId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuid() ).Id;
 
             // If there are not any addresses with a Map Location, set the first home location to be a mapped location
             if ( !GroupAddresses.Any( l => l.IsLocation == true ) )
@@ -1597,7 +1730,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
     {
         public int Index { get; set; }
 
-        public int Id { get; set; }
+        public int PersonId { get; set; }
 
         public bool ExistingGroupMember { get; set; }  // Is this person part of the original group 
 
@@ -1616,6 +1749,31 @@ namespace RockWeb.Blocks.Crm.PersonDetail
         public string LastName { get; set; }
 
         public int? SuffixValueId { get; set; }
+
+        public int? RecordTypeValueId { get; private set; }
+
+        public Guid? RecordTypeValueGuid
+        {
+            get
+            {
+                DefinedValueCache recordTypeValue = null;
+                if ( RecordTypeValueId != null )
+                {
+                    recordTypeValue = DefinedValueCache.Get( RecordTypeValueId.Value );
+                }
+
+                if ( recordTypeValue != null )
+                {
+                    return recordTypeValue.Guid;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+        }
+
+        public AgeClassification AgeClassification { get; private set; }
 
         public Gender Gender { get; set; }
 
@@ -1672,7 +1830,7 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 
         public GroupMemberInfo()
         {
-            Id = -1;
+            PersonId = -1;
             ExistingGroupMember = false;
             Removed = false;
             RemoveFromOtherGroups = false;
@@ -1682,12 +1840,14 @@ namespace RockWeb.Blocks.Crm.PersonDetail
         {
             if ( person != null )
             {
-                Id = person.Id;
+                PersonId = person.Id;
                 TitleValueId = person.TitleValueId;
                 FirstName = person.FirstName;
                 NickName = person.NickName;
                 LastName = person.LastName;
                 SuffixValueId = person.SuffixValueId;
+                RecordTypeValueId = person.RecordTypeValueId;
+                AgeClassification = person.AgeClassification;
                 Gender = person.Gender;
                 BirthDate = person.BirthDate;
                 GradeOffset = person.GradeOffset;
@@ -1747,11 +1907,15 @@ namespace RockWeb.Blocks.Crm.PersonDetail
 
         public string Country { get; set; }
 
+        public string County { get; set; }
+
         public bool IsMailing { get; set; }
 
         public bool IsLocation { get; set; }
 
-        public GroupAddressInfo( GroupLocation groupLocation )
+        public bool ShowCounty { get; set; }
+
+        public GroupAddressInfo( GroupLocation groupLocation, bool showCounty )
         {
             LocationIsDirty = false;
             if ( groupLocation != null )
@@ -1773,10 +1937,12 @@ namespace RockWeb.Blocks.Crm.PersonDetail
                     State = groupLocation.Location.State;
                     PostalCode = groupLocation.Location.PostalCode;
                     Country = groupLocation.Location.Country;
+                    County = groupLocation.Location.County;
                 }
 
                 IsMailing = groupLocation.IsMailingLocation;
                 IsLocation = groupLocation.IsMappedLocation;
+                ShowCounty = showCounty;
             }
         }
 
@@ -1792,32 +1958,39 @@ namespace RockWeb.Blocks.Crm.PersonDetail
         {
             get
             {
-                string result = string.Format(
-                    "{0} {1} {2}, {3} {4}",
-                    this.Street1,
-                    this.Street2,
-                    this.City,
-                    this.State,
-                    this.PostalCode ).ReplaceWhileExists( "  ", " " );
-
-                var countryValue = Rock.Web.Cache.DefinedTypeCache.Read( new Guid( Rock.SystemGuid.DefinedType.LOCATION_COUNTRIES ) )
-                    .DefinedValues
-                    .Where( v => v.Value.Equals( this.Country, StringComparison.OrdinalIgnoreCase ) )
-                    .FirstOrDefault();
-                if ( countryValue != null )
+                string result = string.Empty;
+                if ( ShowCounty )
                 {
-                    string format = countryValue.GetAttributeValue( "AddressFormat" );
-                    if ( !string.IsNullOrWhiteSpace( format ) )
-                    {
-                        var mergeFields = new Dictionary<string, object>();
-                        mergeFields.Add( "Street1", Street1 );
-                        mergeFields.Add( "Street2", Street2 );
-                        mergeFields.Add( "City", City );
-                        mergeFields.Add( "State", State );
-                        mergeFields.Add( "PostalCode", PostalCode );
-                        mergeFields.Add( "Country", countryValue.Description );
+                    result = string.Format(
+                        "{0}{1}{2}{3}, {4} {5}",
+                        this.Street1 + Environment.NewLine,
+                        this.Street2 + Environment.NewLine,
+                        this.City,
+                        this.County.IsNotNullOrWhiteSpace() ? ", " + this.County : "",
+                        this.State,
+                        this.PostalCode
+                        ).ReplaceWhileExists( "  ", " " );
 
-                        result = format.ResolveMergeFields( mergeFields );
+                    // If the block is configured to display county, do not reformat the address using the country's address format as it does not account for county
+                }
+                else
+                {
+                    var countryValue = DefinedTypeCache.Get( new Guid( Rock.SystemGuid.DefinedType.LOCATION_COUNTRIES ) ).GetDefinedValueFromValue( this.Country );
+                    if ( countryValue != null )
+                    {
+                        string format = countryValue.GetAttributeValue( "AddressFormat" );
+                        if ( !string.IsNullOrWhiteSpace( format ) )
+                        {
+                            var mergeFields = new Dictionary<string, object>();
+                            mergeFields.Add( "Street1", Street1 );
+                            mergeFields.Add( "Street2", Street2 );
+                            mergeFields.Add( "City", City );
+                            mergeFields.Add( "State", State );
+                            mergeFields.Add( "PostalCode", PostalCode );
+                            mergeFields.Add( "Country", countryValue.Description );
+
+                            result = format.ResolveMergeFields( mergeFields );
+                        }
                     }
                 }
 

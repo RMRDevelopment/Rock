@@ -17,7 +17,7 @@
 using System;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using Rock;
+
 using Rock.Web.Cache;
 
 namespace Rock.Web.UI.Controls
@@ -58,11 +58,11 @@ namespace Rock.Web.UI.Controls
             CampusCache campusCache = null;
             if ( dataValueAsInt.HasValue )
             {
-                campusCache = CampusCache.Read( dataValueAsInt.Value );
+                campusCache = CampusCache.Get( dataValueAsInt.Value );
             }
             else if ( dataValueAsGuid.HasValue )
             {
-                campusCache = CampusCache.Read( dataValueAsGuid.Value );
+                campusCache = CampusCache.Get( dataValueAsGuid.Value );
             }
 
             if ( campusCache != null )

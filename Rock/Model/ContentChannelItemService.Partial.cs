@@ -31,21 +31,17 @@ namespace Rock.Model
         /// <returns>The highest value in the Order field for the specified content channel</returns>
         public int? GetMaxItemOrderValueForContentChannel( int contentChannelId )
         {
-            bool b = Queryable().Where( i => i.ContentChannelId == contentChannelId ).Any();
-            if ( b )
-                return Queryable().Where( i => i.ContentChannelId == contentChannelId ).Max( i => i.Order );
-            else
-                return null;
+            return Queryable().Where( i => i.ContentChannelId == contentChannelId ).Max( i => ( int? ) i.Order );
         }
 
         /// <summary>
         /// Gets the next Order value for the content channel.
         /// </summary>
-        /// <param name="contenctChannelId">The contenct channel identifier.</param>
+        /// <param name="contentChannelId">The content channel identifier.</param>
         /// <returns></returns>
-        public int GetNextItemOrderValueForContentChannel( int contenctChannelId )
+        public int GetNextItemOrderValueForContentChannel( int contentChannelId )
         {
-            int? i = GetMaxItemOrderValueForContentChannel( contenctChannelId );
+            int? i = GetMaxItemOrderValueForContentChannel( contentChannelId );
             return i == null ? 0 : (int)i + 1;
         }
     }

@@ -94,9 +94,11 @@ namespace Rock.Model
         public static void CopyPropertiesFrom( this Attribute target, Attribute source )
         {
             target.Id = source.Id;
+            target.AbbreviatedName = source.AbbreviatedName;
             target.AllowSearch = source.AllowSearch;
             target.DefaultValue = source.DefaultValue;
             target.Description = source.Description;
+            target.EnableHistory = source.EnableHistory;
             target.EntityTypeId = source.EntityTypeId;
             target.EntityTypeQualifierColumn = source.EntityTypeQualifierColumn;
             target.EntityTypeQualifierValue = source.EntityTypeQualifierValue;
@@ -104,16 +106,21 @@ namespace Rock.Model
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
             target.IconCssClass = source.IconCssClass;
+            target.IsActive = source.IsActive;
             target.IsAnalytic = source.IsAnalytic;
             target.IsAnalyticHistory = source.IsAnalyticHistory;
             target.IsGridColumn = source.IsGridColumn;
             target.IsIndexEnabled = source.IsIndexEnabled;
             target.IsMultiValue = source.IsMultiValue;
+            target.IsPublic = source.IsPublic;
             target.IsRequired = source.IsRequired;
             target.IsSystem = source.IsSystem;
             target.Key = source.Key;
             target.Name = source.Name;
             target.Order = source.Order;
+            target.PostHtml = source.PostHtml;
+            target.PreHtml = source.PreHtml;
+            target.ShowOnBulk = source.ShowOnBulk;
             target.CreatedDateTime = source.CreatedDateTime;
             target.ModifiedDateTime = source.ModifiedDateTime;
             target.CreatedByPersonAliasId = source.CreatedByPersonAliasId;

@@ -36,12 +36,12 @@ using Rock.Data;
 using Rock.Web;
 
 /// <summary>
-/// 
+///
 /// </summary>
 namespace RockWeb.Blocks.Cms
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     [DisplayName( "Page/Zone Blocks Editor" )]
     [Category( "CMS" )]
@@ -129,7 +129,7 @@ namespace RockWeb.Blocks.Cms
                 var rockContext = new RockContext();
                 var blockService = new BlockService( rockContext );
                 var block = blockService.Get( blockId.Value );
-                var page = Rock.Web.Cache.PageCache.Read( hfPageId.Value.AsInteger() );
+                var page = PageCache.Get( hfPageId.Value.AsInteger() );
                 if ( block != null && page != null )
                 {
                     List<Block> zoneBlocks = null;
@@ -154,21 +154,16 @@ namespace RockWeb.Blocks.Cms
                         rockContext.SaveChanges();
                     }
 
-                    foreach ( var zoneBlock in zoneBlocks )
-                    {
-                        // make sure the BlockCache for all the re-ordered blocks get flushed so the new Order is updated
-                        BlockCache.Flush( zoneBlock.Id );
-                    }
+                    PageCache.Remove( page.Id );
 
-                    page.FlushBlocks();
                     if ( block.LayoutId.HasValue )
                     {
-                        Rock.Web.Cache.PageCache.FlushLayoutBlocks( block.LayoutId.Value );
+                        PageCache.FlushPagesForLayout( block.LayoutId.Value );
                     }
 
                     if ( block.SiteId.HasValue )
                     {
-                        Rock.Web.Cache.PageCache.FlushSiteBlocks( block.SiteId.Value );
+                        PageCache.FlushPagesForSite( block.SiteId.Value );
                     }
 
                     ShowDetailForZone( ddlZones.SelectedValue );
@@ -183,7 +178,7 @@ namespace RockWeb.Blocks.Cms
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void ddlZones_SelectedIndexChanged( object sender, EventArgs e )
         {
-            ShowDetailForZone( ddlZones.SelectedValue );
+            // Note: nothing should be done here since this is already been take care of when OnLoad calls ShowDetailForZone
         }
 
         /// <summary>
@@ -193,7 +188,7 @@ namespace RockWeb.Blocks.Cms
         public void ShowDetail( int pageId )
         {
             hfPageId.Value = pageId.ToString();
-            var page = Rock.Web.Cache.PageCache.Read( pageId );
+            var page = PageCache.Get( pageId );
 
             this.Visible = page != null;
             LoadDropDowns();
@@ -208,7 +203,9 @@ namespace RockWeb.Blocks.Cms
         private void ShowDetailForZone( string zoneName )
         {
             int pageId = hfPageId.Value.AsInteger();
-            var page = Rock.Web.Cache.PageCache.Read( pageId );
+            var page = PageCache.Get( pageId );
+
+            hlInvalidZoneWarning.Visible = _invalidPageZones != null && _invalidPageZones.Contains( zoneName );
 
             lZoneTitle.Text = string.Format( "{0} Zone", zoneName );
             lZoneIcon.Text = "<i class='fa fa-th-large'></i>";
@@ -224,6 +221,31 @@ namespace RockWeb.Blocks.Cms
                 // update SiteBlock, LayoutBlock and PageBlock repeaters
                 var zoneBlocks = page.Blocks.Where( a => a.Zone == zoneName ).ToList();
 
+                var blockTypes = zoneBlocks.Select( a => a.BlockType ).Distinct().ToList();
+
+                // if the blockType has changed since it IsInstancePropertiesVerified, check for updated attributes
+                foreach ( var blockType in blockTypes )
+                {
+                    if ( blockType != null && !blockType.IsInstancePropertiesVerified )
+                    {
+                        try
+                        {
+                            int blockTypeId = blockType.Id;
+                            using ( var rockContext = new RockContext() )
+                            {
+                                var blockCompiledType = blockType.GetCompiledType();
+                                int? blockEntityTypeId = EntityTypeCache.Get( typeof( Block ) ).Id;
+                                bool attributesUpdated = Rock.Attribute.Helper.UpdateAttributes( blockCompiledType, blockEntityTypeId, "BlockTypeId", blockTypeId.ToString(), rockContext );
+                                BlockTypeCache.Get( blockTypeId ).MarkInstancePropertiesVerified( true );
+                            }
+                        }
+                        catch
+                        {
+                            // ignore if it can't be compiled
+                        }
+                    }
+                }
+
                 rptSiteBlocks.DataSource = zoneBlocks.Where(a => a.BlockLocation == BlockLocation.Site).ToList();
                 rptSiteBlocks.DataBind();
 
@@ -232,6 +254,19 @@ namespace RockWeb.Blocks.Cms
 
                 rptPageBlocks.DataSource = zoneBlocks.Where( a => a.BlockLocation == BlockLocation.Page ).ToList();
                 rptPageBlocks.DataBind();
+            }
+        }
+
+        private string[] _invalidPageZones
+        {
+            get
+            {
+                return ViewState["_invalidPageZones"] as string[] ?? new string[0];
+            }
+
+            set
+            {
+                ViewState["_invalidPageZones"] = value;
             }
         }
 
@@ -244,9 +279,10 @@ namespace RockWeb.Blocks.Cms
 
             ddlZones.Items.Clear();
             ddlMoveToZoneList.Items.Clear();
-            var page = Rock.Web.Cache.PageCache.Read( pageId );
+            var page = PageCache.Get( pageId );
             if ( page != null )
             {
+                // get the valid zones from the Layout for this page
                 var zoneNames = FindZoneNames( page );
 
                 foreach ( var zoneName in zoneNames )
@@ -254,6 +290,14 @@ namespace RockWeb.Blocks.Cms
                     var zoneBlockCount = page.Blocks.Where( a => a.Zone.Equals( zoneName, StringComparison.OrdinalIgnoreCase ) ).Count();
                     ddlZones.Items.Add( new ListItem( string.Format( "{0} ({1})", zoneName, zoneBlockCount ), zoneName ) );
                     ddlMoveToZoneList.Items.Add( new ListItem( zoneName, zoneName ) );
+                }
+
+                // get any zones from blocks that have a zone that isn't part of the layout, then add those the list, but not the MoveToZoneList
+                _invalidPageZones = page.Blocks.Select( a => a.Zone ).ToList().Where( z => !zoneNames.Contains( z ) ).ToArray();
+                foreach ( var invalidPageZone in _invalidPageZones )
+                {
+                    var zoneBlockCount = page.Blocks.Where( a => a.Zone.Equals( invalidPageZone, StringComparison.OrdinalIgnoreCase ) ).Count();
+                    ddlZones.Items.Add( new ListItem( string.Format( "{0} ({1})", invalidPageZone, zoneBlockCount ), invalidPageZone ) );
                 }
 
                 // default to Main Zone (if there is one)
@@ -272,11 +316,11 @@ namespace RockWeb.Blocks.Cms
         /// </summary>
         /// <param name="layoutPath">The layout path.</param>
         /// <returns></returns>
-        private List<string> FindZoneNames( Rock.Web.Cache.PageCache page )
+        private List<string> FindZoneNames( PageCache page )
         {
-            string theme = page.Layout.Site.Theme;
+            string theme = page.Layout.Site.ConfiguredTheme;
             string layout = page.Layout.FileName;
-            string layoutPath = Rock.Web.Cache.PageCache.FormatPath( theme, layout );
+            string layoutPath = PageCache.FormatPath( theme, layout );
 
             HtmlAgilityPack.HtmlDocument layoutAspx = new HtmlAgilityPack.HtmlDocument();
             layoutAspx.OptionFixNestedTags = true;
@@ -313,7 +357,7 @@ namespace RockWeb.Blocks.Cms
                 }
             }
 
-            
+
             // if the layout block doesn't have a master page, or if there are other ContentPlaceHolders that we didn't know about, add any other zones that we haven't added already
             var layoutZones = layoutControlNodes.Where( a => a.Attributes["Name"] != null ).Select( a => a.Attributes["Name"].Value ).ToList();
             foreach ( var layoutZone in layoutZones )
@@ -323,7 +367,7 @@ namespace RockWeb.Blocks.Cms
                     zoneNames.Add( layoutZone );
                 }
             }
-            
+
 
             // remove any spaces
             zoneNames = zoneNames.Select( a => a.Replace( " ", string.Empty ) ).ToList();
@@ -386,13 +430,13 @@ namespace RockWeb.Blocks.Cms
 
             // Block Properties
             Literal btnBlockProperties = new Literal();
-            btnBlockProperties.Text = string.Format( @"<a title='Block Properties' class='btn btn-sm btn-default properties' id='aBlockProperties' href='javascript: Rock.controls.modal.show($(this), ""/BlockProperties/{0}?t=Block Properties"")' height='500px'><i class='fa fa-cog'></i></a>", block.Id );
+            btnBlockProperties.Text = string.Format( @"<a title='Block Properties' class='btn btn-sm btn-default btn-square properties' id='aBlockProperties' href='javascript: Rock.controls.modal.show($(this), ""/BlockProperties/{0}?t=Block Properties"")' height='500px'><i class='fa fa-cog'></i></a>", block.Id );
             pnlAdminButtons.Controls.Add( btnBlockProperties );
 
             // Block Security
-            int entityTypeBlockId = EntityTypeCache.Read<Rock.Model.Block>().Id;
+            int entityTypeBlockId = EntityTypeCache.Get<Rock.Model.Block>().Id;
             SecurityButton btnBlockSecurity = new SecurityButton { ID = "btnBlockSecurity", EntityTypeId = entityTypeBlockId, EntityId = block.Id, Title = block.Name };
-            btnBlockSecurity.AddCssClass( "btn btn-sm btn-security" );
+            btnBlockSecurity.AddCssClass( "btn btn-sm btn-square btn-security" );
             pnlAdminButtons.Controls.Add( btnBlockSecurity );
 
             // Move Block
@@ -400,7 +444,8 @@ namespace RockWeb.Blocks.Cms
             btnMoveBlock.ID = string.Format( "btnMoveBlock_{0}", block.Id );
             btnMoveBlock.CommandName = "BlockId";
             btnMoveBlock.CommandArgument = block.Id.ToString();
-            btnMoveBlock.CssClass = "btn btn-sm btn-default fa fa-external-link";
+            btnMoveBlock.CssClass = "btn btn-sm btn-default btn-square";
+            btnMoveBlock.Text = "<i class='fa fa-external-link'></i>";
             btnMoveBlock.ToolTip = "Move Block";
             btnMoveBlock.Click += btnMoveBlock_Click;
             pnlAdminButtons.Controls.Add( btnMoveBlock );
@@ -410,7 +455,7 @@ namespace RockWeb.Blocks.Cms
             btnDeleteBlock.ID = string.Format( "btnDeleteBlock_{0}", block.Id );
             btnDeleteBlock.CommandName = "BlockId";
             btnDeleteBlock.CommandArgument = block.Id.ToString();
-            btnDeleteBlock.CssClass = "btn btn-xs btn-danger";
+            btnDeleteBlock.CssClass = "btn btn-sm btn-square btn-danger";
             btnDeleteBlock.Text = "<i class='fa fa-times'></i>";
             btnDeleteBlock.ToolTip = "Delete Block";
             btnDeleteBlock.Click += btnDeleteBlock_Click;
@@ -463,7 +508,16 @@ namespace RockWeb.Blocks.Cms
 
             if ( customAdminControls.Any() && blockControl != null)
             {
-                pnlBlocksHolder.Controls.Add( blockControl );
+                // Set a flag to indicate that the block should only render the necessary elements to allow configuration.
+                // Rendering the block content here may disrupt the formatting of the page.
+                blockControl.ConfigurationRenderModeIsEnabled = true;
+
+                // if the block an ID so that viewstate (in the dynamicplaceholder) can be tracked by id
+                blockControl.ID = string.Format( "config_block_control_{0}", block.Id );
+                if ( phBlockHolder.FindControl( blockControl.ID ) == null )
+                {
+                    phBlockHolder.Controls.Add( blockControl );
+                }
             }
         }
 
@@ -488,21 +542,6 @@ namespace RockWeb.Blocks.Cms
                     int? layoutId = block.LayoutId;
                     blockService.Delete( block );
                     rockContext.SaveChanges();
-
-                    // flush all the cache stuff that involves the block
-                    Rock.Web.Cache.BlockCache.Flush( blockId.Value );
-
-                    if ( layoutId.HasValue )
-                    {
-                        Rock.Web.Cache.PageCache.FlushLayoutBlocks( layoutId.Value );
-                    }
-
-                    if ( pageId.HasValue )
-                    {
-                        Rock.Web.Cache.PageCache.Flush( pageId.Value );
-                        var page = Rock.Web.Cache.PageCache.Read( pageId.Value );
-                        page.FlushBlocks();
-                    }
 
                     ShowDetailForZone( ddlZones.SelectedValue );
                 }
@@ -532,7 +571,7 @@ namespace RockWeb.Blocks.Cms
                     ddlMoveToZoneList.SetValue( block.Zone );
                     cblBlockMovePageOrLayout.Items.Clear();
 
-                    var page = PageCache.Read( hfPageId.Value.AsInteger() );
+                    var page = PageCache.Get( hfPageId.Value.AsInteger() );
 
                     var listItemPage = new ListItem();
                     listItemPage.Text = "Page: " + page.ToString();
@@ -569,7 +608,7 @@ namespace RockWeb.Blocks.Cms
                     @"<div class='panel-heading'>
                         <a class='btn btn-link btn-xs panel-widget-reorder js-stop-immediate-propagation'><i class='fa fa-bars'></i></a>
                         <span>{0} ({1})</span>
-                      
+
                         <div class='block-config-buttons pull-right'>
                         ",
                     block.Name,
@@ -607,19 +646,31 @@ namespace RockWeb.Blocks.Cms
                     // ignore
                 }
 
+                // Get a list of BlockTypes that does not include Mobile block types.
+                List<BlockTypeCache> allExceptMobileBlockTypes = new List<BlockTypeCache>();
+                foreach( var cachedBlockType in BlockTypeCache.All() )
+                {
+                    try
+                    {
+                        var blockCompiledType = cachedBlockType.GetCompiledType();
 
-                Rock.Model.BlockTypeService blockTypeService = new Rock.Model.BlockTypeService( rockContext );
-                var blockTypes = blockTypeService.Queryable().AsNoTracking()
-                    .Select( b => new { b.Id, b.Name, b.Category, b.Description } )
-                    .ToList();
+                        if ( !typeof( Rock.Blocks.IRockMobileBlockType ).IsAssignableFrom( blockCompiledType ) )
+                        {
+                            allExceptMobileBlockTypes.Add( cachedBlockType );
+                        }
+                    }
+                    catch ( Exception )
+                    {
+                        // Intentionally ignored
+                    }
+                }
+
+                var blockTypes = allExceptMobileBlockTypes.Select( b => new { b.Id, b.Name, b.Category, b.Description } ).ToList();
 
                 ddlBlockType.Items.Clear();
 
                 // Add the categorized block types
-                foreach ( var blockType in blockTypes
-                    .Where( b => b.Category != string.Empty )
-                    .OrderBy( b => b.Category )
-                    .ThenBy( b => b.Name ) )
+                foreach ( var blockType in blockTypes.Where( b => b.Category != string.Empty ).OrderBy( b => b.Category ).ThenBy( b => b.Name ) )
                 {
                     var li = new ListItem( blockType.Name, blockType.Id.ToString() );
                     li.Attributes.Add( "optiongroup", blockType.Category );
@@ -628,9 +679,7 @@ namespace RockWeb.Blocks.Cms
                 }
 
                 // Add the uncategorized block types
-                foreach ( var blockType in blockTypes
-                    .Where( b => b.Category == null || b.Category == string.Empty )
-                    .OrderBy( b => b.Name ) )
+                foreach ( var blockType in blockTypes.Where( b => b.Category == null || b.Category == string.Empty ).OrderBy( b => b.Name ) )
                 {
                     var li = new ListItem( blockType.Name, blockType.Id.ToString() );
                     li.Attributes.Add( "optiongroup", "Other (not categorized)" );
@@ -639,13 +688,12 @@ namespace RockWeb.Blocks.Cms
                 }
             }
 
-            var htmlContentBlockType = BlockTypeCache.Read( Rock.SystemGuid.BlockType.HTML_CONTENT.AsGuid() );
-
-            ddlBlockType.SetValue( htmlContentBlockType.Id );
+            // Set the initial selection to the HTMLContent block.
+            ddlBlockType.SetValue( BlockTypeCache.Get( Rock.SystemGuid.BlockType.HTML_CONTENT.AsGuid() ).Id );
 
             rblAddBlockLocation.Items.Clear();
 
-            var page = PageCache.Read( hfPageId.Value.AsInteger() );
+            var page = PageCache.Get( hfPageId.Value.AsInteger() );
 
             var listItemPage = new ListItem();
             listItemPage.Text = string.Format( "Page ({0})", page.ToString() );
@@ -681,7 +729,7 @@ namespace RockWeb.Blocks.Cms
             var blockService = new BlockService( rockContext );
             var block = blockService.Get( blockId );
 
-            var page = PageCache.Read( hfPageId.Value.AsInteger() );
+            var page = PageCache.Get( hfPageId.Value.AsInteger() );
 
             if ( block != null )
             {
@@ -699,16 +747,6 @@ namespace RockWeb.Blocks.Cms
 
                 rockContext.SaveChanges();
 
-                // flush all the cache stuff that involves the block and page
-                Rock.Web.Cache.BlockCache.Flush( block.Id );
-
-                Rock.Web.Cache.LayoutCache.Flush( page.LayoutId );
-                Rock.Web.Cache.PageCache.Flush( page.Id );
-
-                // re-read the pageCache
-                page = Rock.Web.Cache.PageCache.Read( page.Id );
-                page.FlushBlocks();
-
                 mdBlockMove.Hide();
                 ShowDetailForZone( ddlZones.SelectedValue );
             }
@@ -725,7 +763,7 @@ namespace RockWeb.Blocks.Cms
             {
                 BlockService blockService = new BlockService( rockContext );
 
-                var page = PageCache.Read( hfPageId.Value.AsInteger() );
+                var page = PageCache.Get( hfPageId.Value.AsInteger() );
 
                 Block block = new Rock.Model.Block();
                 block.Zone = ddlZones.SelectedValue;
@@ -761,11 +799,12 @@ namespace RockWeb.Blocks.Cms
 
                 if ( block.LayoutId.HasValue )
                 {
-                    Rock.Web.Cache.PageCache.FlushLayoutBlocks( page.LayoutId );
+                    PageCache.FlushPagesForLayout( page.LayoutId );
                 }
                 else
                 {
-                    page.FlushBlocks();
+                    //page.RemoveBlocks();
+                    PageCache.Remove( page.Id );
                 }
 
                 mdAddBlock.Hide();
@@ -782,7 +821,7 @@ namespace RockWeb.Blocks.Cms
         {
             LinkButton btnNewBlockQuickSetting = sender as LinkButton;
 
-            BlockTypeCache quickSettingBlockType = BlockTypeCache.Read( btnNewBlockQuickSetting.CommandArgument.AsInteger()) ;
+            BlockTypeCache quickSettingBlockType = BlockTypeCache.Get( btnNewBlockQuickSetting.CommandArgument.AsInteger()) ;
 
             if ( quickSettingBlockType != null )
             {
@@ -821,6 +860,6 @@ namespace RockWeb.Blocks.Cms
             pnlDetails.Visible = visible;
         }
 
-        
+
     }
 }

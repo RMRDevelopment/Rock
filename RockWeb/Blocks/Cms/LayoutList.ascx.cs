@@ -37,9 +37,37 @@ namespace RockWeb.Blocks.Cms
     [DisplayName("Layout List")]
     [Category("CMS")]
     [Description("Lists layouts for a site.")]
-    [LinkedPage("Detail Page")]
+
+    #region Block Attributes
+
+    [LinkedPage(
+       "Detail Page",
+        Key = AttributeKey.DetailPage )]
+
+    #endregion Block Attributes
     public partial class LayoutList : RockBlock, ISecondaryBlock, ICustomGridColumns
     {
+        #region Attribute Keys
+
+        private static class AttributeKey
+        {
+            public const string DetailPage = "DetailPage";
+        }
+
+        #endregion Attribute Keys
+
+        #region Page Parameter Keys
+
+        /// <summary>
+        /// Keys to use for Page Parameters
+        /// </summary>
+        private static class PageParameterKey
+        {
+            public const string SiteId = "SiteId";
+        }
+
+        #endregion
+
         #region Base Control Methods
 
         /// <summary>
@@ -62,7 +90,7 @@ namespace RockWeb.Blocks.Cms
             var securityField = gLayouts.ColumnsOfType<SecurityField>().FirstOrDefault();
             if ( securityField != null )
             {
-                securityField.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.Layout ) ).Id;
+                securityField.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.Layout ) ).Id;
             }
         }
 
@@ -111,8 +139,6 @@ namespace RockWeb.Blocks.Cms
 
                 layoutService.Delete( layout );
                 rockContext.SaveChanges();
-
-                LayoutCache.Flush( e.RowKeyId );
             }
 
             BindLayoutsGrid();
@@ -126,7 +152,7 @@ namespace RockWeb.Blocks.Cms
         /// <exception cref="System.NotImplementedException"></exception>
         protected void gLayouts_AddClick( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "layoutId", 0, "siteId", hfSiteId.ValueAsInt() );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "LayoutId", 0, "SiteId", hfSiteId.ValueAsInt() );
         }
 
         /// <summary>
@@ -136,7 +162,7 @@ namespace RockWeb.Blocks.Cms
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gLayouts_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "layoutId", e.RowKeyId );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "LayoutId", e.RowKeyId );
         }
 
         /// <summary>
@@ -157,7 +183,7 @@ namespace RockWeb.Blocks.Cms
         {
             pnlLayouts.Visible = false;
 
-            int siteId = PageParameter( "siteId" ).AsInteger();
+            int siteId = PageParameter( PageParameterKey.SiteId ).AsInteger();
             if ( siteId == 0 )
             {
                 // quit if the siteId can't be determined
@@ -165,7 +191,7 @@ namespace RockWeb.Blocks.Cms
             }
 
             var rockContext = new RockContext();
-            var site = SiteCache.Read( siteId, rockContext );
+            var site = SiteCache.Get( siteId, rockContext );
             if ( site == null )
             {
                 return;
@@ -199,7 +225,7 @@ namespace RockWeb.Blocks.Cms
         {
             string virtualPath = fileName;
 
-            var siteCache = SiteCache.Read( hfSiteId.ValueAsInt() );
+            var siteCache = SiteCache.Get( hfSiteId.ValueAsInt() );
             if ( siteCache != null )
             {
                 virtualPath = string.Format( "~/Themes/{0}/Layouts/{1}.aspx", siteCache.Theme, fileName );

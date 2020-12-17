@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Data.Entity.Spatial;
 using System.Linq;
@@ -38,7 +39,7 @@ namespace Rock.Model
     [RockDomain( "Core" )]
     [Table( "Location" )]
     [DataContract]
-    public partial class Location : Model<Location>, IHasActiveFlag
+    public partial class Location : Model<Location>, IHasActiveFlag, ICacheable
     {
         #region Entity Properties
 
@@ -287,7 +288,7 @@ namespace Rock.Model
         /// Gets or sets date and time that this Location's  address has been successfully geocoded. 
         /// </summary>
         /// <value>
-        /// A <see cref="System.DateTime"/> representing the date and time that the address of this location was successfully geocoded. If geocoding has not been attepted for this location or 
+        /// A <see cref="System.DateTime"/> representing the date and time that the address of this location was successfully geocoded. If geocoding has not been attempted for this location or 
         /// the location had not been successfully geocoded this value will be null.
         /// </value>
         [DataMember]
@@ -511,26 +512,39 @@ namespace Rock.Model
         {
             get
             {
-                var campuses = CampusCache.All();
-
-                int? campusId = null;
-                Location loc = this;
-
-                while ( !campusId.HasValue && loc != null )
+                using ( var rockContext = new RockContext() )
                 {
-                    var campus = campuses.Where( c => c.LocationId != null && c.LocationId == loc.Id ).FirstOrDefault();
-                    if ( campus != null )
-                    {
-                        campusId = campus.Id;
-                    }
-                    else
-                    {
-                        loc = loc.ParentLocation;
-                    }
+                    return GetCampusId( rockContext );
                 }
-
-                return campusId;
             }
+        }
+
+        /// <summary>
+        /// Gets the campus that is at this location, or one of this location's parent location
+        /// </summary>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        private int? GetCampusId( RockContext rockContext )
+        {
+            var campuses = CampusCache.All( rockContext );
+
+            int? campusId = null;
+            Location loc = this;
+
+            while ( !campusId.HasValue && loc != null )
+            {
+                var campus = campuses.Where( c => c.LocationId != null && c.LocationId == loc.Id ).FirstOrDefault();
+                if ( campus != null )
+                {
+                    campusId = campus.Id;
+                }
+                else
+                {
+                    loc = loc.ParentLocation;
+                }
+            }
+
+            return campusId;
         }
 
         /// <summary>
@@ -548,6 +562,18 @@ namespace Rock.Model
             get { return _distance; }
         }
         private double _distance = 0.0D;
+
+        /// <summary>
+        /// Gets the polygon for google maps.
+        /// </summary>
+        /// <value>
+        /// The polygon for google maps.
+        /// </value>
+        [LavaInclude]
+        public virtual string GooglePolygon
+        {
+            get { return EncodeGooglePolygon(); }
+        }
 
         #endregion
 
@@ -629,11 +655,11 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext">The database context.</param>
         /// <param name="state">The state.</param>
-        public override void PreSaveChanges( Rock.Data.DbContext dbContext, System.Data.Entity.EntityState state )
+        public override void PreSaveChanges( Rock.Data.DbContext dbContext, EntityState state )
         {
             if ( ImageId.HasValue )
             {
-                BinaryFileService binaryFileService = new BinaryFileService( (RockContext)dbContext );
+                BinaryFileService binaryFileService = new BinaryFileService( ( RockContext ) dbContext );
                 var binaryFile = binaryFileService.Get( ImageId.Value );
                 if ( binaryFile != null && binaryFile.IsTemporary )
                 {
@@ -677,25 +703,49 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Returns true if the Location has one of the following: Street1, Street2, City. Otherwise returns false.
+        /// </summary>
+        /// <returns>
+        ///   <c>true</c> if [is minimum viable address]; otherwise, <c>false</c>.
+        /// </returns>
+        public bool IsMinimumViableAddress()
+        {
+            if ( this.Street1.IsNullOrWhiteSpace() &&
+                this.Street2.IsNullOrWhiteSpace() &&
+                this.City.IsNullOrWhiteSpace() )
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Gets <seealso cref="DbGeography">GeoPoint</seealso> from the specified latitude and longitude
+        /// </summary>
+        /// <param name="latitude">The latitude.</param>
+        /// <param name="longitude">The longitude.</param>
+        /// <returns></returns>
+        public static DbGeography GetGeoPoint( double latitude, double longitude )
+        {
+            return DbGeography.FromText( $"POINT({longitude} {latitude})" );
+        }
+
+        /// <summary>
         /// Gets the full street address.
         /// </summary>
         /// <returns></returns>
         public string GetFullStreetAddress()
         {
-            if (string.IsNullOrWhiteSpace(this.Street1) &&
-                string.IsNullOrWhiteSpace(this.Street2) &&
-                string.IsNullOrWhiteSpace(this.City))
+            if ( !IsMinimumViableAddress() )
             {
                 return string.Empty;
             }
 
             string result = string.Format( "{0} {1} {2}, {3} {4}",
                 this.Street1, this.Street2, this.City, this.State, this.PostalCode ).ReplaceWhileExists( "  ", " " );
+            var countryValue = DefinedTypeCache.Get( new Guid( SystemGuid.DefinedType.LOCATION_COUNTRIES ) ).GetDefinedValueFromValue( this.Country );
 
-            var countryValue = Rock.Web.Cache.DefinedTypeCache.Read( new Guid( SystemGuid.DefinedType.LOCATION_COUNTRIES ) )
-                .DefinedValues
-                .Where( v => v.Value.Equals( this.Country, StringComparison.OrdinalIgnoreCase ) )
-                .FirstOrDefault();
             if ( countryValue != null )
             {
                 string format = countryValue.GetAttributeValue( "AddressFormat" );
@@ -708,7 +758,7 @@ namespace Rock.Model
             }
 
             // Remove blank lines
-            while (result.Contains( Environment.NewLine + Environment.NewLine))
+            while ( result.Contains( Environment.NewLine + Environment.NewLine ) )
             {
                 result = result.Replace( Environment.NewLine + Environment.NewLine, Environment.NewLine );
             }
@@ -736,19 +786,19 @@ namespace Rock.Model
 
             if ( this.GeoFence != null )
             {
-                var encodeDiff = (Action<int>)( diff =>
-                {
-                    int shifted = diff << 1;
-                    if ( diff < 0 )
-                        shifted = ~shifted;
-                    int rem = shifted;
-                    while ( rem >= 0x20 )
-                    {
-                        str.Append( (char)( ( 0x20 | ( rem & 0x1f ) ) + 63 ) );
-                        rem >>= 5;
-                    }
-                    str.Append( (char)( rem + 63 ) );
-                } );
+                var encodeDiff = ( Action<int> ) ( diff =>
+                   {
+                       int shifted = diff << 1;
+                       if ( diff < 0 )
+                           shifted = ~shifted;
+                       int rem = shifted;
+                       while ( rem >= 0x20 )
+                       {
+                           str.Append( ( char ) ( ( 0x20 | ( rem & 0x1f ) ) + 63 ) );
+                           rem >>= 5;
+                       }
+                       str.Append( ( char ) ( rem + 63 ) );
+                   } );
 
                 int lastLat = 0;
                 int lastLng = 0;
@@ -757,8 +807,8 @@ namespace Rock.Model
                 {
                     if ( coordinate.Longitude.HasValue && coordinate.Latitude.HasValue )
                     {
-                        int lat = (int)Math.Round( coordinate.Latitude.Value * 1E5 );
-                        int lng = (int)Math.Round( coordinate.Longitude.Value * 1E5 );
+                        int lat = ( int ) Math.Round( coordinate.Latitude.Value * 1E5 );
+                        int lng = ( int ) Math.Round( coordinate.Longitude.Value * 1E5 );
                         encodeDiff( lat - lastLat );
                         encodeDiff( lng - lastLng );
                         lastLat = lat;
@@ -778,6 +828,38 @@ namespace Rock.Model
         public void SetDistance( double distance )
         {
             _distance = distance;
+        }
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return null;
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            // Make sure CampusCache.All is cached using the dbContext (to avoid deadlock if snapshot isolation is disabled)
+            var campusId = this.GetCampusId( dbContext as RockContext );
+
+            // CampusCache has a CampusLocation that could get stale when Location changes, so refresh the CampusCache for this location's Campus
+            if ( this.CampusId.HasValue )
+            {
+                CampusCache.UpdateCachedEntity( this.CampusId.Value, EntityState.Detached );
+            }
+
+            // and also refresh the CampusCache for any Campus that uses this location
+            foreach ( var campus in CampusCache.All( dbContext as RockContext ).Where( c => c.LocationId == this.Id ) )
+            {
+                CampusCache.UpdateCachedEntity( campus.Id, EntityState.Detached );
+            }
         }
 
         /// <summary>
@@ -810,7 +892,7 @@ namespace Rock.Model
                                 return GeoFence.Coordinates()
                                     .Select( c => c.Latitude.ToString() + "," + c.Longitude.ToString() )
                                     .ToList()
-                                    .AsDelimited("|");
+                                    .AsDelimited( "|" );
                             }
                             break;
                         }
@@ -823,7 +905,7 @@ namespace Rock.Model
                 return string.Empty;
             }
         }
-        
+
         #endregion
 
         #region constants

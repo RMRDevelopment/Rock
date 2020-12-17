@@ -17,7 +17,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Rock.Data;
 
 namespace Rock.Model
 {
@@ -79,6 +78,8 @@ namespace Rock.Model
         /// <returns>
         /// An enumerable collection of <see cref="Rock.Model.ContentChannel">ContentChannel</see>.
         /// </returns>
+        [RockObsolete( "1.12" )]
+        [Obsolete( "Not Used, not needed. Could cause an exception." )]
         public IEnumerable<ContentChannel> GetAllAssociatedDescendents( int parentContentChannelId )
         {
             return this.ExecuteQuery(
@@ -105,11 +106,13 @@ namespace Rock.Model
         /// <returns>
         /// An enumerable collection of <see cref="Rock.Model.ContentChannelPath">ContentChannelPath</see> objects.
         /// </returns>
+        [RockObsolete( "1.12" )]
+        [Obsolete( "Not Used, not needed. Could cause an exception." )]
         public IEnumerable<ContentChannelPath> GetAllAssociatedDescendentsPath( int parentContentChannelId )
         {
             return this.Context.Database.SqlQuery<ContentChannelPath>(
                 @"
-                -- Get ContentChannel association heirarchy with ContentChannel ancestor path information
+                -- Get ContentChannel association hierarchy with ContentChannel ancestor path information
                 WITH CTE (ChildContentChannelId,ContentChannelId, HierarchyPath) AS
                 (
                       SELECT [ChildContentChannelId], [ContentChannelId], CONVERT(nvarchar(500),'')
@@ -139,6 +142,8 @@ namespace Rock.Model
         /// <returns>
         /// An enumerable collection of <see cref="Rock.Model.ContentChannel">ContentChannel</see>.
         /// </returns>
+        [RockObsolete( "1.12" )]
+        [Obsolete( "Not Used, not needed. Could cause an exception." )]
         public IEnumerable<ContentChannel> GetAllAssociatedDescendents( Guid parentContentChannelGuid )
         {
             return this.GetAllAssociatedDescendents( this.Get( parentContentChannelGuid ).Id );

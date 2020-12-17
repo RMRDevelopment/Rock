@@ -20,7 +20,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
-using System.Linq;
 using System.Runtime.Serialization;
 
 using Rock.Data;
@@ -181,7 +180,7 @@ namespace Rock.Model
             {
                 if ( Schedule != null )
                 {
-                    return Schedule.NextStartDateTime;
+                    return Schedule.GetNextStartDateTime( RockDateTime.Now );
                 }
 
                 return null;

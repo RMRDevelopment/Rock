@@ -19,7 +19,7 @@
                 <div class="panel-body">
 
                     <Rock:NotificationBox ID="nbEditModeMessage" runat="server" NotificationBoxType="Info" />
-                    <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                    <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                     <div id="pnlEditDetails" runat="server">
 
@@ -63,8 +63,16 @@
                                                 Help="Should the numbers be randomized (vs. generated in order)." />
                                         </Rock:RockControlWrapper>
                                     </div>
-                                    <Rock:RockCheckBox ID="cbAllowCheckout" runat="server" Label="Allow Checkout" Text="Yes" 
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <Rock:RockCheckBox ID="cbAllowCheckout" runat="server" Label="Allow Checkout" Text="Yes" 
                                         Help="Should there option for user to be able to check-out?" />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <Rock:RockCheckBox ID="cbEnablePresence" runat="server" Label="Enable Presence" Text="Yes" 
+                                        Help="When enabled, the attendance record will not be marked as being 'present' until the individual is set to 'Present' by the assistant using the Check-in Manager application." />
+                                        </div>
+                                    </div>
                                     <Rock:RockCheckBox ID="cbEnableManager" runat="server" Label="Enable Manager Option" Text="Yes" 
                                         Help="Should an option be displayed on the check-in welcome screen that allows user to view the management screen (after entering a passcode)?" />
                                     <Rock:RockCheckBox ID="cbEnableOverride" runat="server" Label="Enable Override" Text="Yes" 
@@ -94,10 +102,13 @@
 
                         </Rock:PanelWidget>
 
+                        <%-- Search Settings --%>
                         <Rock:PanelWidget ID="wpSearch" runat="server" Title="Search Settings">
                             <div class="row">
                                 <div class="col-md-6">
-                                    <Rock:RockDropDownList ID="ddlSearchType" runat="server" Label="Search Type" Required="true" AutoPostBack="true" OnSelectedIndexChanged="ddlSearchType_SelectedIndexChanged" />
+                                    <Rock:RockDropDownList ID="ddlSearchType" runat="server" Label="Search Type" Required="true" AutoPostBack="true" OnSelectedIndexChanged="ddlSearchType_SelectedIndexChanged"
+                                        Help="The type of search that is available after person clicks the check-in button on the check-in Welcome screen. Note, the user can also always check-in using
+                                        a scanned barcode, fingerprint, RFID card, etc. if the scanner is attached and configured for keyboard wedge mode."/>
                                     <Rock:NumberBox ID="nbMaxResults" runat="server" Label="Maximum Number of Results"  NumberType="Integer" 
                                         Help="The maximum number of search results to return when searching (default is 100)." />
                                 </div>
@@ -115,6 +126,45 @@
                             </div>
                         </Rock:PanelWidget>
 
+                        <%-- Display Settings --%>
+                        <Rock:PanelWidget ID="wpDisplaySettings" runat="server" Title="Display Settings">
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <Rock:CodeEditor runat="server" ID="ceStartTemplate" Label="Start Template" Help="The lava template to use when rendering the Start button on the Welcome Block" EditorMode="Lava" />
+                                    <Rock:CodeEditor runat="server" ID="ceFamilySelectTemplate" Label="Family Select Template" Help="The lava template to use when rendering each family button on the Family Select" EditorMode="Lava" />
+                                    <Rock:CodeEditor runat="server" ID="ceSuccessTemplate" Label="Success Template" Help="The lava template to use when rendering the Success result on the Success Block" EditorMode="Lava" />
+                                </div>
+                            </div>
+                        </Rock:PanelWidget>
+
+                        <%-- Registration Settings --%>
+                        <Rock:PanelWidget ID="wpRegistrationSettings" runat="server" Title="Registration Settings">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <Rock:DefinedValuePicker ID="dvpRegistrationDefaultPersonConnectionStatus" runat="server" Label="Default Person Connection Status" />
+                                    <Rock:RockCheckBox ID="cbRegistrationDisplayAlternateIdFieldForAdults" runat="server" Label="Display Alternate ID Field for Adults" />
+                                    <Rock:RockCheckBox ID="cbRegistrationDisplayAlternateIdFieldForChildren" runat="server" Label="Display Alternate ID Field for Children" />
+                                    <Rock:RockCheckBox ID="cbRegistrationDisplaySmsEnabled" runat="server" Label="Display SMS Enabled Selection for Phone Number" />
+                                    <Rock:RockCheckBox ID="cbRegistrationSmsEnabledByDefault" runat="server" Label="Set the SMS Enabled for the phone number by default" />
+                                    <Rock:RockCheckBox ID="cbEnableCheckInAfterRegistration" runat="server" Label="Enable Check-in After Registration" Help="This determines if the family should continue on the check-in path after being registered, or if they should be directed to a different kiosk after registration (take them back to search )." />
+                                    <Rock:RockListBox ID="lbKnownRelationshipTypes" runat="server" Label="Known Relationship Types" Help="The known relationships to display in the child's 'Relationship to Adult' field." />
+                                    <Rock:RockListBox ID="lbSameFamilyKnownRelationshipTypes" runat="server" Label="Same Family Known Relationship Types" Help="Of the known relationships defined above which should be used to place the child in the family with the adults." />
+                                    <Rock:RockListBox ID="lbCanCheckInKnownRelationshipTypes" runat="server" Label="Can Check-in Known Relationship Types" Help="The known relationships that will place the child in a separate family with a 'Can Check-in' relationship back to the person." />
+                                    <Rock:WorkflowTypePicker ID="wftpRegistrationAddFamilyWorkflowTypes" runat="server" AllowMultiSelect="true" Label="New Family Workflow Types" Help="The workflow types that should be launched when a family is added." />
+                                    <Rock:WorkflowTypePicker ID="wftpRegistrationAddPersonWorkflowTypes" runat="server" AllowMultiSelect="true" Label="New Person Workflow Types" Help="The workflow types that should be launched when a person is added to a family." />
+                                </div>
+                                <div class="col-md-6">
+                                    <Rock:RockListBox ID="lbRegistrationRequiredAttributesForAdults" runat="server" Label="Required Attributes for Adults" />
+                                    <Rock:RockListBox ID="lbRegistrationOptionalAttributesForAdults" runat="server" Label="Optional Attributes for Adults" />
+                                    <Rock:RockListBox ID="lbRegistrationRequiredAttributesForChildren" runat="server" Label="Required Attributes for Children" />
+                                    <Rock:RockListBox ID="lbRegistrationOptionalAttributesForChildren" runat="server" Label="Optional Attributes for Children" />
+                                    <Rock:RockListBox ID="lbRegistrationRequiredAttributesForFamilies" runat="server" Label="Required Attributes for Families" />
+                                    <Rock:RockListBox ID="lbRegistrationOptionalAttributesForFamilies" runat="server" Label="Optional Attributes for Families" />
+                                </div>
+                            </div>
+                        </Rock:PanelWidget>
+
+                        <%-- Advanced Settings --%>
                         <Rock:PanelWidget ID="wpAdvanced" runat="server" Title="Advanced Settings">
                             <div class="row">
                                 <div class="col-md-6">
@@ -122,18 +172,20 @@
                                         Help="An optional regular expression that will be run against any search input before the search is performed. This is useful for removing any special characters." />
                                     <Rock:NumberBox ID="nbRefreshInterval" runat="server" Label="Refresh Interval" NumberType="Integer" 
                                         Help="How often (seconds) should the welcome page automatically refresh and check for updated configuration information." />
+                                    <Rock:RockTextBox ID="tbIconCssClass" runat="server" Label="Icon CSS Class" Help="The Font Awesome icon class to use when displaying check-in of this check-in type." />
                                 </div>
                                 <div class="col-md-6">
                                     <Rock:RockCheckBox ID="cbAgeRequired" runat="server" Label="Age is Required" Text="Yes" 
-                                        Help="If an area and/or group has an age requirement, should people without an age be allowed to check-in to that area/group?" />
+                                        Help="If an area and/or group has an age requirement, check this option to prevent people without an age from checking in to that area/group." />
                                     <Rock:RockCheckBox ID="cbGradeRequired" runat="server" Label="Grade is Required" Text="Yes" 
-                                        Help="If an area and/or group has a grade requirement, should people without an grade be allowed to check-in to that area/group?" />
+                                        Help="If an area and/or group has a grade requirement, check this option to prevent people without a grade from checking in to that area/group." />
                                     <Rock:RockCheckBox ID="cbDisplayLocCount" runat="server" Label="Display Location Count" Text="Yes" 
                                         Help="Should the room locations options include a count of how many people are currently checked into that location?" />
                                 </div>
                             </div>
                         </Rock:PanelWidget>
 
+                        <%-- Custom Settings --%>
                         <Rock:PanelWidget ID="wpCustom" runat="server" Title="Custom Settings">
                             <Rock:DynamicPlaceholder ID="phAttributeEdits" runat="server" ></Rock:DynamicPlaceholder>
                         </Rock:PanelWidget>

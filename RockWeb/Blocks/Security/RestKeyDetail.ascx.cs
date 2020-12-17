@@ -47,7 +47,7 @@ namespace RockWeb.Blocks.Security
 
             if ( !Page.IsPostBack )
             {
-                ShowDetail( PageParameter( "restUserId" ).AsInteger() );
+                ShowDetail( PageParameter( "RestUserId" ).AsInteger() );
             }
         }
 
@@ -90,14 +90,14 @@ namespace RockWeb.Blocks.Security
 
                 // the rest user name gets saved as the last name on a person
                 restUser.LastName = tbName.Text;
-                restUser.RecordTypeValueId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_RESTUSER.AsGuid() ).Id;
+                restUser.RecordTypeValueId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_RESTUSER.AsGuid() ).Id;
                 if ( cbActive.Checked )
                 {
-                    restUser.RecordStatusValueId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_ACTIVE.AsGuid() ).Id;
+                    restUser.RecordStatusValueId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_ACTIVE.AsGuid() ).Id;
                 }
                 else
                 {
-                    restUser.RecordStatusValueId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE.AsGuid() ).Id;
+                    restUser.RecordStatusValueId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE.AsGuid() ).Id;
                 }
 
                 if ( restUser.IsValid )
@@ -106,7 +106,7 @@ namespace RockWeb.Blocks.Security
                 }
 
                 // the description gets saved as a system note for the person
-                var noteType = NoteTypeCache.Read( Rock.SystemGuid.NoteType.PERSON_TIMELINE_NOTE.AsGuid() );
+                var noteType = NoteTypeCache.Get( Rock.SystemGuid.NoteType.PERSON_TIMELINE_NOTE.AsGuid() );
                 if ( noteType != null )
                 {
                     var noteService = new NoteService( rockContext );
@@ -163,48 +163,13 @@ namespace RockWeb.Blocks.Security
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void lbGenerate_Click( object sender, EventArgs e )
         {
-            // Generate a unique random 12 digit api key
-            var rockContext = new RockContext();
-            var userLoginService = new UserLoginService( rockContext );
-            var key = string.Empty;
-            var isGoodKey = false;
-            while ( isGoodKey == false )
-            {
-                key = GenerateKey();
-                var userLogins = userLoginService.Queryable().Where( a => a.ApiKey == key );
-                if ( userLogins.Count() == 0 )
-                {
-                    // no other user login has this key.
-                    isGoodKey = true;
-                }
-            }
-
-            tbKey.Text = key;
+            tbKey.Text = Rock.Utility.KeyHelper.GenerateKey( (RockContext rockContext, string key) => new UserLoginService( rockContext ).Queryable().Any( a => a.ApiKey == key ) );
         }
 
         #endregion
 
         #region Internal Methods
-
-        /// <summary>
-        /// Generates the key.
-        /// </summary>
-        /// <returns></returns>
-        private string GenerateKey()
-        {
-            StringBuilder sb = new StringBuilder();
-            Random rnd = new Random();
-            char[] codeCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".ToCharArray(); ;
-            int poolSize = codeCharacters.Length;
-
-            for ( int i = 0; i < 24; i++ )
-            {
-                sb.Append( codeCharacters[rnd.Next( poolSize )] );
-            }
-
-            return sb.ToString();
-        }
-
+                
         /// <summary>
         /// Shows the detail.
         /// </summary>
@@ -233,7 +198,7 @@ namespace RockWeb.Blocks.Security
             {
                 tbName.Text = restUser.LastName;
                 cbActive.Checked = false;
-                var activeStatusId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_ACTIVE.AsGuid() ).Id;
+                var activeStatusId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_ACTIVE.AsGuid() ).Id;
                 if ( restUser.RecordStatusValueId == activeStatusId )
                 {
                     cbActive.Checked = true;

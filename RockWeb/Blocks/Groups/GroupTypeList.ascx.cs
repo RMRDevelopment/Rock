@@ -94,7 +94,7 @@ namespace RockWeb.Blocks.Groups
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void rFilter_ApplyFilterClick( object sender, EventArgs e )
         {
-            rFilter.SaveUserPreference( "Purpose", ddlPurpose.SelectedValue );
+            rFilter.SaveUserPreference( "Purpose", dvpPurpose.SelectedValue );
             rFilter.SaveUserPreference( "System Group Types", ddlIsSystem.SelectedValue );
             rFilter.SaveUserPreference( "Shown in Navigation", ddlShowInNavigation.SelectedValue );
             BindGrid();
@@ -114,7 +114,7 @@ namespace RockWeb.Blocks.Groups
                     int? id = e.Value.AsIntegerOrNull();
                     if ( id.HasValue )
                     {
-                        var purpose = DefinedValueCache.Read( id.Value );
+                        var purpose = DefinedValueCache.Get( id.Value );
                         if ( purpose != null )
                         {
                             e.Value = purpose.Value;
@@ -132,7 +132,7 @@ namespace RockWeb.Blocks.Groups
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void gGroupType_Add( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "groupTypeId", 0 );
+            NavigateToLinkedPage( "DetailPage", "GroupTypeId", 0 );
         }
 
         /// <summary>
@@ -142,7 +142,7 @@ namespace RockWeb.Blocks.Groups
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gGroupType_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "groupTypeId", e.RowKeyId );
+            NavigateToLinkedPage( "DetailPage", "GroupTypeId", e.RowKeyId );
         }
 
         /// <summary>
@@ -178,8 +178,6 @@ namespace RockWeb.Blocks.Groups
 
                 groupTypeService.Delete( groupType );
                 rockContext.SaveChanges();
-
-                GroupTypeCache.Flush( groupTypeId );
             }
 
             BindGrid();
@@ -223,8 +221,8 @@ namespace RockWeb.Blocks.Groups
         /// </summary>
         private void BindFilter()
         {
-            ddlPurpose.BindToDefinedType( DefinedTypeCache.Read( new Guid( Rock.SystemGuid.DefinedType.GROUPTYPE_PURPOSE ) ), true );
-            ddlPurpose.SelectedValue = rFilter.GetUserPreference( "Purpose" );
+            dvpPurpose.DefinedTypeId = DefinedTypeCache.Get( new Guid( Rock.SystemGuid.DefinedType.GROUPTYPE_PURPOSE ) ).Id;
+            dvpPurpose.SelectedValue = rFilter.GetUserPreference( "Purpose" );
             ddlIsSystem.SelectedValue = rFilter.GetUserPreference( "System Group Types" );
             ddlIsSystem.SelectedValue = rFilter.GetUserPreference( "Shown in Navigation" );
         }

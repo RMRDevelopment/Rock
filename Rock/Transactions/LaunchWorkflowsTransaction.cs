@@ -46,6 +46,14 @@ namespace Rock.Transactions
         public int? WorkflowTypeId { get; set; }
 
         /// <summary>
+        /// Gets or sets the initiator person alias identifier.
+        /// </summary>
+        /// <value>
+        /// The initiator person alias identifier.
+        /// </value>
+        public int? InitiatorPersonAliasId { get; set; }
+
+        /// <summary>
         /// Gets or sets the workflow details.
         /// </summary>
         /// <value>
@@ -85,12 +93,12 @@ namespace Rock.Transactions
                 WorkflowTypeCache workflowType = null;
                 if ( WorkflowTypeGuid.HasValue )
                 {
-                    workflowType = WorkflowTypeCache.Read( WorkflowTypeGuid.Value );
+                    workflowType = WorkflowTypeCache.Get( WorkflowTypeGuid.Value );
                 }
 
                 if ( workflowType == null && WorkflowTypeId.HasValue )
                 {
-                    workflowType = WorkflowTypeCache.Read( WorkflowTypeId.Value );
+                    workflowType = WorkflowTypeCache.Get( WorkflowTypeId.Value );
                 }
 
                 if ( workflowType != null && ( workflowType.IsActive ?? true ) )
@@ -100,6 +108,8 @@ namespace Rock.Transactions
                         using ( var rockContext = new RockContext() )
                         {
                             var workflow = Rock.Model.Workflow.Activate( workflowType, wfDetail.Name );
+                            workflow.InitiatorPersonAliasId = InitiatorPersonAliasId;
+
                             if ( wfDetail.AttributeValues != null )
                             {
                                 foreach ( var keyVal in wfDetail.AttributeValues )
@@ -162,5 +172,14 @@ namespace Rock.Transactions
             Entity = entity;
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="LaunchWorkflowDetails"/> class.
+        /// </summary>
+        /// <param name="entity">The entity.</param>
+        /// <param name="attributeValues">The attribute values.</param>
+        public LaunchWorkflowDetails( IEntity entity, Dictionary<string, string> attributeValues ) : this(entity)
+        {
+            AttributeValues = attributeValues;
+        }
     }
 }

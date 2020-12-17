@@ -24,6 +24,7 @@ using Rock.Constants;
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
+using Rock.Utility;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
@@ -88,13 +89,13 @@ namespace RockWeb.Blocks.Core
 
             if ( !Page.IsPostBack )
             {
-                ShowDetail( PageParameter( "binaryFileTypeId" ).AsInteger() );
+                ShowDetail( PageParameter( "BinaryFileTypeId" ).AsInteger() );
             }
             else
             {
                 if ( pnlDetails.Visible )
                 {
-                    var storageEntityType = EntityTypeCache.Read( cpStorageType.SelectedValue.AsGuid() );
+                    var storageEntityType = EntityTypeCache.Get( cpStorageType.SelectedValue.AsGuid() );
                     if ( storageEntityType != null )
                     {
                         var binaryFileType = new BinaryFileType { StorageEntityTypeId = storageEntityType.Id };
@@ -162,20 +163,26 @@ namespace RockWeb.Blocks.Core
             tbName.Text = binaryFileType.Name;
             tbDescription.Text = binaryFileType.Description;
             tbIconCssClass.Text = binaryFileType.IconCssClass;
-            cbAllowCaching.Checked = binaryFileType.AllowCaching;
+            cbCacheToServerFileSystem.Checked = binaryFileType.CacheToServerFileSystem;
+
+            if ( binaryFileType.CacheControlHeaderSettings != null )
+            {
+                cpCacheSettings.CurrentCacheablity = JsonConvert.DeserializeObject<RockCacheability>( binaryFileType.CacheControlHeaderSettings );
+            }
+
             cbRequiresViewSecurity.Checked = binaryFileType.RequiresViewSecurity;
 
             nbMaxWidth.Text = binaryFileType.MaxWidth.ToString();
             nbMaxHeight.Text = binaryFileType.MaxHeight.ToString();
 
             ddlPreferredFormat.BindToEnum<Format>();
-            ddlPreferredFormat.SetValue( (int)binaryFileType.PreferredFormat );
+            ddlPreferredFormat.SetValue( ( int ) binaryFileType.PreferredFormat );
 
             ddlPreferredResolution.BindToEnum<Resolution>();
-            ddlPreferredResolution.SetValue( (int)binaryFileType.PreferredResolution );
+            ddlPreferredResolution.SetValue( ( int ) binaryFileType.PreferredResolution );
 
             ddlPreferredColorDepth.BindToEnum<ColorDepth>();
-            ddlPreferredColorDepth.SetValue( (int)binaryFileType.PreferredColorDepth );
+            ddlPreferredColorDepth.SetValue( ( int ) binaryFileType.PreferredColorDepth );
 
             cbPreferredRequired.Checked = binaryFileType.PreferredRequired;
 
@@ -187,7 +194,7 @@ namespace RockWeb.Blocks.Core
             AttributeService attributeService = new AttributeService( rockContext );
 
             string qualifierValue = binaryFileType.Id.ToString();
-            var qryBinaryFileAttributes = attributeService.GetByEntityTypeId( new BinaryFile().TypeId ).AsQueryable()
+            var qryBinaryFileAttributes = attributeService.GetByEntityTypeId( new BinaryFile().TypeId, true ).AsQueryable()
                 .Where( a => a.EntityTypeQualifierColumn.Equals( "BinaryFileTypeId", StringComparison.OrdinalIgnoreCase )
                 && a.EntityTypeQualifierValue.Equals( qualifierValue ) );
 
@@ -240,7 +247,8 @@ namespace RockWeb.Blocks.Core
             // allow these to be edited in restricted edit mode if not readonly
             tbDescription.ReadOnly = readOnly;
             tbIconCssClass.ReadOnly = readOnly;
-            cbAllowCaching.Enabled = !readOnly;
+            cbCacheToServerFileSystem.Enabled = !readOnly;
+            cpCacheSettings.Enabled = !readOnly;
             cbRequiresViewSecurity.Enabled = !readOnly;
             cpStorageType.Enabled = !readOnly;
             nbMaxWidth.ReadOnly = readOnly;
@@ -296,7 +304,8 @@ namespace RockWeb.Blocks.Core
             binaryFileType.Name = tbName.Text;
             binaryFileType.Description = tbDescription.Text;
             binaryFileType.IconCssClass = tbIconCssClass.Text;
-            binaryFileType.AllowCaching = cbAllowCaching.Checked;
+            binaryFileType.CacheToServerFileSystem = cbCacheToServerFileSystem.Checked;
+            binaryFileType.CacheControlHeaderSettings = cpCacheSettings.CurrentCacheablity.ToJson();
             binaryFileType.RequiresViewSecurity = cbRequiresViewSecurity.Checked;
             binaryFileType.MaxWidth = nbMaxWidth.Text.AsInteger();
             binaryFileType.MaxHeight = nbMaxHeight.Text.AsInteger();
@@ -333,16 +342,16 @@ namespace RockWeb.Blocks.Core
                 binaryFileType = binaryFileTypeService.Get( binaryFileType.Guid );
 
                 /* Take care of Binary File Attributes */
-                var entityTypeId = Rock.Web.Cache.EntityTypeCache.Read( typeof( BinaryFile ) ).Id;
+                var entityTypeId = EntityTypeCache.Get( typeof( BinaryFile ) ).Id;
 
                 // delete BinaryFileAttributes that are no longer configured in the UI
-                var attributes = attributeService.Get( entityTypeId, "BinaryFileTypeId", binaryFileType.Id.ToString() );
+                var attributes = attributeService.GetByEntityTypeQualifier( entityTypeId, "BinaryFileTypeId", binaryFileType.Id.ToString(), true );
                 var selectedAttributeGuids = BinaryFileAttributesState.Select( a => a.Guid );
                 foreach ( var attr in attributes.Where( a => !selectedAttributeGuids.Contains( a.Guid ) ) )
                 {
-                    Rock.Web.Cache.AttributeCache.Flush( attr.Id );
                     attributeService.Delete( attr );
                 }
+
                 rockContext.SaveChanges();
 
                 // add/update the BinaryFileAttributes that are assigned in the UI
@@ -355,8 +364,6 @@ namespace RockWeb.Blocks.Core
                 binaryFileType.SaveAttributeValues( rockContext );
 
             } );
-
-            AttributeCache.FlushEntityAttributes();
 
             NavigateToParentPage();
         }
@@ -382,7 +389,7 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gBinaryFileAttributes_Edit( object sender, RowEventArgs e )
         {
-            Guid attributeGuid = (Guid)e.RowKeyValue;
+            Guid attributeGuid = ( Guid ) e.RowKeyValue;
             gBinaryFileAttributes_ShowEdit( attributeGuid );
         }
 
@@ -399,7 +406,7 @@ namespace RockWeb.Blocks.Core
             if ( attributeGuid.Equals( Guid.Empty ) )
             {
                 attribute = new Attribute();
-                attribute.FieldTypeId = FieldTypeCache.Read( Rock.SystemGuid.FieldType.TEXT ).Id;
+                attribute.FieldTypeId = FieldTypeCache.Get( Rock.SystemGuid.FieldType.TEXT ).Id;
                 edtBinaryFileAttributes.ActionTitle = ActionTitle.Add( "attribute for binary files of type " + tbName.Text );
             }
             else
@@ -421,7 +428,7 @@ namespace RockWeb.Blocks.Core
         /// <exception cref="System.NotImplementedException"></exception>
         protected void gBinaryFileAttributes_Delete( object sender, RowEventArgs e )
         {
-            Guid attributeGuid = (Guid)e.RowKeyValue;
+            Guid attributeGuid = ( Guid ) e.RowKeyValue;
             BinaryFileAttributesState.RemoveEntity( attributeGuid );
 
             BindBinaryFileAttributesGrid();
@@ -444,17 +451,15 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void btnSaveBinaryFileAttribute_Click( object sender, EventArgs e )
         {
-            Attribute attribute = new Attribute();
-            edtBinaryFileAttributes.GetAttributeProperties( attribute );
+#pragma warning disable 0618 // Type or member is obsolete
+            var attribute = SaveChangesToStateCollection( edtBinaryFileAttributes, BinaryFileAttributesState );
+#pragma warning restore 0618 // Type or member is obsolete
 
             // Controls will show warnings
             if ( !attribute.IsValid )
             {
                 return;
             }
-
-            BinaryFileAttributesState.RemoveEntity( attribute.Guid );
-            BinaryFileAttributesState.Add( attribute );
 
             pnlDetails.Visible = true;
             pnlBinaryFileAttribute.Visible = false;
@@ -480,6 +485,50 @@ namespace RockWeb.Blocks.Core
         {
             gBinaryFileAttributes.DataSource = BinaryFileAttributesState.OrderBy( a => a.Name ).ToList();
             gBinaryFileAttributes.DataBind();
+        }
+
+        #endregion
+
+        #region Obsolete Code
+
+        /// <summary>
+        /// Add or update the saved state of an Attribute using values from the AttributeEditor.
+        /// Non-editable system properties of the existing Attribute state are preserved.
+        /// </summary>
+        /// <param name="editor">The AttributeEditor that holds the updated Attribute values.</param>
+        /// <param name="attributeStateCollection">The stored state collection.</param>
+        [RockObsolete( "1.11" )]
+        [Obsolete( "This method is required for backward-compatibility - new blocks should use the AttributeEditor.SaveChangesToStateCollection() extension method instead." )]
+        private Rock.Model.Attribute SaveChangesToStateCollection( AttributeEditor editor, List<Rock.Model.Attribute> attributeStateCollection )
+        {
+            // Load the editor values into a new Attribute instance.
+            Rock.Model.Attribute attribute = new Rock.Model.Attribute();
+
+            editor.GetAttributeProperties( attribute );
+
+            // Get the stored state of the Attribute, and copy the values of the non-editable properties.
+            var attributeState = attributeStateCollection.Where( a => a.Guid.Equals( attribute.Guid ) ).FirstOrDefault();
+
+            if ( attributeState != null )
+            {
+                attribute.Order = attributeState.Order;
+                attribute.CreatedDateTime = attributeState.CreatedDateTime;
+                attribute.CreatedByPersonAliasId = attributeState.CreatedByPersonAliasId;
+                attribute.ForeignGuid = attributeState.ForeignGuid;
+                attribute.ForeignId = attributeState.ForeignId;
+                attribute.ForeignKey = attributeState.ForeignKey;
+
+                attributeStateCollection.RemoveEntity( attribute.Guid );
+            }
+            else
+            {
+                // Set the Order of the new entry as the last item in the collection.
+                attribute.Order = attributeStateCollection.Any() ? attributeStateCollection.Max( a => a.Order ) + 1 : 0;
+            }
+
+            attributeStateCollection.Add( attribute );
+
+            return attribute;
         }
 
         #endregion

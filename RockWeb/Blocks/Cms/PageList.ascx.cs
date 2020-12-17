@@ -38,9 +38,38 @@ namespace RockWeb.Blocks.Cms
     [Category( "CMS" )]
     [Description( "Lists pages for a site." )]
 
-    [BooleanField("Show Page Id", "Enables the hiding of the page id column.", true)]
+    #region Block Attributes
+
+    [BooleanField(
+        "Show Page Id",
+        Description = "Enables the hiding of the page id column.",
+        DefaultBooleanValue = true,
+        Key = AttributeKey.ShowPageId )]
+
+    #endregion Block Attributes
     public partial class PageList : RockBlock, ISecondaryBlock, ICustomGridColumns
     {
+        #region Attribute Keys
+
+        private static class AttributeKey
+        {
+            public const string ShowPageId = "ShowPageId";
+        }
+
+        #endregion Attribute Keys
+
+        #region Page Parameter Keys
+
+        /// <summary>
+        /// Keys to use for Page Parameters
+        /// </summary>
+        private static class PageParameterKey
+        {
+            public const string SiteId = "SiteId";
+        }
+
+        #endregion
+
         #region Base Control Methods
 
         /// <summary>
@@ -75,7 +104,7 @@ namespace RockWeb.Blocks.Cms
                 var pageIdBoundField = gPages.ColumnsOfType<RockBoundField>().FirstOrDefault( a => a.DataField == "Id" );
                 if ( pageIdBoundField != null )
                 {
-                    pageIdBoundField.Visible = GetAttributeValue( "ShowPageId" ).AsBoolean();
+                    pageIdBoundField.Visible = GetAttributeValue( AttributeKey.ShowPageId ).AsBoolean();
                 }
             }
         }
@@ -157,8 +186,6 @@ namespace RockWeb.Blocks.Cms
                 pageService.Delete( page );
 
                 rockContext.SaveChanges();
-
-                PageCache.Flush( page.Id );
             }
 
             BindPagesGrid();
@@ -173,13 +200,13 @@ namespace RockWeb.Blocks.Cms
         /// </summary>
         private void BindFilter()
         {
-            int siteId = PageParameter( "siteId" ).AsInteger();
+            int siteId = PageParameter( PageParameterKey.SiteId ).AsInteger();
             if ( siteId == 0 )
             {
                 // quit if the siteId can't be determined
                 return;
             }
-            LayoutService.RegisterLayouts( Request.MapPath( "~" ), SiteCache.Read( siteId ) );
+            LayoutService.RegisterLayouts( Request.MapPath( "~" ), SiteCache.Get( siteId ) );
             LayoutService layoutService = new LayoutService( new RockContext() );
             var layouts = layoutService.Queryable().Where( a => a.SiteId.Equals( siteId ) ).ToList();
             ddlLayoutFilter.DataSource = layouts;
@@ -195,7 +222,7 @@ namespace RockWeb.Blocks.Cms
         protected void BindPagesGrid()
         {
             pnlPages.Visible = false;
-            int siteId = PageParameter( "siteId" ).AsInteger();
+            int siteId = PageParameter( PageParameterKey.SiteId ).AsInteger();
             if ( siteId == 0 )
             {
                 // quit if the siteId can't be determined
@@ -208,7 +235,7 @@ namespace RockWeb.Blocks.Cms
             // Question: Is this RegisterLayouts necessary here?  Since if it's a new layout
             // there would not be any pages on them (which is our concern here).
             // It seems like it should be the concern of some other part of the puzzle.
-            LayoutService.RegisterLayouts( Request.MapPath( "~" ), SiteCache.Read( siteId ) );
+            LayoutService.RegisterLayouts( Request.MapPath( "~" ), SiteCache.Get( siteId ) );
             //var layouts = layoutService.Queryable().Where( a => a.SiteId.Equals( siteId ) ).Select( a => a.Id ).ToList();
 
             // Find all the pages that are related to this site...

@@ -22,6 +22,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.UI.Controls;
@@ -143,22 +144,12 @@ namespace Rock.Reporting.DataFilter.Person
         }
 
         /// <summary>
-        /// The RegistrationTemplatePicker
-        /// </summary>
-        private RegistrationTemplatePicker rp = null;
-
-        /// <summary>
-        /// The "Include Inactive" checkbox
-        /// </summary>
-        private RockCheckBox cbIncludeInactiveRegistrationInstances = null;
-
-        /// <summary>
         /// Creates the child controls.
         /// </summary>
         /// <returns></returns>
         public override Control[] CreateChildControls( Type entityType, FilterField filterControl )
         {
-            rp = new RegistrationTemplatePicker();
+            var rp = new RegistrationTemplatePicker();
             rp.ID = filterControl.ID + "_rp";
             rp.Label = "RegistrationTemplate(s)";
             rp.CssClass = "js-group-picker";
@@ -166,7 +157,7 @@ namespace Rock.Reporting.DataFilter.Person
             rp.Help = "Select the registration templates that you want the registrants for. Leaving this blank will not restrict results to a registration template.";
             filterControl.Controls.Add( rp );
 
-            cbIncludeInactiveRegistrationInstances = new RockCheckBox();
+            var cbIncludeInactiveRegistrationInstances = new RockCheckBox();
             cbIncludeInactiveRegistrationInstances.ID = filterControl.ID + "_cbIncludeInactiveRegistrationInstances";
             cbIncludeInactiveRegistrationInstances.Text = "Include Inactive Registration Instances";
             cbIncludeInactiveRegistrationInstances.CssClass = "js-include-inactive-groups";
@@ -257,7 +248,7 @@ namespace Rock.Reporting.DataFilter.Person
             return string.Format(
                 "{0}|{1}|{2}",
                 registrationTemplateGuids.AsDelimited( "," ),
-                cbIncludeInactiveRegistrationInstances.Checked.ToString(),
+                cbInactiveRegistrationInstances.Checked.ToString(),
                 delimitedValues );
         }
 
@@ -290,18 +281,18 @@ namespace Rock.Reporting.DataFilter.Person
 
                 if ( selectionValues.Length >= 2 )
                 {
-                    cbIncludeInactiveRegistrationInstances.Checked = selectionValues[6].AsBooleanOrNull() ?? false;
+                    cbIncludeInactive.Checked = selectionValues[1].AsBooleanOrNull() ?? false;
                 }
                 else
                 {
                     // if options where saved before this option was added, set to false, even though it would have included inactive before
-                    cbIncludeInactiveRegistrationInstances.Checked = false;
+                    cbIncludeInactive.Checked = false;
                 }
 
                 if ( selectionValues.Length >= 3 )
                 {
                     // convert comma delimited to pipe
-                    registeredOnDateRangePicker.DelimitedValues = selectionValues[7].Replace( ',', '|' );
+                    registeredOnDateRangePicker.DelimitedValues = selectionValues[2].Replace( ',', '|' );
                 }
             }
         }

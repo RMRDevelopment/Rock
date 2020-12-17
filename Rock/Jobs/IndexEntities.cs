@@ -15,25 +15,26 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Web;
+
 using Quartz;
+
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
 using Rock.UniversalSearch;
 using Rock.Web.Cache;
-using Rock.Web.UI;
-using Rock.Web.UI.Controls;
 
 namespace Rock.Jobs
 {
     /// <summary>
-    /// Job to run quick SQL queries on a schedule
+    /// Re-indexes the selected entity types in Universal Search
     /// </summary>
+    [DisplayName( "Universal Search Re-Index" )]
+    [Description( "Re-indexes the selected entity types in Universal Search." )]
+
     [BooleanField("Index All Entities", "Indexes all entities, the entity filter will be ignored.", true, order: 0)]
     [CustomCheckboxListField("Entity Filter", "Entities to re-index. Not selecting a value will re-index all index enabled entities.", "SELECT CAST([Id] AS VARCHAR) [Value], [FriendlyName] [Text] FROM [EntityType] WHERE [IsIndexingEnabled] = 1 AND [FriendlyName] != 'Site'", false, order: 1 )]
     [DisallowConcurrentExecution]
@@ -51,7 +52,7 @@ namespace Rock.Jobs
         }
 
         /// <summary>
-        /// Job that will run quick SQL queries on a schedule.
+        /// Re-indexes the selected entity types in Universal Search
         /// 
         /// Called by the <see cref="IScheduler" /> when a
         /// <see cref="ITrigger" /> fires that is associated with
@@ -70,16 +71,16 @@ namespace Rock.Jobs
             // if 'All' wasn't selected the filter out the ones that weren't selected
             if ( !allEntities )
             {
-                if ( selectedEntitiesSetting.IsNotNullOrWhitespace() )
+                if ( selectedEntitiesSetting.IsNotNullOrWhiteSpace() )
                 {
                     var selectedEntityIds = selectedEntitiesSetting.Split( ',' ).Select( int.Parse ).ToList();
                     selectedEntityTypes = selectedEntityTypes.Where( e => selectedEntityIds.Contains( e.Id ) );
                 }
             }            
 
-            string results = string.Empty;           
-
-            foreach(var entityTypeCache in selectedEntityTypes )
+            string results = string.Empty;
+            var timerTotal = System.Diagnostics.Stopwatch.StartNew();
+            foreach (var entityTypeCache in selectedEntityTypes )
             {
                 EntityTypeService entityTypeService = new EntityTypeService( rockContext );
                 var entityType = entityTypeService.Get( entityTypeCache.Id );
@@ -104,6 +105,7 @@ namespace Rock.Jobs
                 }
             }
 
+            results += $"Total Time: {timerTotal.ElapsedMilliseconds / 1000}s,";
             context.Result = "Indexing results: " + results.Trim( ',' );
         }
     }

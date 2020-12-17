@@ -12,7 +12,7 @@
                         </div>
                         <div class="panel-body">
 
-                            <asp:ValidationSummary ID="vsDetails" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                            <asp:ValidationSummary ID="vsDetails" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                             <div class="row">
                                 <div class="col-md-6">
@@ -32,7 +32,7 @@
                                 <div class="col-md-6">
                                     <Rock:CategoryPicker ID="cpCategory" runat="server" Required="true" EntityTypeName="Rock.Model.Report" Label="Category" />
                                     <Rock:EntityTypePicker ID="etpEntityType" runat="server" Label="Applies To" Required="true" AutoPostBack="true" OnSelectedIndexChanged="etpEntityType_SelectedIndexChanged" EnhanceForLongLists="true" />
-                                    <Rock:DataViewPicker ID="ddlDataView" runat="server" Label="Data View" Required="false" EnhanceForLongLists="true" />
+                                    <Rock:DataViewItemPicker ID="dvpDataView" runat="server" Label="Data View" Required="false" />
                                 </div>
                                 <div class="col-md-6">
                                     <Rock:KeyValueList ID="kvSortFields" runat="server" Label="Sorting" />
@@ -93,14 +93,15 @@
                             </p>
 
                             <Rock:NotificationBox ID="nbEditModeMessage" runat="server" NotificationBoxType="Info" />
+                            <Rock:NotificationBox ID="nbErrorMessage" runat="server" NotificationBoxType="Danger" Visible="false" />
 
                             <div class="actions">
                                 <asp:LinkButton ID="btnEdit" runat="server" AccessKey="m" ToolTip="Alt+m" Text="Edit" CssClass="btn btn-primary" OnClick="btnEdit_Click" />
                                 <Rock:ModalAlert ID="mdDeleteWarning" runat="server" />
                                 <asp:LinkButton ID="btnDelete" runat="server" Text="Delete" CssClass="btn btn-link" OnClick="btnDelete_Click" />
                                 <div class="pull-right">
-                                    <asp:LinkButton ID="lbDataView" runat="server" Text="Data View" CssClass="btn btn-link" OnClick="lbDataView_Click" />
-                                    <asp:LinkButton ID="btnCopy" runat="server" Tooltip="Copy Report" CssClass="btn btn-default btn-sm fa fa-clone" OnClick="btnCopy_Click" />
+                                    <asp:HyperLink ID="lbDataView" runat="server" Text="Data View" CssClass="btn btn-link" />
+                                    <asp:LinkButton ID="btnCopy" runat="server" Tooltip="Copy Report" CssClass="btn btn-default btn-sm btn-square fa fa-clone" OnClick="btnCopy_Click" />
                                     <Rock:SecurityButton ID="btnSecurity" runat="server" class="btn btn-sm btn-security" />
                                 </div>
                             </div>
@@ -109,15 +110,10 @@
 
                     <div class="panel panel-block">
                         <div class="panel-heading">
-                            <div class="row margin-t-sm">
-                                <div class="col-md-6">
-                                    <h1 class="panel-title"><i class="fa fa-table"></i> Report Data</h1>
-                                </div>
-                                <div class="col-md-6 pull-right">
-                                    <div class="pull-right">
-                                        <asp:LinkButton ID="btnToggleResults" runat="server" CssClass="btn btn-default btn-xs margin-b-sm" OnClick="btnToggleResults_Click" />
-                                    </div>
-                                </div>
+                            <h1 class="panel-title"><i class="fa fa-table"></i> Report Data</h1>
+                                
+                            <div class="panel-labels">
+                                <asp:LinkButton ID="btnToggleResults" runat="server" CssClass="btn btn-default btn-xs" OnClick="btnToggleResults_Click" />
                             </div>
                         </div>
                       

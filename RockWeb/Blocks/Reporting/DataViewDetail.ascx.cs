@@ -45,12 +45,13 @@ namespace RockWeb.Blocks.Reporting
     [LinkedPage( "Report Detail Page", "The page to display a report.", false, order: 1 )]
     [LinkedPage( "Group Detail Page", "The page to display a group.", false, order: 2 )]
     [IntegerField( "Database Timeout", "The number of seconds to wait before reporting a database timeout.", false, 180, order: 3 )]
+    [LinkedPage( "Report Detail Page", "Page used to create new report.", false, order: 4 )]
     public partial class DataViewDetail : RockBlock, IDetailBlock
     {
         #region Properties
 
         private const string _ViewStateKeyShowResults = "ShowResults";
-        private string _SettingKeyShowResults = "data-view-show-results-{blockId}";
+        private string _settingKeyShowResults = "data-view-show-results-{blockId}";
 
         /// <summary>
         /// Gets or sets the visibility of the Results Grid for the Data View.
@@ -71,7 +72,7 @@ namespace RockWeb.Blocks.Reporting
                 {
                     ViewState[_ViewStateKeyShowResults] = value;
 
-                    SetUserPreference( _SettingKeyShowResults, value.ToString() );
+                    SetUserPreference( _settingKeyShowResults, value.ToString() );
                 }
 
                 pnlResultsGrid.Visible = this.ShowResults;
@@ -123,10 +124,10 @@ namespace RockWeb.Blocks.Reporting
             base.OnInit( e );
 
             // Create unique user setting keys for this block.
-            _SettingKeyShowResults = _SettingKeyShowResults.Replace( "{blockId}", this.BlockId.ToString() );
+            _settingKeyShowResults = _settingKeyShowResults.Replace( "{blockId}", this.BlockId.ToString() );
 
             // Switch does not automatically initialize again after a partial-postback.  This script 
-            // looks for any switch elements that have not been initialized and re-intializes them.
+            // looks for any switch elements that have not been initialized and re-initializes them.
             string script = @"
 $(document).ready(function() {
     $('.switch > input').each( function () {
@@ -137,7 +138,7 @@ $(document).ready(function() {
             ScriptManager.RegisterStartupScript( this.Page, this.Page.GetType(), "toggle-switch-init", script, true );
 
             btnDelete.Attributes["onclick"] = string.Format( "javascript: return Rock.dialogs.confirmDelete(event, '{0}');", DataView.FriendlyTypeName );
-            btnSecurity.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.DataView ) ).Id;
+            btnSecurity.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.DataView ) ).Id;
 
             gReport.GridRebind += gReport_GridRebind;
 
@@ -162,7 +163,7 @@ $(document).ready(function() {
 
             if ( !Page.IsPostBack )
             {
-                this.ShowResults = GetUserPreference( _SettingKeyShowResults ).AsBoolean(true);
+                this.ShowResults = GetUserPreference( _settingKeyShowResults ).AsBoolean( true );
 
                 string itemId = PageParameter( "DataViewId" );
                 if ( !string.IsNullOrWhiteSpace( itemId ) )
@@ -225,13 +226,15 @@ $(document).ready(function() {
         {
             // Create a new Data View using the current item as a template.
             var id = int.Parse( hfDataViewId.Value );
-            
+
             var dataViewService = new DataViewService( new RockContext() );
 
             var newItem = dataViewService.GetNewFromTemplate( id );
 
-            if (newItem == null)
+            if ( newItem == null )
+            {
                 return;
+            }
 
             newItem.Name += " (Copy)";
 
@@ -239,22 +242,6 @@ $(document).ready(function() {
             hfDataViewId.Value = "0";
 
             ShowEditDetails( newItem );
-        }
-
-        /// <summary>
-        /// Set the Guids on the datafilter and it's children to Guid.NewGuid
-        /// </summary>
-        /// <param name="dataViewFilter">The data view filter.</param>
-        private void SetNewDataFilterGuids( DataViewFilter dataViewFilter )
-        {
-            if ( dataViewFilter != null )
-            {
-                dataViewFilter.Guid = Guid.NewGuid();
-                foreach ( var childFilter in dataViewFilter.ChildFilters )
-                {
-                    SetNewDataFilterGuids( childFilter );
-                }
-            }
         }
 
         /// <summary>
@@ -288,9 +275,10 @@ $(document).ready(function() {
             dataView.TransformEntityTypeId = ddlTransform.SelectedValueAsInt();
             dataView.EntityTypeId = etpEntityType.SelectedEntityTypeId;
             dataView.CategoryId = cpCategory.SelectedValueAsInt();
+            dataView.IncludeDeceased = cbIncludeDeceased.Checked;
+            dataView.PersistedScheduleIntervalMinutes = swPersistDataView.Checked ? ipPersistedScheduleInterval.IntervalInMinutes : null;
 
             var newDataViewFilter = ReportingHelper.GetFilterFromControls( phFilters );
-            
 
             if ( !Page.IsValid )
             {
@@ -304,14 +292,17 @@ $(document).ready(function() {
             }
 
             var adding = dataView.Id.Equals( 0 );
-            if ( adding )
-            {
-                service.Add( dataView );
-            }
 
             rockContext.WrapTransaction( () =>
             {
-                
+                if ( adding )
+                {
+                    service.Add( dataView );
+
+                    // We need to save the new data view so we can bind the data view filters.
+                    rockContext.SaveChanges();
+                }
+
                 if ( origDataViewFilterId.HasValue )
                 {
                     // delete old report filter so that we can add the new filter (but with original guids), then drop the old filter
@@ -319,14 +310,42 @@ $(document).ready(function() {
                     DataViewFilter origDataViewFilter = dataViewFilterService.Get( origDataViewFilterId.Value );
 
                     dataView.DataViewFilterId = null;
-                    rockContext.SaveChanges();
-                    
-                    DeleteDataViewFilter( origDataViewFilter, dataViewFilterService );
+
+                    DeleteDataViewFilter( origDataViewFilter, dataViewFilterService, rockContext );
                 }
-                
+
                 dataView.DataViewFilter = newDataViewFilter;
                 rockContext.SaveChanges();
             } );
+
+            if ( dataView.PersistedScheduleIntervalMinutes.HasValue )
+            {
+                try
+                {
+                    Stopwatch stopwatch = Stopwatch.StartNew();
+                    dataView.PersistResult( GetAttributeValue( "DatabaseTimeout" ).AsIntegerOrNull() ?? 180 );
+                    stopwatch.Stop();
+                    dataView.PersistedLastRefreshDateTime = RockDateTime.Now;
+                    dataView.PersistedLastRunDurationMilliseconds = Convert.ToInt32( stopwatch.Elapsed.TotalMilliseconds );
+                    rockContext.SaveChanges();
+                }
+                catch ( Exception ex )
+                {
+                    this.LogException( ex );
+                    var sqlTimeoutException = ReportingHelper.FindSqlTimeoutException( ex );
+                    if ( sqlTimeoutException != null )
+                    {
+                        nbPersistError.NotificationBoxType = NotificationBoxType.Warning;
+                        nbPersistError.Text = "This dataview did not persist in a timely manner. You can try again or adjust the timeout setting of this block.";
+                        return;
+                    }
+
+                    nbPersistError.NotificationBoxType = NotificationBoxType.Danger;
+                    nbPersistError.Text = "An error occurred when persisting the dataview";
+                    nbPreviewError.Details = ex.Message;
+                    return;
+                }
+            }
 
             if ( adding )
             {
@@ -337,7 +356,8 @@ $(document).ready(function() {
 
             var qryParams = new Dictionary<string, string>();
             qryParams["DataViewId"] = dataView.Id.ToString();
-            NavigateToPage( RockPage.Guid, qryParams );
+            qryParams["ParentCategoryId"] = null;
+            NavigateToCurrentPageReference( qryParams );
         }
 
         /// <summary>
@@ -350,7 +370,7 @@ $(document).ready(function() {
             // Check if we are editing an existing Data View.
             int dataViewId = hfDataViewId.Value.AsInteger();
 
-            if (dataViewId == 0)
+            if ( dataViewId == 0 )
             {
                 // If not, check if we are editing a new copy of an existing Data View.
                 dataViewId = PageParameter( "DataViewId" ).AsInteger();
@@ -364,7 +384,9 @@ $(document).ready(function() {
                     // Cancelling on Add, and we know the parentCategoryId, so we are probably in treeview mode, so navigate to the current page
                     var qryParams = new Dictionary<string, string>();
                     qryParams["CategoryId"] = parentCategoryId.ToString();
-                    NavigateToPage( RockPage.Guid, qryParams );
+                    qryParams["DataViewId"] = null;
+                    qryParams["ParentCategoryId"] = null;
+                    NavigateToCurrentPageReference( qryParams );
                 }
                 else
                 {
@@ -405,16 +427,16 @@ $(document).ready(function() {
                 else
                 {
                     categoryId = dataView.CategoryId;
-                    
+
                     // delete report filter
                     try
                     {
                         DataViewFilterService dataViewFilterService = new DataViewFilterService( rockContext );
-                        DeleteDataViewFilter( dataView.DataViewFilter, dataViewFilterService );
+                        DeleteDataViewFilter( dataView.DataViewFilter, dataViewFilterService, rockContext );
                     }
                     catch
                     {
-                        //
+                        // intentionally ignore if delete fails
                     }
 
                     dataViewService.Delete( dataView );
@@ -427,7 +449,9 @@ $(document).ready(function() {
                         qryParams["CategoryId"] = categoryId.ToString();
                     }
 
-                    NavigateToPage( RockPage.Guid, qryParams );
+                    qryParams["DataViewId"] = null;
+                    qryParams["ParentCategoryId"] = null;
+                    NavigateToCurrentPageReference( qryParams );
                 }
             }
         }
@@ -442,6 +466,40 @@ $(document).ready(function() {
             this.ShowResults = !this.ShowResults;
         }
 
+
+        /// <summary>
+        /// Handles the Click event of the lbCreateReport control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void lbCreateReport_Click( object sender, EventArgs e )
+        {
+            var queryParams = new Dictionary<string, string>();
+            queryParams.Add( "ReportId", "0" );
+            if ( hfDataViewId.ValueAsInt() != default( int ) )
+            {
+                queryParams.Add( "DataViewId", hfDataViewId.ValueAsInt().ToString() );
+            }
+            NavigateToLinkedPage( "ReportDetailPage", queryParams );
+        }
+
+        protected void lbResetRunCount_Click( object sender, EventArgs e )
+        {
+            var dataViewId = hfDataViewId.ValueAsInt();
+            if ( dataViewId > 0 )
+            {
+                var rockContext = new RockContext();
+                var dataViewService = new DataViewService( rockContext );
+                var dataView = dataViewService.Get( dataViewId );
+                if ( dataView != null )
+                {
+                    dataView.RunCount = 0;
+                    dataView.RunCountLastRefreshDateTime = RockDateTime.Now;
+                    rockContext.SaveChanges();
+                    ShowReadonlyDetails( dataView );
+                }
+            }
+        }
         #endregion
 
         #region Internal Methods
@@ -467,12 +525,12 @@ $(document).ready(function() {
             int? entityTypeId = etpEntityType.SelectedEntityTypeId;
             if ( entityTypeId.HasValue )
             {
-                var filteredEntityType = EntityTypeCache.Read( entityTypeId.Value );
+                var filteredEntityType = EntityTypeCache.Get( entityTypeId.Value );
                 foreach ( var component in DataTransformContainer.GetComponentsByTransformedEntityName( filteredEntityType.Name ).OrderBy( c => c.Title ) )
                 {
                     if ( component.IsAuthorized( Authorization.VIEW, this.CurrentPerson ) )
                     {
-                        var transformEntityType = EntityTypeCache.Read( component.TypeName );
+                        var transformEntityType = EntityTypeCache.Get( component.TypeName );
                         ListItem li = new ListItem( component.Title, transformEntityType.Id.ToString() );
                         ddlTransform.Items.Add( li );
                     }
@@ -515,6 +573,7 @@ $(document).ready(function() {
             {
                 dataView = new DataView { Id = 0, IsSystem = false, CategoryId = parentCategoryId };
                 dataView.Name = string.Empty;
+
                 // hide the panel drawer that show created and last modified dates
                 pdAuditDetails.Visible = false;
             }
@@ -554,6 +613,7 @@ $(document).ready(function() {
             {
                 btnEdit.Visible = false;
                 btnDelete.Visible = false;
+                lbResetRunCount.Visible = false;
                 ShowReadonlyDetails( dataView );
             }
             else
@@ -561,7 +621,7 @@ $(document).ready(function() {
                 btnEdit.Visible = true;
                 string errorMessage = string.Empty;
                 btnDelete.Enabled = dataViewService.CanDelete( dataView, out errorMessage );
-                if (!btnDelete.Enabled)
+                if ( !btnDelete.Enabled )
                 {
                     btnDelete.ToolTip = errorMessage;
                     btnDelete.Attributes["onclick"] = null;
@@ -593,6 +653,11 @@ $(document).ready(function() {
                 lActionTitle.Text = ActionTitle.Add( DataView.FriendlyTypeName ).FormatAsHtmlTitle();
             }
 
+            if ( dataView.Id == default( int ) || string.IsNullOrWhiteSpace( GetAttributeValue( "ReportDetailPage" ) ) )
+            {
+                lbCreateReport.Visible = false;
+            }
+
             SetEditMode( true );
             LoadDropDowns( dataView );
 
@@ -605,13 +670,28 @@ $(document).ready(function() {
 
             tbName.Text = dataView.Name;
             tbDescription.Text = dataView.Description;
-            etpEntityType.SelectedEntityTypeId = dataView.EntityTypeId;
+
+            if ( dataView.EntityTypeId.HasValue )
+            {
+                etpEntityType.SelectedEntityTypeId = dataView.EntityTypeId;
+                etpEntityType.Enabled = false;
+            }
+            else
+            {
+                etpEntityType.Enabled = true;
+            }
+
             cpCategory.SetValue( dataView.CategoryId );
+
+            ipPersistedScheduleInterval.IntervalInMinutes = dataView.PersistedScheduleIntervalMinutes;
+
+            SetPersistenceScheduleVisibility( dataView.PersistedScheduleIntervalMinutes > 0 );
 
             var rockContext = new RockContext();
             BindDataTransformations( rockContext );
             ddlTransform.SetValue( dataView.TransformEntityTypeId ?? 0 );
 
+            BindIncludeDeceasedControl( dataView.EntityTypeId, dataView.IncludeDeceased );
             CreateFilterControl( dataView.EntityTypeId, dataView.DataViewFilter, true, rockContext );
         }
 
@@ -625,8 +705,12 @@ $(document).ready(function() {
             hfDataViewId.SetValue( dataView.Id );
             lReadOnlyTitle.Text = dataView.Name.FormatAsHtmlTitle();
             hlblDataViewId.Text = "Id: " + dataView.Id.ToString();
+            if ( dataView.Id == default( int ) || string.IsNullOrWhiteSpace( GetAttributeValue( "ReportDetailPage" ) ) )
+            {
+                lbViewCreateReport.Visible = false;
+            }
 
-            lDescription.Text = dataView.Description;
+            lDescription.Text = dataView.Description.ConvertMarkdownToHtml();
 
             DescriptionList descriptionListMain = new DescriptionList();
 
@@ -645,13 +729,22 @@ $(document).ready(function() {
                 descriptionListMain.Add( "Post-filter Transformation", dataView.TransformEntityType.FriendlyName );
             }
 
+            if ( dataView.IncludeDeceased )
+            {
+                descriptionListMain.Add( "Include Deceased", dataView.IncludeDeceased.ToYesNo() );
+            }
+
             lblMainDetails.Text = descriptionListMain.Html;
+
+            SetupTimeToRunLabel( dataView );
+            SetupNumberOfRuns( dataView );
+            SetupLastRun( dataView );
 
             DescriptionList descriptionListFilters = new DescriptionList();
 
             if ( dataView.DataViewFilter != null && dataView.EntityTypeId.HasValue )
             {
-                var entityTypeCache = EntityTypeCache.Read( dataView.EntityTypeId.Value );
+                var entityTypeCache = EntityTypeCache.Get( dataView.EntityTypeId.Value );
                 if ( entityTypeCache != null )
                 {
                     var entityTypeType = entityTypeCache.GetEntityType();
@@ -664,8 +757,17 @@ $(document).ready(function() {
 
             lFilters.Text = descriptionListFilters.Html;
 
+            DescriptionList descriptionListPersisted = new DescriptionList();
+            hlblPersisted.Visible = dataView.PersistedScheduleIntervalMinutes.HasValue && dataView.PersistedLastRefreshDateTime.HasValue;
+            if ( hlblPersisted.Visible )
+            {
+                hlblPersisted.Text = string.Format( "Persisted {0}", dataView.PersistedLastRefreshDateTime.ToElapsedString() );
+            }
+
+            lPersisted.Text = descriptionListPersisted.Html;
+
             DescriptionList descriptionListDataviews = new DescriptionList();
-            var dataViewFilterEntityId = EntityTypeCache.Read( typeof( Rock.Reporting.DataFilter.OtherDataViewFilter ) ).Id;
+            var dataViewFilterEntityId = EntityTypeCache.Get( typeof( Rock.Reporting.DataFilter.OtherDataViewFilter ) ).Id;
 
             var rockContext = new RockContext();
             DataViewService dataViewService = new DataViewService( rockContext );
@@ -716,25 +818,31 @@ $(document).ready(function() {
             descriptionListReports.Add( "Reports", sbReports );
             lReports.Text = descriptionListReports.Html;
 
-            // Groups using DataView in Group Sync
+            // Group-Roles using DataView in Group Sync
             DescriptionList descriptionListGroupSync = new DescriptionList();
             StringBuilder sbGroups = new StringBuilder();
 
-            GroupService groupService = new GroupService( rockContext );
-            var groups = groupService.Queryable().AsNoTracking().Where( g => g.SyncDataViewId == dataView.Id ).OrderBy( g => g.Name );
+            GroupSyncService groupSyncService = new GroupSyncService( rockContext );
+            var groupSyncs = groupSyncService
+                .Queryable()
+                .Where( a => a.SyncDataViewId == dataView.Id )
+                .ToList();
+
             var groupDetailPage = GetAttributeValue( "GroupDetailPage" );
 
-            if ( groups.Count() > 0 )
+            if ( groupSyncs.Count() > 0 )
             {
-                foreach ( var group in groups )
+                foreach ( var groupSync in groupSyncs )
                 {
+                    string groupAndRole = string.Format( "{0} - {1}", ( groupSync.Group != null ? groupSync.Group.Name : "(Id: " + groupSync.GroupId.ToStringSafe() + ")" ), groupSync.GroupTypeRole.Name );
+
                     if ( !string.IsNullOrWhiteSpace( groupDetailPage ) )
                     {
-                        sbGroups.Append( "<a href=\"" + LinkedPageUrl( "GroupDetailPage", new Dictionary<string, string>() { { "GroupId", group.Id.ToString() } } ) + "\">" + group.Name + "</a><br/>" );
+                        sbGroups.Append( "<a href=\"" + LinkedPageUrl( "GroupDetailPage", new Dictionary<string, string>() { { "GroupId", groupSync.GroupId.ToString() } } ) + "\">" + groupAndRole + "</a><br/>" );
                     }
                     else
                     {
-                        sbGroups.Append( group.Name + "<br/>" );
+                        sbGroups.Append( string.Format( "{0}<br/>", groupAndRole ) );
                     }
                 }
 
@@ -743,6 +851,93 @@ $(document).ready(function() {
             }
 
             ShowReport( dataView );
+        }
+
+        private void SetupLastRun( DataView dataView )
+        {
+            if ( dataView.LastRunDateTime == null )
+            {
+                return;
+            }
+
+            hlLastRun.Text = string.Format( "Last Run: {0}", dataView.LastRunDateTime.ToShortDateString() );
+            hlLastRun.LabelType = LabelType.Default;
+        }
+
+        private void SetupNumberOfRuns( DataView dataView )
+        {
+            hlRunSince.Text = "Not Run";
+            hlRunSince.LabelType = LabelType.Info;
+
+            var lastRefreshDateTime = dataView.CreatedDateTime;
+
+            if ( dataView.RunCountLastRefreshDateTime == null )
+            {
+                lastRefreshDateTime = dataView.RunCountLastRefreshDateTime;
+            }
+
+            var status = "Since Creation";
+            if ( lastRefreshDateTime != null )
+            {
+                status = string.Format( "Since {0}", lastRefreshDateTime.Value.ToShortDateString() );
+            }
+
+            if ( dataView.RunCount == null || dataView.RunCount.Value == 0 )
+            {
+                hlRunSince.LabelType = LabelType.Warning;
+                hlRunSince.Text = string.Format( "Not Run {0}", status );
+                return;
+            }
+
+            hlRunSince.Text = string.Format( "{0:0} Runs {1}", dataView.RunCount, status );
+        }
+
+        private void SetupTimeToRunLabel( DataView dataView )
+        {
+            hlTimeToRun.Text = "";
+            hlTimeToRun.LabelType = LabelType.Default;
+
+            if ( dataView == null || dataView.TimeToRunDurationMilliseconds == null )
+            {
+                return;
+            }
+
+            var labelValue = dataView.TimeToRunDurationMilliseconds.Value;
+            var labelUnit = "ms";
+            var labelType = LabelType.Success;
+            if ( labelValue > 1000 )
+            {
+                labelValue = labelValue / 1000;
+                labelUnit = "s";
+
+                if ( labelValue > 10 )
+                {
+                    labelType = LabelType.Warning;
+                }
+            }
+
+            if ( labelValue > 60 && labelUnit == "s" )
+            {
+                labelValue = labelValue / 60;
+                labelUnit = "m";
+
+                if ( labelValue > 1 )
+                {
+                    labelType = LabelType.Danger;
+                }
+            }
+
+            hlTimeToRun.LabelType = labelType;
+            var isValueAWholeNumber = Math.Abs( labelValue % 1 ) < 0.01;
+            if ( isValueAWholeNumber )
+            {
+                hlTimeToRun.Text = string.Format( "Time To Run: {0:0}{1}", labelValue, labelUnit );
+            }
+            else
+            {
+                hlTimeToRun.Text = string.Format( "Time To Run: {0:0.0}{1}", labelValue, labelUnit );
+            }
+
         }
 
         /// <summary>
@@ -756,7 +951,7 @@ $(document).ready(function() {
             {
                 string authorizationMessage = string.Empty;
 
-                bool isPersonDataSet = dataView.EntityTypeId == EntityTypeCache.Read( typeof( Rock.Model.Person ) ).Id;
+                bool isPersonDataSet = dataView.EntityTypeId == EntityTypeCache.Get( typeof( Rock.Model.Person ) ).Id;
 
                 if ( isPersonDataSet )
                 {
@@ -770,8 +965,8 @@ $(document).ready(function() {
 
                 if ( dataView.EntityTypeId.HasValue )
                 {
-                    var entityTypeCache = EntityTypeCache.Read( dataView.EntityTypeId.Value, rockContext );
-                    if (entityTypeCache != null)
+                    var entityTypeCache = EntityTypeCache.Get( dataView.EntityTypeId.Value, rockContext );
+                    if ( entityTypeCache != null )
                     {
                         gReport.RowItemText = entityTypeCache.FriendlyName;
                     }
@@ -795,7 +990,7 @@ $(document).ready(function() {
         private void ShowPreview( DataView dataView )
         {
             BindGrid( gPreview, dataView, 15 );
-            
+
             modalPreview.Show();
         }
 
@@ -817,6 +1012,19 @@ $(document).ready(function() {
         /// <returns></returns>
         private bool BindGrid( Grid grid, DataView dataView, int? fetchRowCount = null )
         {
+            // Making an unsaved copy of the DataView so the runs do not get counted.
+            var dv = new DataView
+            {
+                Name = dataView.Name,
+                TransformEntityTypeId = dataView.TransformEntityTypeId,
+                TransformEntityType = dataView.TransformEntityType,
+                EntityTypeId = dataView.EntityTypeId,
+                EntityType = dataView.EntityType,
+                DataViewFilterId = dataView.DataViewFilterId,
+                DataViewFilter = dataView.DataViewFilter,
+                IncludeDeceased = dataView.IncludeDeceased
+            };
+
             grid.DataSource = null;
 
             // Only respect the ShowResults option if fetchRowCount is null
@@ -825,11 +1033,10 @@ $(document).ready(function() {
                 return false;
             }
 
-            var errorMessages = new List<string>();
 
-            if ( dataView.EntityTypeId.HasValue )
+            if ( dv.EntityTypeId.HasValue )
             {
-                var cachedEntityType = EntityTypeCache.Read( dataView.EntityTypeId.Value );
+                var cachedEntityType = EntityTypeCache.Get( dv.EntityTypeId.Value );
                 if ( cachedEntityType != null && cachedEntityType.AssemblyName != null )
                 {
                     Type entityType = cachedEntityType.GetEntityType();
@@ -839,70 +1046,68 @@ $(document).ready(function() {
                         try
                         {
                             grid.CreatePreviewColumns( entityType );
+                            var dbContext = dv.GetDbContext();
+                            var dataViewGetQueryArgs = new DataViewGetQueryArgs
+                            {
+                                SortProperty = grid.SortProperty,
+                                DbContext = dbContext,
+                                DatabaseTimeoutSeconds = GetAttributeValue( "DatabaseTimeout" ).AsIntegerOrNull() ?? 180
+                            };
 
-                            var qry = dataView.GetQuery( grid.SortProperty, GetAttributeValue( "DatabaseTimeout" ).AsIntegerOrNull() ?? 180, out errorMessages );
+                            var qry = dv.GetQuery( dataViewGetQueryArgs );
 
                             if ( fetchRowCount.HasValue )
                             {
                                 qry = qry.Take( fetchRowCount.Value );
                             }
-                        
+
                             grid.SetLinqDataSource( qry.AsNoTracking() );
                             grid.DataBind();
                         }
                         catch ( Exception ex )
                         {
                             this.LogException( ex );
-                            Exception exception = ex;
-                            while ( exception != null )
+                            var sqlTimeoutException = ReportingHelper.FindSqlTimeoutException( ex );
+                            var errorBox = ( grid == gPreview ) ? nbPreviewError : nbGridError;
+
+                            if ( sqlTimeoutException != null )
                             {
-                                if ( exception is System.Data.SqlClient.SqlException )
+                                errorBox.NotificationBoxType = NotificationBoxType.Warning;
+                                errorBox.Text = "This dataview did not complete in a timely manner. You can try again or adjust the timeout setting of this block.";
+                                return false;
+                            }
+                            else
+                            {
+                                if ( ex is RockDataViewFilterExpressionException )
                                 {
-                                    // if there was a SQL Server Timeout, have the warning be a friendly message about that.
-                                    if ( ( exception as System.Data.SqlClient.SqlException ).Number == -2 )
-                                    {
-                                        nbEditModeMessage.NotificationBoxType = NotificationBoxType.Warning;
-                                        nbEditModeMessage.Text = "This dataview did not complete in a timely manner. You can try again or adjust the timeout setting of this block.";
-                                        return false;
-                                    }
-                                    else
-                                    {
-                                        errorMessages.Add( exception.Message );
-                                        exception = exception.InnerException;
-                                    }
+                                    RockDataViewFilterExpressionException rockDataViewFilterExpressionException = ex as RockDataViewFilterExpressionException;
+                                    errorBox.Text = rockDataViewFilterExpressionException.GetFriendlyMessage( dataView );
                                 }
                                 else
                                 {
-                                    errorMessages.Add( exception.Message );
-                                    exception = exception.InnerException;
+                                    errorBox.Text = "There was a problem with one of the filters for this data view.";
                                 }
+
+                                errorBox.NotificationBoxType = NotificationBoxType.Danger;
+
+                                errorBox.Details = ex.Message;
+                                errorBox.Visible = true;
+                                return false;
                             }
                         }
                     }
                 }
             }
 
-            var errorBox = ( grid == gPreview) ? nbPreviewError : nbGridError;
 
-            if ( errorMessages.Any() )
+            if ( dv.EntityTypeId.HasValue )
             {
-                errorBox.NotificationBoxType = NotificationBoxType.Warning;
-                errorBox.Text = "WARNING: There was a problem with one or more of the filters for this data view...<br/><br/> " + errorMessages.AsDelimited( "<br/>" );
-                errorBox.Visible = true;
-            }
-            else
-            {
-                errorBox.Visible = false;
-            }
-
-            if ( dataView.EntityTypeId.HasValue )
-            {
-                grid.RowItemText = EntityTypeCache.Read( dataView.EntityTypeId.Value ).FriendlyName;
+                grid.RowItemText = EntityTypeCache.Get( dv.EntityTypeId.Value ).FriendlyName;
             }
 
             if ( grid.DataSource != null )
             {
-                grid.ExportFilename = dataView.Name;
+                grid.ExportFilename = dv.Name;
                 return true;
             }
 
@@ -933,9 +1138,14 @@ $(document).ready(function() {
         protected void btnPreview_Click( object sender, EventArgs e )
         {
             DataView dv = new DataView();
+            var rockContext = new RockContext();
+
             dv.TransformEntityTypeId = ddlTransform.SelectedValueAsInt();
+            dv.TransformEntityType = dv.TransformEntityTypeId.HasValue ? new EntityTypeService( rockContext ).Get( dv.TransformEntityTypeId.Value ) : null;
             dv.EntityTypeId = etpEntityType.SelectedEntityTypeId;
+            dv.EntityType = etpEntityType.SelectedEntityTypeId.HasValue ? new EntityTypeService( rockContext ).Get( dv.EntityTypeId.Value ) : null;
             dv.DataViewFilter = ReportingHelper.GetFilterFromControls( phFilters );
+            dv.IncludeDeceased = cbIncludeDeceased.Checked;
             ShowPreview( dv );
         }
 
@@ -948,6 +1158,7 @@ $(document).ready(function() {
         {
             FilterGroup groupControl = sender as FilterGroup;
             FilterField filterField = new FilterField();
+            filterField.ValidationGroup = this.BlockValidationGroup;
             filterField.DataViewFilterGuid = Guid.NewGuid();
             filterField.DeleteClick += filterControl_DeleteClick;
             groupControl.Controls.Add( filterField );
@@ -965,7 +1176,7 @@ $(document).ready(function() {
         {
             FilterGroup groupControl = sender as FilterGroup;
             FilterGroup childGroupControl = new FilterGroup();
-            
+
             childGroupControl.AddFilterClick += groupControl_AddFilterClick;
             childGroupControl.AddGroupClick += groupControl_AddGroupClick;
             childGroupControl.DeleteGroupClick += groupControl_DeleteGroupClick;
@@ -1004,16 +1215,22 @@ $(document).ready(function() {
         /// </summary>
         /// <param name="dataViewFilter">The data view filter.</param>
         /// <param name="service">The service.</param>
-        private void DeleteDataViewFilter( DataViewFilter dataViewFilter, DataViewFilterService service )
+        private void DeleteDataViewFilter( DataViewFilter dataViewFilter, DataViewFilterService service, RockContext rockContext )
         {
             if ( dataViewFilter != null )
             {
                 foreach ( var childFilter in dataViewFilter.ChildFilters.ToList() )
                 {
-                    DeleteDataViewFilter( childFilter, service );
+                    DeleteDataViewFilter( childFilter, service, rockContext );
                 }
 
+                dataViewFilter.DataViewId = null;
+                dataViewFilter.RelatedDataViewId = null;
+
+                rockContext.SaveChanges();
+
                 service.Delete( dataViewFilter );
+
             }
         }
 
@@ -1029,8 +1246,24 @@ $(document).ready(function() {
             phFilters.Controls.Clear();
             if ( filter != null && filteredEntityTypeId.HasValue )
             {
-                var filteredEntityType = EntityTypeCache.Read( filteredEntityTypeId.Value );
+                var filteredEntityType = EntityTypeCache.Get( filteredEntityTypeId.Value );
                 CreateFilterControl( phFilters, filter, filteredEntityType.Name, setSelection, rockContext );
+
+                var filtersWithErrors = phFilters.ControlsOfTypeRecursive<FilterField>().Where( a => a.HasFilterError ).ToList();
+                nbFiltersError.Visible = false;
+                if ( filtersWithErrors.Any() )
+                {
+                    nbFiltersError.Visible = true;
+                    if ( filtersWithErrors.Count == 1 )
+                    {
+                        var filterWithError = filtersWithErrors[0];
+                        nbFiltersError.Text = "One of the data filters has an <a href='#filtererror'>error</a>.";
+                    }
+                    else
+                    {
+                        nbFiltersError.Text = "There are data filter <a href='#filtererror'>errors</a>";
+                    }
+                }
             }
         }
 
@@ -1049,13 +1282,14 @@ $(document).ready(function() {
                 if ( filter.ExpressionType == FilterExpressionType.Filter )
                 {
                     var filterControl = new FilterField();
+                    filterControl.ValidationGroup = this.BlockValidationGroup;
                     parentControl.Controls.Add( filterControl );
                     filterControl.DataViewFilterGuid = filter.Guid;
                     filterControl.ID = string.Format( "ff_{0}", filterControl.DataViewFilterGuid.ToString( "N" ) );
                     filterControl.FilteredEntityTypeName = filteredEntityTypeName;
                     if ( filter.EntityTypeId.HasValue )
                     {
-                        var entityTypeCache = Rock.Web.Cache.EntityTypeCache.Read( filter.EntityTypeId.Value, rockContext );
+                        var entityTypeCache = EntityTypeCache.Get( filter.EntityTypeId.Value, rockContext );
                         if ( entityTypeCache != null )
                         {
                             filterControl.FilterEntityTypeName = entityTypeCache.Name;
@@ -1065,13 +1299,13 @@ $(document).ready(function() {
                     filterControl.Expanded = filter.Expanded;
                     if ( setSelection )
                     {
-                        try 
+                        try
                         {
                             filterControl.SetSelection( filter.Selection );
                         }
                         catch ( Exception ex )
                         {
-                            this.LogException( new Exception("Exception setting selection for DataViewFilter: " + filter.Guid, ex));
+                            this.LogException( new Exception( "Exception setting selection for DataViewFilter: " + filter.Guid, ex ) );
                         }
                     }
 
@@ -1124,7 +1358,62 @@ $(document).ready(function() {
             emptyFilter.Guid = Guid.NewGuid();
             dataViewFilter.ChildFilters.Add( emptyFilter );
 
+            BindIncludeDeceasedControl( etpEntityType.SelectedEntityTypeId );
+
             CreateFilterControl( etpEntityType.SelectedEntityTypeId, dataViewFilter, true, rockContext );
+        }
+
+        /// <summary>
+        /// Creates the filter control.
+        /// </summary>
+        /// /// <param name="sender">The source of the event.</param>
+        /// <param name="filteredEntityTypeId">The filtered entity type identifier.</param>
+        /// <param name="includeDeceased">if set to <c>true</c> [editable].</param>
+        private void BindIncludeDeceasedControl( int? filteredEntityTypeId, bool includeDeceased = false )
+        {
+            if ( filteredEntityTypeId.HasValue )
+            {
+                var filteredEntityType = EntityTypeCache.Get( filteredEntityTypeId.Value );
+                if ( filteredEntityType != null )
+                {
+                    var isPersonDataView = filteredEntityType.Id == EntityTypeCache.Get( typeof( Rock.Model.Person ) ).Id;
+                    cbIncludeDeceased.Visible = isPersonDataView;
+                    if ( isPersonDataView )
+                    {
+                        cbIncludeDeceased.Checked = includeDeceased;
+                    }
+                    else
+                    {
+                        cbIncludeDeceased.Checked = false;
+                    }
+                }
+            }
+        }
+
+        #endregion
+
+        #region Persisted Schedule Settings
+
+        /// <summary>
+        /// Set and validate the persistence schedule settings.
+        /// </summary>
+        /// <param name="isEnabled"></param>
+        /// <param name="persistedScheduleIntervalMinutes"></param>
+        /// <param name="scheduleUnit">The schedule unit, or null if the unit should be determined by the interval.</param>
+        private void SetPersistenceScheduleVisibility( bool isEnabled )
+        {
+            swPersistDataView.Checked = isEnabled;
+            pnlSpeedSettings.Visible = isEnabled;
+        }
+
+        /// <summary>
+        /// Handles the CheckedChanged event of the swPersistDataView control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
+        protected void swPersistDataView_CheckedChanged( object sender, EventArgs e )
+        {
+            SetPersistenceScheduleVisibility( swPersistDataView.Checked );
         }
 
         #endregion

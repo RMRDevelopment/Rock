@@ -95,11 +95,16 @@ namespace Rock.Model
         {
             target.Id = source.Id;
             target.AllowMultiple = source.AllowMultiple;
+            #pragma warning disable 612, 618
             target.CostValue = source.CostValue;
+            #pragma warning restore 612, 618
             target.DiscountApplies = source.DiscountApplies;
             target.FeeType = source.FeeType;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
+            target.HideWhenNoneRemaining = source.HideWhenNoneRemaining;
+            target.IsActive = source.IsActive;
+            target.IsRequired = source.IsRequired;
             target.Name = source.Name;
             target.Order = source.Order;
             target.RegistrationTemplateId = source.RegistrationTemplateId;

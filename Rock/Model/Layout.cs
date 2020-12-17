@@ -18,24 +18,26 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
 
 using Newtonsoft.Json;
 
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
     /// <summary>
     /// A logical representation of a physical html layout (page).  The physical layout controls the zones that 
-    /// are availble for one or more <see cref="Page">Pages</see> to use.  The logical layout is used to configure
+    /// are available for one or more <see cref="Page">Pages</see> to use.  The logical layout is used to configure
     /// which blocks are present in each zone
     /// </summary>
     [RockDomain( "CMS" )]
     [Table( "Layout" )]
     [DataContract]
-    public partial class Layout : Model<Layout>
+    public partial class Layout : Model<Layout>, ICacheable
     {
 
         #region Entity Properties
@@ -90,6 +92,24 @@ namespace Rock.Model
         [MaxLength( 100 )]
         [DataMember( IsRequired = true )]
         public string Name { get; set; }
+
+        /// <summary>
+        /// Gets or sets the layout mobile phone.
+        /// </summary>
+        /// <value>
+        /// The layout mobile phone.
+        /// </value>
+        [DataMember]
+        public string LayoutMobilePhone { get; set; }
+
+        /// <summary>
+        /// Gets or sets the layout mobile tablet.
+        /// </summary>
+        /// <value>
+        /// The layout mobile tablet.
+        /// </value>
+        [DataMember]
+        public string LayoutMobileTablet { get; set; }
 
         /// <summary>
         /// Gets or sets the user defined description of the Layout. 
@@ -175,6 +195,29 @@ namespace Rock.Model
 
         #endregion
 
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// 
+        /// 
+        public IEntityCache GetCacheObject()
+        {
+            return LayoutCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            LayoutCache.UpdateCachedEntity( this.Id, entityState );
+        }
+
+        #endregion
     }
 
     #region Entity Configuration

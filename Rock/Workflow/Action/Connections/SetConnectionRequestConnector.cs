@@ -24,9 +24,6 @@ using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
-using Rock.Security;
-using Rock.Web.Cache;
-using Rock.Workflow;
 
 namespace Rock.Workflow.Action
 {
@@ -61,7 +58,7 @@ namespace Rock.Workflow.Action
 
             // Get the connection request
             ConnectionRequest connectionRequest = null;
-            Guid connectionRequestGuid = action.GetWorklowAttributeValue( GetAttributeValue( action, "ConnectionRequestAttribute" ).AsGuid() ).AsGuid();
+            Guid connectionRequestGuid = action.GetWorkflowAttributeValue( GetAttributeValue( action, "ConnectionRequestAttribute" ).AsGuid() ).AsGuid();
             connectionRequest = new ConnectionRequestService( rockContext ).Get( connectionRequestGuid );
             if ( connectionRequest == null )
             {
@@ -74,7 +71,7 @@ namespace Rock.Workflow.Action
             Guid? personAttributeGuid = GetAttributeValue( action, "PersonAttribute" ).AsGuidOrNull();
             if ( personAttributeGuid.HasValue )
             {
-                Guid? personAliasGuid = action.GetWorklowAttributeValue( personAttributeGuid.Value ).AsGuidOrNull();
+                Guid? personAliasGuid = action.GetWorkflowAttributeValue( personAttributeGuid.Value ).AsGuidOrNull();
                 if ( personAliasGuid.HasValue )
                 {
                     var personAlias = new PersonAliasService( rockContext ).Get( personAliasGuid.Value );

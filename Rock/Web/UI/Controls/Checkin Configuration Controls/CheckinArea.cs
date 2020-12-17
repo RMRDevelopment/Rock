@@ -20,6 +20,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 
@@ -132,7 +133,7 @@ namespace Rock.Web.UI.Controls
                 EnsureChildControls();
 
                 string lblAddControlId = subTargetList.Last();
-                var lblAdd = _gCheckinLabels.Actions.FindControl( lblAddControlId );
+                var lblAdd = _gCheckinLabels.Actions.FindControl( lblAddControlId ) as LinkButton;
                 if ( lblAdd != null )
                 {
                     AddCheckinLabel_Click( this, new EventArgs() );

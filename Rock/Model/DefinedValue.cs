@@ -16,10 +16,12 @@
 //
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
 
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -30,7 +32,7 @@ namespace Rock.Model
     [RockDomain( "Core" )]
     [Table( "DefinedValue" )]
     [DataContract]
-    public partial class DefinedValue : Model<DefinedValue>, IOrdered
+    public partial class DefinedValue : Model<DefinedValue>, IOrdered, ICacheable
     {
 
         #region Entity Properties
@@ -85,6 +87,16 @@ namespace Rock.Model
         [DataMember]
         public string Description { get; set; }
 
+        /// <summary>
+        /// Gets or sets a value indicating whether this DefinedValue is active.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this instance is active; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember( IsRequired = true )]
+        [Required]
+        public bool IsActive { get; set; } = true;
+
         #endregion
 
         #region Virtual Properties
@@ -125,6 +137,30 @@ namespace Rock.Model
         public override string ToString()
         {
             return this.Value;
+        }
+
+        #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return DefinedValueCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            DefinedValueCache.UpdateCachedEntity( this.Id, entityState );
+            DefinedTypeCache.FlushItem( this.DefinedTypeId );
         }
 
         #endregion

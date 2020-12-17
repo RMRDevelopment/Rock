@@ -19,12 +19,13 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity.Spatial;
 using System.Linq;
-using System.Web.UI;
+using System.Web;
 using System.Web.UI.WebControls;
 using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
+using Rock.Reporting;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
@@ -142,10 +143,42 @@ namespace RockWeb.Blocks.Reporting
                 pnlPieSlicer.Visible = this.GetAttributeValue( "ShowPieSlicer" ).AsBoolean();
                 pnlSaveShape.Visible = this.GetAttributeValue( "ShowSaveLocation" ).AsBoolean();
 
-                ShowMap();
+                try
+                {
+                    ShowMap();
+                }
+                catch ( Exception ex )
+                {
+                    ExceptionLogService.LogException( ex );
+                    var sqlTimeoutException = ReportingHelper.FindSqlTimeoutException( ex );
+
+                    if ( sqlTimeoutException != null )
+                    {
+                        nbErrorMessage.NotificationBoxType = NotificationBoxType.Warning;
+                        nbErrorMessage.Text = "This query did not complete in a timely manner.";
+                    }
+                    else
+                    {
+                        if ( ex is RockDataViewFilterExpressionException )
+                        {
+                            RockDataViewFilterExpressionException rockDataViewFilterExpressionException = ex as RockDataViewFilterExpressionException;
+                            nbErrorMessage.Text = rockDataViewFilterExpressionException.GetFriendlyMessage( this.GetDataView() );
+                        }
+                        else
+                        {
+                            nbErrorMessage.Text = "There was a problem with one of the filters for this report's dataview.";
+                        }
+
+                        nbErrorMessage.NotificationBoxType = NotificationBoxType.Danger;
+
+                        nbErrorMessage.Details = ex.Message;
+                        nbErrorMessage.Visible = true;
+                    }
+                }
             }
-            else if (this.Request.Params["__EVENTTARGET"] == upSaveLocation.ClientID){
-                mdSaveLocation_SaveClick(null, null);
+            else if ( this.Request.Params["__EVENTTARGET"] == upSaveLocation.ClientID )
+            {
+                mdSaveLocation_SaveClick( null, null );
             }
         }
 
@@ -246,19 +279,25 @@ namespace RockWeb.Blocks.Reporting
                             #map_canvas {{
                                 width: 100%;
                                 height: 100%;
-                                border-radius: 8px;
+                                border-radius: var(--border-radius-base);
                             }}
                         </style>";
 
             lMapStyling.Text = string.Format( mapStylingFormat, GetAttributeValue( "MapHeight" ) );
 
+            DefinedValueCache dvcMapStyle = DefinedValueCache.Get( GetAttributeValue( "MapStyle" ).AsGuid() );
             // add styling to map
-            string styleCode = "null";
-
-            DefinedValueCache dvcMapStyle = DefinedValueCache.Read( GetAttributeValue( "MapStyle" ).AsGuid() );
             if ( dvcMapStyle != null )
             {
-                styleCode = dvcMapStyle.GetAttributeValue( "DynamicMapStyle" );
+                this.StyleCode = dvcMapStyle.GetAttributeValue( "DynamicMapStyle" );
+                if ( this.StyleCode.IsNullOrWhiteSpace() )
+                {
+                    this.StyleCode = "[]";
+                }
+            }
+            else
+            {
+                this.StyleCode = "[]";
             }
 
             var polygonColorList = GetAttributeValue( "PolygonColors" ).Split( new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries ).ToList();
@@ -267,7 +306,7 @@ namespace RockWeb.Blocks.Reporting
             string latitude = "39.8282";
             string longitude = "-98.5795";
             string zoom = "4";
-            var orgLocation = GlobalAttributesCache.Read().OrganizationLocation;
+            var orgLocation = GlobalAttributesCache.Get().OrganizationLocation;
             if ( orgLocation != null && orgLocation.GeoPoint != null )
             {
                 latitude = orgLocation.GeoPoint.Latitude.Value.ToString( System.Globalization.CultureInfo.GetCultureInfo( "en-US" ) );
@@ -288,7 +327,7 @@ namespace RockWeb.Blocks.Reporting
                         var location = locationService.Get( campus.LocationId.Value );
                         if ( location != null && location.GeoPoint != null )
                         {
-                            CampusMarkersData += string.Format( "{{ location: new google.maps.LatLng({0},{1}), campusName:'{2}' }},", location.GeoPoint.Latitude, location.GeoPoint.Longitude, campus.Name );
+                            CampusMarkersData += string.Format( "{{ location: new google.maps.LatLng({0},{1}), campusName:'{2}' }},", location.GeoPoint.Latitude, location.GeoPoint.Longitude, HttpUtility.JavaScriptStringEncode( campus.Name ) );
                         }
                     }
                 }
@@ -305,45 +344,18 @@ namespace RockWeb.Blocks.Reporting
             }
 
             var groupMemberService = new GroupMemberService( rockContext );
-            var groupLocationTypeHome = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuid() );
+            var groupLocationTypeHome = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuid() );
             int groupLocationTypeHomeId = groupLocationTypeHome != null ? groupLocationTypeHome.Id : 0;
             var groupTypeFamily = GroupTypeCache.GetFamilyGroupType();
             int groupTypeFamilyId = groupTypeFamily != null ? groupTypeFamily.Id : 0;
 
-            // if there is a DataViewId page parameter, use that instead of the Block or Filter dataview setting (the filter control won't be visible if there is a DataViewId page parameter)
-            int? dataViewId = this.PageParameter( "DataViewId" ).AsIntegerOrNull();
-            Guid? dataViewGuid = null;
-            if ( !dataViewId.HasValue )
-            {
-                dataViewGuid = this.GetAttributeValue( "DataView" ).AsGuidOrNull();
-            }
-
-            if ( ddlUserDataView.Visible )
-            {
-                dataViewGuid = ddlUserDataView.SelectedValue.AsGuidOrNull();
-            }
-
+            DataView dataView = GetDataView();
             IQueryable<int> qryPersonIds = null;
 
-            if ( dataViewId.HasValue || dataViewGuid.HasValue )
+            if ( dataView != null )
             {
-                DataView dataView = null;
-
-                // if a DataViewId page parameter was specified, use that, otherwise use the blocksetting or filter selection
-                if ( dataViewId.HasValue )
-                {
-                    dataView = new DataViewService( rockContext ).Get( dataViewId.Value );
-                }
-                else
-                {
-                    dataView = new DataViewService( rockContext ).Get( dataViewGuid.Value );
-                }
-
-                if ( dataView != null )
-                {
-                    List<string> errorMessages;
-                    qryPersonIds = dataView.GetQuery( null, rockContext, null, out errorMessages ).OfType<Person>().Select( a => a.Id );
-                }
+                var dataViewGetQueryArgs = new DataViewGetQueryArgs { DbContext = rockContext };
+                qryPersonIds = dataView.GetQuery( dataViewGetQueryArgs ).OfType<Person>().Select( a => a.Id );
             }
 
             if ( qryPersonIds == null )
@@ -362,7 +374,7 @@ namespace RockWeb.Blocks.Reporting
 
             var qryLocationGroupMembers = qryGroupMembers
                 .Where( a => a.Group.GroupTypeId == groupTypeFamilyId )
-                .Where( a => a.Group.IsActive )
+                .Where( a => a.Group.IsActive && !a.Group.IsArchived )
                 .Select( a => new
                 {
                     GroupGeoPoint = a.Group.GroupLocations.Where( gl => gl.IsMappedLocation && gl.GroupLocationTypeValueId == groupLocationTypeHomeId && gl.Location.IsActive && gl.Location.GeoPoint != null ).Select( x => x.Location.GeoPoint ).FirstOrDefault(),
@@ -404,22 +416,60 @@ namespace RockWeb.Blocks.Reporting
                 var longitudeRoundFactor = metersPerLongitudePHX / squareLengthHeightMeters;
                 var latitudeRoundFactor = metersPerLatitudePHX / squareLengthHeightMeters;
 
+                // average the Lat/Lng, but make sure to round to 8 decimal points (otherwise Google Maps will silently not show the points due to too high of decimal precision)
                 points = points.GroupBy( a => new
                 {
                     rLat = Math.Round( a.Lat * latitudeRoundFactor ),
                     rLong = Math.Round( a.Lat * longitudeRoundFactor ),
-                } ).Select( a => new LatLongWeighted( a.Average( x => x.Lat ), a.Average( x => x.Long ), a.Sum( x => x.Weight ) ) ).ToList();
+                } ).Select( a => new LatLongWeighted( Math.Round( a.Average( x => x.Lat ), 8 ), Math.Round( a.Average( x => x.Long ), 8 ), a.Sum( x => x.Weight ) ) ).ToList();
             }
 
             this.HeatMapData = points.Select( a => a.Weight > 1
-                ? string.Format( "{{location: new google.maps.LatLng({0}, {1}), weight: {2}}}", a.Lat, a.Long, a.Weight )
+                ? string.Format( "{{ location: new google.maps.LatLng({0}, {1}), weight: {2} }}", a.Lat, a.Long, a.Weight )
                 : string.Format( "new google.maps.LatLng({0}, {1})", a.Lat, a.Long ) ).ToList().AsDelimited( ",\n" );
 
-            StyleCode = styleCode;
             hfPolygonColors.Value = polygonColors;
             hfCenterLatitude.Value = latitude.ToString();
             hfCenterLongitude.Value = longitude.ToString();
             hfZoom.Value = zoom.ToString();
+        }
+
+        /// <summary>
+        /// Gets the data view.
+        /// </summary>
+        /// <returns></returns>
+        private DataView GetDataView()
+        {
+            var rockContext = new RockContext();
+            DataView dataView = null;
+
+            // if there is a DataViewId page parameter, use that instead of the Block or Filter dataview setting (the filter control won't be visible if there is a DataViewId page parameter)
+            int? dataViewId = this.PageParameter( "DataViewId" ).AsIntegerOrNull();
+            Guid? dataViewGuid = null;
+            if ( !dataViewId.HasValue )
+            {
+                dataViewGuid = this.GetAttributeValue( "DataView" ).AsGuidOrNull();
+            }
+
+            if ( ddlUserDataView.Visible )
+            {
+                dataViewGuid = ddlUserDataView.SelectedValue.AsGuidOrNull();
+            }
+
+            if ( dataViewId.HasValue || dataViewGuid.HasValue )
+            {
+                // if a DataViewId page parameter was specified, use that, otherwise use the blocksetting or filter selection
+                if ( dataViewId.HasValue )
+                {
+                    dataView = new DataViewService( rockContext ).Get( dataViewId.Value );
+                }
+                else
+                {
+                    dataView = new DataViewService( rockContext ).Get( dataViewGuid.Value );
+                }
+            }
+
+            return dataView;
         }
 
         /// <summary>
@@ -436,6 +486,7 @@ namespace RockWeb.Blocks.Reporting
         protected override void ShowSettings()
         {
             pnlConfigure.Visible = true;
+            upnlContent.Update();
             LoadDropDowns();
             ddlBlockConfigDataView.SetValue( this.GetAttributeValue( "DataView" ).AsGuidOrNull() );
             mdConfigure.Show();
@@ -515,12 +566,12 @@ namespace RockWeb.Blocks.Reporting
                     {
                         var lngLat = parts[1].Split( new char[] { ',', ' ' } ).Select( a => a.AsDouble() ).ToList().ToArray();
                         var point = Microsoft.SqlServer.Types.SqlGeography.Point( lngLat[1], lngLat[0], DbGeography.DefaultCoordinateSystemId );
-                        
+
                         var radius = parts[2].AsDoubleOrNull() ?? 1;
 
                         // construct a circle using BufferWithCurves (point.Buffer creates a polygon with too many coordinates for large circles)
                         var buffer = point.BufferWithCurves( radius );
-                        
+
                         // convert the circle to a polygon (to make it easier to interact with Google MAPs api which has limited support for circles)
                         var polyCircle = buffer.STCurveToLine();
 
@@ -536,12 +587,12 @@ namespace RockWeb.Blocks.Reporting
                 // get the LocationId from hfLocationId instead of dpLocation since the postback is done in javascript
                 var locationId = hfLocationId.Value.AsIntegerOrNull();
                 Location location = null;
-                if (locationId.HasValue)
+                if ( locationId.HasValue )
                 {
                     var rockContext = new RockContext();
                     location = new LocationService( rockContext ).Get( locationId.Value );
 
-                    if (location != null && geoFence != null)
+                    if ( location != null && geoFence != null )
                     {
                         location.GeoFence = geoFence;
                         rockContext.SaveChanges();

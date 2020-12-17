@@ -26,7 +26,7 @@ using Rock.Web.Cache;
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select multiple components
     /// </summary>
     public class ComponentsPicker : RockCheckBoxList
     {
@@ -57,7 +57,7 @@ namespace Rock.Web.UI.Controls
                                 {
                                     if ( component.Value.Value.IsActive )
                                     {
-                                        var entityType = EntityTypeCache.Read( component.Value.Value.GetType() );
+                                        var entityType = EntityTypeCache.Get( component.Value.Value.GetType() );
                                         if ( entityType != null )
                                         {
                                             this.Items.Add( new ListItem( entityType.FriendlyName, entityType.Guid.ToString() ) );

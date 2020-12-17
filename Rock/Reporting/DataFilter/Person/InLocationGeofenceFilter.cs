@@ -22,11 +22,12 @@ using System.Data.Entity.Spatial;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Web.UI;
+using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
-using System.Web.UI.WebControls;
 
 namespace Rock.Reporting.DataFilter.Person
 {
@@ -120,19 +121,12 @@ function() {
         }
 
         /// <summary>
-        /// The LocationPicker
-        /// </summary>
-        private LocationPicker lp = null;
-
-        private RockDropDownList ddlLocationType = null;
-
-        /// <summary>
         /// Creates the child controls.
         /// </summary>
         /// <returns></returns>
         public override Control[] CreateChildControls( Type entityType, FilterField filterControl )
         {
-            lp = new LocationPicker();
+            var lp = new LocationPicker();
             lp.ID = filterControl.ID + "_lp";
             lp.Label = "Location";
             lp.AllowedPickerModes = LocationPickerMode.Named | LocationPickerMode.Polygon;
@@ -144,17 +138,16 @@ function() {
             panel.CssClass = "col-lg-8";
             filterControl.Controls.Add( panel );
 
-            ddlLocationType = new RockDropDownList();
-            ddlLocationType.ID = filterControl.ID + "_ddlLocationType";
-            ddlLocationType.Label = "Location Type";
-            ddlLocationType.DataValueField = "Id";
-            ddlLocationType.DataTextField = "Value";
-            DefinedTypeCache locationDefinedType = DefinedTypeCache.Read( SystemGuid.DefinedType.GROUP_LOCATION_TYPE.AsGuid() );
-            ddlLocationType.BindToDefinedType( locationDefinedType );
-            ddlLocationType.Items.Insert( 0, new ListItem( "(All Location Types)", "" ) );
-            panel.Controls.Add( ddlLocationType );
+            var dvpLocationType = new DefinedValuePicker();
+            dvpLocationType.ID = filterControl.ID + "_dvpLocationType";
+            dvpLocationType.Label = "Location Type";
+            dvpLocationType.DataValueField = "Id";
+            dvpLocationType.DataTextField = "Value";
+            DefinedTypeCache locationDefinedType = DefinedTypeCache.Get( SystemGuid.DefinedType.GROUP_LOCATION_TYPE.AsGuid() );
+            dvpLocationType.DefinedTypeId = locationDefinedType.Id;
+            panel.Controls.Add( dvpLocationType );
 
-            return new Control[3] { lp, ddlLocationType, panel };
+            return new Control[3] { lp, dvpLocationType, panel };
         }
 
         /// <summary>

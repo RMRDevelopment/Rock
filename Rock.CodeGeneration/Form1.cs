@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.Design.PluralizationServices;
 using System.Data.SqlClient;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -32,60 +35,40 @@ namespace Rock.CodeGeneration
             InitializeComponent();
         }
 
-        /// <summary>
-        /// Handles the Click event of the btnLoad control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
-        private void btnLoad_Click( object sender, EventArgs e )
+        private void Form1_Load( object sender, EventArgs e )
         {
-            if ( !Directory.Exists( lblAssemblyPath.Text ) || lblAssemblyPath.Text == string.Empty )
+            rockAssembly = typeof( Rock.Data.IEntity ).Assembly;
+            FileInfo fi = new FileInfo( ( new System.Uri( rockAssembly.CodeBase ) ).AbsolutePath );
+            lblAssemblyPath.Text = fi.FullName;
+            lblAssemblyDateTime.Text = fi.LastWriteTime.ToElapsedString();
+            Cursor = Cursors.WaitCursor;
+
+            cblModels.Items.Clear();
+
+            string assemblyFileName = fi.FullName;
+
+            lblAssemblyPath.Text = assemblyFileName;
+
+            toolTip1.SetToolTip( lblAssemblyDateTime, fi.LastWriteTime.ToString() );
+
+            var assembly = Assembly.LoadFrom( assemblyFileName );
+
+            foreach ( Type type in assembly.GetTypes().OfType<Type>().OrderBy( a => a.FullName ) )
             {
-                rockAssembly = typeof( Rock.Data.IEntity ).Assembly;
-                FileInfo fi = new FileInfo( ( new System.Uri( rockAssembly.CodeBase ) ).AbsolutePath );
-                lblAssemblyPath.Text = fi.FullName;
-            }
-
-            ofdAssembly.InitialDirectory = Path.GetDirectoryName( lblAssemblyPath.Text );
-            ofdAssembly.Filter = "dll files (*.dll)|*.dll";
-            ofdAssembly.FileName = "Rock.dll";
-            ofdAssembly.RestoreDirectory = true;
-
-            if ( ofdAssembly.ShowDialog() == DialogResult.OK )
-            {
-                Cursor = Cursors.WaitCursor;
-
-                cblModels.Items.Clear();
-
-                foreach ( var file in ofdAssembly.FileNames )
+                if ( type.Namespace != null && !type.Namespace.StartsWith( "Rock.Data" ) && !type.IsAbstract && type.GetCustomAttribute<NotMappedAttribute>() == null )
                 {
-                    FileInfo fi = new FileInfo( file );
-                    if ( fi.Exists )
+                    if ( typeof( Rock.Data.IEntity ).IsAssignableFrom( type ) || type.GetCustomAttribute( typeof( TableAttribute ) ) != null )
                     {
-                        lblAssemblyPath.Text = file;
-                        lblAssemblyDateTime.Text = fi.LastWriteTime.ToElapsedString();
-                        toolTip1.SetToolTip( lblAssemblyDateTime, fi.LastWriteTime.ToString() );
-
-                        var assembly = Assembly.LoadFrom( file );
-
-                        foreach ( Type type in assembly.GetTypes().OfType<Type>().OrderBy( a => a.FullName ) )
-                        {
-                            if ( type.Namespace != null && !type.Namespace.StartsWith( "Rock.Data" ) && !type.IsAbstract && type.GetCustomAttribute<NotMappedAttribute>() == null )
-                            {
-                                if ( typeof( Rock.Data.IEntity ).IsAssignableFrom( type ) || type.GetCustomAttribute( typeof( TableAttribute ) ) != null )
-                                {
-                                    cblModels.Items.Add( type );
-                                }
-                            }
-                        }
+                        cblModels.Items.Add( type );
                     }
                 }
-
-                CheckAllItems( true );
-                cbSelectAll.Checked = true;
-
-                Cursor = Cursors.Default;
             }
+
+            CheckAllItems( true );
+            cbSelectAll.Checked = true;
+
+            Cursor = Cursors.Default;
+
 
             var projectName = Path.GetFileNameWithoutExtension( lblAssemblyPath.Text );
 
@@ -124,6 +107,7 @@ namespace Rock.CodeGeneration
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         private void btnGenerate_Click( object sender, EventArgs e )
         {
+            tbResults.Text = string.Empty;
             string serviceFolder = tbServiceFolder.Text;
             string restFolder = tbRestFolder.Text;
             string rockClientFolder = tbClientFolder.Text;
@@ -138,10 +122,16 @@ namespace Rock.CodeGeneration
                 var rootFolder = RootFolder();
                 if ( rootFolder != null )
                 {
-                    var dbSetEntityType = typeof( Rock.Data.RockContext ).GetProperties().Where( a => a.PropertyType.IsGenericType && a.PropertyType.Name == "DbSet`1" ).Select( a => a.PropertyType.GenericTypeArguments[0] ).ToList();
-                    var entityTypes = cblModels.Items.Cast<Type>().ToList();
-                    var missingDbSets = entityTypes.Where( a => !dbSetEntityType.Any( x => x.FullName == a.FullName ) ).ToList();
-                    System.Diagnostics.Debug.WriteLine( missingDbSets.Select( a => a.Name ).ToList().AsDelimited( "\r\n" ) );
+                    if ( cbClient.Checked )
+                    {
+                        var codeGenFolder = Path.Combine( rockClientFolder, "CodeGenerated" );
+                        if ( Directory.Exists( codeGenFolder ) )
+                        {
+                            Directory.Delete( codeGenFolder, true );
+                        }
+
+                        Directory.CreateDirectory( Path.Combine( rockClientFolder, "CodeGenerated" ) );
+                    }
 
                     foreach ( object item in cblModels.CheckedItems )
                     {
@@ -182,12 +172,209 @@ namespace Rock.CodeGeneration
                     {
                         WriteDatabaseProcsScripts( tbDatabaseFolder.Text, projectName );
                     }
+
+                    if ( cbEnsureCopyrightHeaders.Checked )
+                    {
+                        EnsureCopyrightHeaders( rootFolder.FullName );
+                    }
                 }
             }
+
+            ReportRockCodeWarnings();
 
             progressBar1.Visible = false;
             Cursor = Cursors.Default;
             MessageBox.Show( "Files have been generated" );
+        }
+
+        /// <summary>
+        /// Reports the rock code warnings.
+        /// </summary>
+        public void ReportRockCodeWarnings()
+        {
+            StringBuilder missingDbSetWarnings = new StringBuilder();
+            StringBuilder rockObsoleteWarnings = new StringBuilder();
+            StringBuilder singletonClassVariablesWarnings = new StringBuilder();
+            List<string> obsoleteList = new List<string>();
+            List<Assembly> rockAssemblyList = new List<Assembly>();
+            rockAssemblyList.Add( typeof( Rock.Data.RockContext ).Assembly );
+            rockAssemblyList.Add( typeof( Rock.Rest.ApiControllerBase ).Assembly );
+
+            /* List any EntityTypes that don't have an associated DbSet<T> in RockContext */
+            var dbSetEntityType = typeof( Rock.Data.RockContext ).GetProperties().Where( a => a.PropertyType.IsGenericType && a.PropertyType.Name == "DbSet`1" ).Select( a => a.PropertyType.GenericTypeArguments[0] ).ToList();
+            var entityTypes = cblModels.Items.Cast<Type>().ToList();
+            var missingDbSets = entityTypes.Where( a => !dbSetEntityType.Any( x => x.FullName == a.FullName ) ).ToList();
+            if ( missingDbSets.Any() )
+            {
+                missingDbSetWarnings.AppendLine( missingDbSets.Select( a => $" - {a.Name}" ).ToList().AsDelimited( "\r\n" ) + "\r\n\r\n" );
+            }
+
+            foreach ( var rockAssembly in rockAssemblyList )
+            {
+                Type[] allTypes = rockAssembly.GetTypes();
+
+                // ignore anonymous types (see https://stackoverflow.com/a/2483048/1755417)
+                allTypes = allTypes.Where( a =>
+                    a.IsClass == true &&
+                    a.GetCustomAttributes<CompilerGeneratedAttribute>()?.Any() != true
+                    && a.GetCustomAttributes<DebuggerDisplayAttribute>()?.Any() != true ).ToArray();
+
+                foreach ( var type in allTypes.OrderBy( a => a.FullName ) )
+                {
+                    /* See if the class is Obsolete/RockObsolete */
+                    ObsoleteAttribute typeObsoleteAttribute = type.GetCustomAttribute<ObsoleteAttribute>();
+                    if ( typeObsoleteAttribute != null )
+                    {
+                        var rockObsolete = type.GetCustomAttribute<RockObsolete>();
+                        if ( rockObsolete == null )
+                        {
+                            rockObsoleteWarnings.AppendLine( $" - {type}" );
+                        }
+                        else
+                        {
+                            obsoleteList.Add( $"{rockObsolete.Version},{type.Name},class,{typeObsoleteAttribute.IsError}" );
+                        }
+                    }
+
+                    // get all members so we can see if there are warnings that we want to show
+                    var memberList = type
+                        .GetMembers( BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static )
+                        .OrderBy( a => a.Name )
+                        .ToList();
+
+                    foreach ( MemberInfo member in memberList )
+                    {
+                        /* See if member is Obsolete/RockObsolete */
+                        ObsoleteAttribute memberObsoleteAttribute = member.GetCustomAttribute<ObsoleteAttribute>();
+                        if ( memberObsoleteAttribute != null && rockAssembly == member.Module.Assembly && member.DeclaringType == type )
+                        {
+                            var rockObsolete = member.GetCustomAttribute<RockObsolete>();
+                            if ( rockObsolete == null )
+                            {
+                                rockObsoleteWarnings.AppendLine( $" - {member.DeclaringType}.{member.Name}" );
+                            }
+                            else
+                            {
+                                string messagePrefix = null;
+                                if ( rockObsolete.Version == "1.8" || rockObsolete.Version.StartsWith( "1.8." ) || rockObsolete.Version == "1.7" || rockObsolete.Version.StartsWith( "1.7." ) )
+                                {
+                                    if ( !memberObsoleteAttribute.IsError || rockObsolete.Version == "1.7" || rockObsolete.Version.StartsWith( "1.7." ) )
+                                    {
+                                        messagePrefix = "###WARNING###:";
+                                    }
+                                }
+
+                                obsoleteList.Add( $"{messagePrefix}{rockObsolete.Version},{type.Name} {member.Name},{member.MemberType},{memberObsoleteAttribute.IsError}" );
+                            }
+                        }
+
+                        /* See if a singleton has class variables that are not thread-safe
+                           NOTE: This won't catch all of them, but hopefully most
+                         */
+
+                        // types that OK based on how they are used
+                        var ignoredThreadSafeTypeWarning = new Type[] {
+                            typeof(Rock.UniversalSearch.IndexComponents.Lucene),
+                        };
+
+                        // fields that OK based on how we use them
+                        var ignoredThreadSafeFieldWarning = new string[]
+                        {
+                            "Rock.Extension.Component.Attributes",
+                            "Rock.Extension.Component.AttributeValues",
+                            "Rock.Web.HttpModules.ResponseHeaders.Headers",
+                            "Rock.Field.FieldType.QualifierUpdated"
+                        };
+
+                        if ( typeof( Rock.Field.FieldType ).IsAssignableFrom( type )
+                            || typeof( Rock.Extension.Component ).IsAssignableFrom( type )
+                            )
+                        {
+                            if ( member is FieldInfo fieldInfo )
+                            {
+                                if ( ignoredThreadSafeTypeWarning.Contains( type ) )
+                                {
+                                    continue;
+                                }
+
+                                /* 2020-05-11 MDP - To detect non-thread safe fields and properties
+                                    - All properties have a field behind them, even ones with a simple get/set (those will be named *k__BackingField)
+                                    - So this will also end up finding non-threadsafe properties as well
+
+                                    - A class level variable on a singleton is not thread safe, except for the following situations
+                                       -- It is a constant (IsLiteral)
+                                       -- It is a readonly field (IsInitOnly)
+                                       -- Is a static field with a [ThreadStatic] attribute.
+                                           -- Note: If has to both [ThreadStatic] AND a static field to be threadsafe.
+                                 */
+
+                                // Also, don't worry about values that are only set in the Constructor (IsInitOnly), since Singletons only get constructed once
+                                if ( !( fieldInfo.IsLiteral || fieldInfo.IsInitOnly ) )
+                                {
+                                    var isThreadStatic = ( fieldInfo.IsStatic && fieldInfo.GetCustomAttribute<System.ThreadStaticAttribute>() != null );
+                                    if ( !isThreadStatic )
+                                    {
+
+                                        string fieldOrPropertyName = fieldInfo.Name;
+                                        Regex regexBackingField = new Regex( @"\<(.*)\>k__BackingField" );
+                                        var match = regexBackingField.Match( fieldInfo.Name );
+
+                                        // if the field appears to be a backing field, we can take a guess at what the associated property is
+                                        // then report that as not-threadsafe
+                                        if ( match.Groups.Count == 2 )
+                                        {
+                                            var propertyName = match.Groups[1].Value;
+                                            if ( memberList.Any( a => a.Name == propertyName ) )
+                                            {
+                                                fieldOrPropertyName = propertyName;
+                                            }
+                                        }
+
+                                        string fullyQualifiedFieldName = $"{type.FullName}.{fieldOrPropertyName}";
+                                        if ( !ignoredThreadSafeFieldWarning.Contains( fullyQualifiedFieldName ) )
+                                        {
+                                            singletonClassVariablesWarnings.AppendLine( $" - {fullyQualifiedFieldName}" );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+
+                    }
+                }
+            }
+
+            StringBuilder warnings = new StringBuilder();
+            if ( singletonClassVariablesWarnings.Length > 0 )
+            {
+                warnings.AppendLine( "Singleton non-threadsafe class variables." );
+                warnings.Append( singletonClassVariablesWarnings );
+            }
+
+            if ( missingDbSetWarnings.Length > 0 )
+            {
+                warnings.AppendLine();
+                warnings.AppendLine( "RockContext missing DbSet<T>s" );
+                warnings.Append( missingDbSetWarnings );
+            }
+
+            if ( rockObsoleteWarnings.Length > 0 )
+            {
+                warnings.AppendLine();
+                warnings.AppendLine( "[Obsolete] that does't have [RockObsolete]" );
+                warnings.Append( rockObsoleteWarnings );
+            }
+
+            if ( cbGenerateObsoleteExport.Checked )
+            {
+                warnings.AppendLine();
+
+                obsoleteList = obsoleteList.OrderBy( a => a.Split( new char[] { ',' } )[0] ).ToList();
+                warnings.Append( $"Version,Name,Type,IsError" + Environment.NewLine + obsoleteList.AsDelimited( Environment.NewLine ) );
+            }
+
+            tbResults.Text = warnings.ToString();
         }
 
         /// <summary>
@@ -197,6 +384,17 @@ namespace Rock.CodeGeneration
         /// <param name="projectName">Name of the project.</param>
         public void WriteDatabaseProcsScripts( string databaseRootFolder, string projectName )
         {
+            // ignore any diagramming procs that might have been added by SMSS
+            string[] procsToIgnore = {
+                "fn_diagramobjects",
+                "sp_alterdiagram",
+                "sp_creatediagram",
+                "sp_dropdiagram",
+                "sp_helpdiagramdefinition",
+                "sp_helpdiagrams",
+                "sp_renamediagram",
+                "sp_upgraddiagrams" };
+
             SqlConnection sqlconn = GetSqlConnection( new DirectoryInfo( databaseRootFolder ).Parent.FullName );
             sqlconn.Open();
             var qryProcs = sqlconn.CreateCommand();
@@ -274,7 +472,10 @@ GO
 
                 if ( string.IsNullOrEmpty( procPrefixFilter ) || routineName.StartsWith( procPrefixFilter, StringComparison.OrdinalIgnoreCase ) )
                 {
-                    File.WriteAllText( filePath, script.Trim() );
+                    if ( !procsToIgnore.Contains( routineName ) )
+                    {
+                        File.WriteAllText( filePath, script.Trim() );
+                    }
                 }
             }
 
@@ -341,7 +542,7 @@ GO
                 dbContextFullName = dbContextFullName.Replace( "Rock.Data.", "" );
             }
 
-            var properties = GetEntityProperties( type, false );
+            var properties = GetEntityProperties( type, false, true );
 
             var sb = new StringBuilder();
 
@@ -434,7 +635,23 @@ GO
 
             foreach ( var property in properties )
             {
-                sb.AppendFormat( "            target.{0} = source.{0};" + Environment.NewLine, property.Key );
+                PropertyInfo propertyInfo = property.Value;
+                var obsolete = propertyInfo.GetCustomAttribute<ObsoleteAttribute>();
+
+                // wrap with a pragma to disable the obsolete warning (since we do want to copy obsolete values when cloning, unless this is obsolete.IsError )
+                if ( obsolete != null )
+                {
+                    if ( obsolete.IsError == false )
+                    {
+                        sb.AppendLine( $"            #pragma warning disable 612, 618" );
+                        sb.AppendLine( $"            target.{property.Key} = source.{property.Key};" );
+                        sb.AppendLine( $"            #pragma warning restore 612, 618" );
+                    }
+                }
+                else
+                {
+                    sb.AppendLine( $"            target.{property.Key} = source.{property.Key};" );
+                }
             }
 
             sb.Append( @"
@@ -480,30 +697,6 @@ GO
 
             sqlconn.Open();
 
-            string sql = @"
-select * from
-(
-select 
-  OBJECT_NAME([fk].[parent_object_id]) [parentTable], 
-  OBJECT_NAME([fk].[referenced_object_id]) [refTable], 
-  [cc].[name] [columnName],
-  isnull(OBJECTPROPERTY(OBJECT_ID('[' + kcu.constraint_name + ']'), 'IsPrimaryKey'), 0) [IsPrimaryKey],
-  [fk].[delete_referential_action] [CascadeAction]
-from 
-sys.foreign_key_columns [fkc]
-join sys.foreign_keys [fk]
-on fkc.constraint_object_id = fk.object_id
-join sys.columns cc
-on fkc.parent_column_id = cc.column_id
-left join INFORMATION_SCHEMA.KEY_COLUMN_USAGE [kcu]
-on kcu.COLUMN_NAME = cc.Name and kcu.TABLE_NAME = OBJECT_NAME([fk].[parent_object_id]) and OBJECTPROPERTY(OBJECT_ID('[' + kcu.constraint_name + ']'), 'IsPrimaryKey') = 1
-where cc.object_id = fk.parent_object_id
-and [fk].[delete_referential_action_desc] != 'CASCADE'
-) sub
-where [refTable] = '{0}'
-order by [parentTable], [columnName] 
-";
-
             SqlCommand sqlCommand = sqlconn.CreateCommand();
             TableAttribute tableAttribute = type.GetCustomAttribute<TableAttribute>();
             if ( tableAttribute == null )
@@ -512,19 +705,27 @@ order by [parentTable], [columnName]
                 return string.Empty;
             }
 
-            sqlCommand.CommandText = string.Format( sql, tableAttribute.Name );
-
+            string sql = $"exec sp_fkeys @pktable_name = '{tableAttribute.Name}', @pktable_owner = 'dbo'";
+            sqlCommand.CommandText = sql;
+            sqlCommand.Parameters.Add( new SqlParameter( "@refTable", tableAttribute.Name ) );
             var reader = sqlCommand.ExecuteReader();
 
             List<TableColumnInfo> parentTableColumnNameList = new List<TableColumnInfo>();
             while ( reader.Read() )
             {
-                string parentTable = reader["parentTable"] as string;
-                string columnName = reader["columnName"] as string;
-                bool isPrimaryKey = ( int ) reader["IsPrimaryKey"] == 1;
+                string parentTable = reader["FKTABLE_NAME"] as string;
+                string columnName = reader["FKCOLUMN_NAME"] as string;
+                bool isCascadeDelete = reader["DELETE_RULE"] as short? == 0;
+                
                 bool ignoreCanDelete = false;
                 bool hasEntityModel = true;
 
+                if ( isCascadeDelete )
+                {
+                    continue;
+                }
+
+                bool isPrimaryKey = false;
                 Type parentEntityType = Type.GetType( string.Format( "Rock.Model.{0}, {1}", parentTable, type.Assembly.FullName ) );
                 if ( parentEntityType != null )
                 {
@@ -535,6 +736,8 @@ order by [parentTable], [columnName]
                         {
                             ignoreCanDelete = true;
                         }
+
+                        isPrimaryKey = columnProp.GetCustomAttribute<KeyAttribute>() != null;
                     }
                 }
                 else
@@ -576,7 +779,7 @@ order by [parentTable], [columnName]
                 if ( item.IsPartOfPrimaryKey || item.Ignore )
                 {
                     canDeleteMiddle += string.Format(
-@"            
+        @"            
             // ignoring {0},{1} 
 ", item.Table, item.Column );
                     continue;
@@ -605,21 +808,32 @@ order by [parentTable], [columnName]
                     pluralizeCode = "";
                 }
 
+                // #pragma warning disable 612, 618
+                var entityTypes = cblModels.Items.Cast<Type>().ToList();
 
-                canDeleteMiddle += string.Format(
-@" 
-            if ( new Service<{0}>( Context ).Queryable().Any( a => a.{1} == item.Id ) )
+                var parentTableType = entityTypes.Where( a => a.GetCustomAttribute<TableAttribute>()?.Name == parentTable || a.Name == parentTable ).FirstOrDefault();
+                var obsolete = parentTableType?.GetCustomAttribute<ObsoleteAttribute>();
+
+                if ( obsolete != null && obsolete.IsError == false )
+                {
+                    canDeleteMiddle += $@"
+            #pragma warning disable 612, 618 // {parentTableType.Name} is obsolete, but we still need this code generated";
+                }
+
+                canDeleteMiddle +=
+        $@" 
+            if ( new Service<{parentTable}>( Context ).Queryable().Any( a => a.{columnName} == item.Id ) )
             {{
-                errorMessage = string.Format( ""This {{0}} {3} {{1}}."", {2}.FriendlyTypeName, {0}.FriendlyTypeName{4} );
+                errorMessage = string.Format( ""This {{0}} {relationShipText} {{1}}."", {type.Name}.FriendlyTypeName, {parentTable}.FriendlyTypeName{pluralizeCode} );
                 return false;
             }}  
-",
-                    parentTable,
-                    columnName,
-                    type.Name,
-                    relationShipText,
-                    pluralizeCode
-                    );
+";
+
+                if ( obsolete != null && obsolete.IsError == false )
+                {
+                    canDeleteMiddle += @"            #pragma warning restore 612, 618
+";
+                }
             }
 
 
@@ -659,6 +873,9 @@ order by [parentTable], [columnName]
             string restNamespace = type.Assembly.GetName().Name + ".Rest.Controllers";
             string dbContextFullName = Rock.Reflection.GetDbContextForEntityType( type ).GetType().FullName;
 
+            var obsolete = type.GetCustomAttribute<ObsoleteAttribute>();
+            var rockObsolete = type.GetCustomAttribute<RockObsolete>();
+
             var sb = new StringBuilder();
 
             sb.AppendLine( "//------------------------------------------------------------------------------" );
@@ -693,6 +910,17 @@ order by [parentTable], [columnName]
             sb.AppendLine( "    /// <summary>" );
             sb.AppendLine( $"    /// {pluralizedName} REST API" );
             sb.AppendLine( "    /// </summary>" );
+
+            if ( obsolete != null && obsolete.IsError == false )
+            {
+                if ( rockObsolete != null )
+                {
+                    sb.AppendLine( $"    [RockObsolete( \"{rockObsolete.Version}\" )]" );
+                }
+
+                sb.AppendLine( $"    [System.Obsolete( \"{obsolete.Message}\" )]" );
+            }
+
             sb.AppendLine( $"    public partial class {pluralizedName}Controller : Rock.Rest.ApiController<{type.Namespace}.{type.Name}>" );
             sb.AppendLine( "    {" );
             sb.AppendLine( "        /// <summary>" );
@@ -862,7 +1090,14 @@ order by [parentTable], [columnName]
             }
         }
 
-        private Dictionary<string, PropertyInfo> GetEntityProperties( Type type, bool includeRockClientIncludes )
+        /// <summary>
+        /// Gets the entity properties.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <param name="includeRockClientIncludes">if set to <c>true</c> [include rock client includes].</param>
+        /// <param name="includeObsolete">if set to <c>true</c> [include obsolete].</param>
+        /// <returns></returns>
+        private Dictionary<string, PropertyInfo> GetEntityProperties( Type type, bool includeRockClientIncludes, bool includeObsolete )
         {
             var properties = new Dictionary<string, PropertyInfo>();
 
@@ -906,7 +1141,7 @@ order by [parentTable], [columnName]
 
                 if ( !property.GetCustomAttributes( typeof( DatabaseGeneratedAttribute ) ).Any() )
                 {
-                    if ( ( property.GetCustomAttribute<ObsoleteAttribute>() == null ) )
+                    if ( ( property.GetCustomAttribute<ObsoleteAttribute>() == null || includeObsolete ) )
                     {
                         if ( property.SetMethod != null && property.SetMethod.IsPublic && property.GetMethod.IsPublic )
                         {
@@ -972,6 +1207,17 @@ order by [parentTable], [columnName]
                     var enumValues = Enum.GetValues( enumType );
                     foreach ( var enumValueName in Enum.GetNames( enumType ) )
                     {
+                        // mark Obsolete Enum values
+                        object value = Enum.Parse( enumType, enumValueName );
+                        var fieldInfo = value.GetType().GetField( enumValueName );
+                        var obsolete = fieldInfo?.GetCustomAttribute<ObsoleteAttribute>();
+
+                        if ( obsolete != null )
+                        {
+                            sb.AppendLine();
+                            sb.AppendLine( $"        [Obsolete( \"{obsolete.Message}\", {obsolete.IsError.ToTrueFalse().ToLower()} )]" );
+                        }
+
                         int enumValue = ( int ) Convert.ChangeType( Enum.Parse( enumType, enumValueName ), typeof( int ) );
                         string enumValueParam = enumValue >= 0 ? " = 0x" + enumValue.ToString( "x" ) : " = " + enumValue.ToString();
                         sb.AppendFormat( "        {0}{1},", enumValueName, enumValueParam );
@@ -991,8 +1237,7 @@ order by [parentTable], [columnName]
         }
 
         /// <summary>
-        /// Writes the rock client system unique identifier files.
-        /// </summary>
+        /// Writes the rock client system unique identifier files.      /// </summary>
         /// <param name="rootFolder">The root folder.</param>
         private void WriteRockClientSystemGuidFiles( string rootFolder )
         {
@@ -1075,7 +1320,7 @@ order by [parentTable], [columnName]
         private void WriteRockClientFile( string rootFolder, Type type )
         {
             // make a copy of the EntityProperties since we are deleting some for this method
-            var entityProperties = GetEntityProperties( type, true ).ToDictionary( k => k.Key, v => v.Value );
+            var entityProperties = GetEntityProperties( type, true, true ).ToDictionary( k => k.Key, v => v.Value );
 
             var dataMembers = type.GetProperties().SortByStandardOrder()
                 .Where( a => a.GetCustomAttribute<DataMemberAttribute>() != null )
@@ -1151,8 +1396,11 @@ order by [parentTable], [columnName]
 
             foreach ( var keyVal in entityProperties )
             {
-                var propertyRockClientIncludeAttribute = keyVal.Value.GetCustomAttribute<Rock.Data.RockClientIncludeAttribute>();
-                var defaultValueAttribute = keyVal.Value.GetCustomAttribute<System.ComponentModel.DefaultValueAttribute>();
+                var propertyName = keyVal.Key;
+                var propertyInfo = keyVal.Value;
+                ObsoleteAttribute obsolete = propertyInfo.GetCustomAttribute<ObsoleteAttribute>();
+                RockObsolete rockObsolete = propertyInfo.GetCustomAttribute<RockObsolete>();
+                var propertyRockClientIncludeAttribute = propertyInfo.GetCustomAttribute<Rock.Data.RockClientIncludeAttribute>();
                 string propertyComments = null;
 
                 if ( propertyRockClientIncludeAttribute != null )
@@ -1171,44 +1419,86 @@ order by [parentTable], [columnName]
                     sb.AppendLine( "        /// <summary />" );
                 }
 
-                if ( defaultValueAttribute != null )
+                if ( obsolete != null )
                 {
-                    sb.AppendFormat( "        public {0} {1}" + Environment.NewLine, this.PropertyTypeName( keyVal.Value.PropertyType ), keyVal.Key );
-                    sb.AppendLine( "        {" );
-                    sb.AppendFormat( "            get {{ return _{0}; }}" + Environment.NewLine, keyVal.Key );
-                    sb.AppendFormat( "            set {{ _{0} = value; }}" + Environment.NewLine, keyVal.Key );
-                    sb.AppendLine( "        }" );
-                    if ( defaultValueAttribute.Value is string )
+                    if ( rockObsolete != null )
                     {
-                        sb.AppendFormat( "        private {0} _{1} = \"{2}\";" + Environment.NewLine, this.PropertyTypeName( keyVal.Value.PropertyType ), keyVal.Key, defaultValueAttribute.Value );
+                        // [RockObsolete( "1.9" )]
+                        sb.AppendLine( $"        // Made Obsolete in Rock \"{rockObsolete.Version}\"" );
                     }
-                    else if ( defaultValueAttribute.Value is bool )
-                    {
-                        sb.AppendFormat( "        private {0} _{1} = {2};" + Environment.NewLine, this.PropertyTypeName( keyVal.Value.PropertyType ), keyVal.Key, ( bool ) defaultValueAttribute.Value ? "true" : "false" );
-                    }
-                    else
-                    {
-                        sb.AppendFormat( "        private {0} _{1} = {2};" + Environment.NewLine, this.PropertyTypeName( keyVal.Value.PropertyType ), keyVal.Key, defaultValueAttribute.Value );
-                    }
-                    /*
-                     public bool IsEmailActive
-        {
-            get { return _isEmailActive; }
-            set { _isEmailActive = value; }
-        }
-        private bool _isEmailActive = true;
-                     
-                     */
+
+                    //[Obsolete( "Use PreventInactivePeople instead.", true )]
+                    sb.AppendLine( $"        [Obsolete( \"{obsolete.Message}\", {obsolete.IsError.ToTrueFalse().ToLower()} )]" );
                 }
-                else
+
+                // if the property has auto-property ( ex: IsActive {get; set) = true;) lets put the same thing on the code generated rock.client class
+                Type[] autoPropertyTypesToCheck = new Type[] { typeof( string ), typeof( bool ), typeof( int ), typeof( bool? ), typeof( int? ) };
+                object autoPropertyValue = null;
+                if ( autoPropertyTypesToCheck.Contains( propertyInfo.PropertyType ) || propertyInfo.PropertyType.IsEnum )
                 {
-                    sb.AppendFormat( "        public {0} {1} {{ get; set; }}" + Environment.NewLine, this.PropertyTypeName( keyVal.Value.PropertyType ), keyVal.Key );
+                    // create an instance of the type to detect any auto-properties that have a default value set
+                    object typeInstance = null;
+                    if ( type.GetConstructor( new Type[0] ) != null )
+                    {
+                        typeInstance = Activator.CreateInstance( type );
+                    }
+
+                    if ( typeInstance != null )
+                    {
+
+                        // we can rule out the existence of the autoProperty if the getter doesn't have CompilerGeneratedAttribute
+                        //if ( propertyInfo.GetGetMethod().GetCustomAttribute<CompilerGeneratedAttribute>() != null )
+                        {
+                            autoPropertyValue = propertyInfo.GetValue( typeInstance );
+                        }
+                    }
                 }
+
+                sb.Append( $"        public {this.PropertyTypeName( propertyInfo.PropertyType )} {propertyName} {{ get; set; }}" );
+
+                if ( autoPropertyValue != null )
+                {
+                    string defaultValueCode = null;
+                    if ( autoPropertyValue is string )
+                    {
+                        var escapedDefaultValue = ( autoPropertyValue as string ).Replace( "\"", "\"\"" );
+                        defaultValueCode = $"@\"{ escapedDefaultValue}\"";
+                    }
+                    else if ( autoPropertyValue is bool )
+                    {
+                        if ( ( bool ) autoPropertyValue != false )
+                        {
+                            defaultValueCode = ( bool ) autoPropertyValue ? "true" : "false";
+                        }
+                    }
+                    else if ( autoPropertyValue is int )
+                    {
+                        if ( ( int ) autoPropertyValue != 0 )
+                        {
+                            defaultValueCode = autoPropertyValue.ToString();
+                        }
+                    }
+                    else if ( autoPropertyValue.GetType().IsEnum )
+                    {
+                        if ( ( int ) autoPropertyValue != 0 )
+                        {
+                            defaultValueCode = $"Rock.Client.Enums.{autoPropertyValue.GetType().Name}.{autoPropertyValue}";
+                        }
+                    }
+
+                    if ( defaultValueCode != null )
+                    {
+                        sb.Append( $" = {defaultValueCode};" );
+                    }
+                }
+
+                sb.AppendLine( "" );
+
                 sb.AppendLine( "" );
             }
 
             sb.AppendFormat(
-@"        /// <summary>
+        @"        /// <summary>
         /// Copies the base properties from a source {0} object
         /// </summary>
         /// <param name=""source"">The source.</param>
@@ -1218,7 +1508,23 @@ order by [parentTable], [columnName]
 
             foreach ( var keyVal in entityProperties )
             {
-                sb.AppendFormat( "            this.{0} = source.{0};" + Environment.NewLine, keyVal.Key );
+
+                var obsolete = keyVal.Value.GetCustomAttribute<ObsoleteAttribute>();
+
+                // wrap with a pragma to disable the obsolete warning (since we do want to copy obsolete values when cloning, unless this is obsolete.IsError )
+                if ( obsolete != null )
+                {
+                    if ( obsolete.IsError == false )
+                    {
+                        sb.AppendLine( $"            #pragma warning disable 612, 618" );
+                        sb.AppendLine( $"            this.{keyVal.Key} = source.{keyVal.Key};" );
+                        sb.AppendLine( $"            #pragma warning restore 612, 618" );
+                    }
+                }
+                else
+                {
+                    sb.AppendLine( $"            this.{keyVal.Key} = source.{keyVal.Key};" );
+                }
             }
 
             sb.Append( @"
@@ -1287,7 +1593,6 @@ order by [parentTable], [columnName]
             sb.AppendLine( "    }" );
             sb.AppendLine( "}" );
 
-            //var file = new FileInfo( Path.Combine( NamespaceFolder( rootFolder, type.Namespace ).FullName, "CodeGenerated", type.Name + "Dto.cs" ) );
             var file = new FileInfo( Path.Combine( rootFolder, "CodeGenerated", type.Name + ".cs" ) );
             WriteFile( file, sb );
         }
@@ -1318,6 +1623,191 @@ order by [parentTable], [columnName]
                 tbClientFolder.Text = fdbRockClient.SelectedPath;
             }
         }
+
+        /// <summary>
+        /// The ignore files
+        /// </summary>
+        static string[] IgnoreFiles = new string[] { "\\DoubleMetaphone.cs", "\\Rock.Version\\AssemblySharedInfo.cs" };
+
+        /// <summary>
+        /// The ignore folders
+        /// </summary>
+        static string[] IgnoreFolders = new string[] { "\\CodeGenerated", "\\obj" };
+
+        /// <summary>
+        /// Mains the specified args.
+        /// </summary>
+        /// <param name="args">The args.</param>
+        static void EnsureCopyrightHeaders( string rootFolder )
+        {
+            string rockDirectory = rootFolder.EnsureTrailingBackslash();
+
+            int updatedFileCount = 0;
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "RockWeb\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Checkr\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.DownhillCss\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Mailgun\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Mandrill\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Migrations\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.NMI\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.PayFlowPro\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Rest\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Security.Authentication.Auth0\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.SignNow\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Slingshot\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Slingshot.Model\\" );
+            //updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Specs\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.StatementGenerator\\" );
+            //updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Tests\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.TransNational.Pi\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.Version\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Rock.WebStartup\\" );
+            updatedFileCount += FixupCopyrightHeaders( rockDirectory + "Applications\\" );
+
+            Console.WriteLine( "\n\nDone!  Files Updated: {0}\n\nPress any key to continue.", updatedFileCount );
+            Console.ReadLine();
+        }
+
+        /// <summary>
+        /// Fixups the copyright headers.
+        /// </summary>
+        /// <param name="searchDirectory">The search directory.</param>
+        private static int FixupCopyrightHeaders( string searchDirectory )
+        {
+            int result = 0;
+
+            List<string> sourceFilenames = Directory.GetFiles( searchDirectory, "*.cs", SearchOption.AllDirectories ).ToList();
+
+            // exclude files that come from the localhistory VS extension
+            sourceFilenames = sourceFilenames.Where( a => !a.Contains( ".localhistory" ) ).ToList();
+
+            // this was was our standard copyright badge up until 1/17/2014. Look for it in case it sneaks back in
+            const string oldCopyrightBadge1 = @"// <copyright>
+// Copyright 2013 by the Spark Development Network
+//
+// Licensed under the Apache License, Version 2.0 (the ""License"");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an ""AS IS"" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// </copyright>
+//";
+
+            // standard copyright badge 4/1/2016 to 5/22/2016
+            const string oldCopyrightBadge2 = @"// <copyright>
+// Copyright by the Spark Development Network
+//
+// Licensed under the Apache License, Version 2.0 (the ""License"");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an ""AS IS"" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// </copyright>
+//
+";
+
+            // standard copyright badge starting 5/23/2016
+            const string newCopyrightBadgeStart = @"// <copyright>
+// Copyright by the Spark Development Network
+//
+// Licensed under the Rock Community License (the ""License"");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.rockrms.com/license
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an ""AS IS"" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// </copyright>";
+
+            const string newCopyrightBadge = newCopyrightBadgeStart + @"
+//
+";
+            foreach ( string fileName in sourceFilenames )
+            {
+                bool skipFile = false;
+                foreach ( var f in IgnoreFolders )
+                {
+                    if ( fileName.Contains( f ) )
+                    {
+                        skipFile = true;
+                    }
+
+                }
+
+                foreach ( var f in IgnoreFiles )
+                {
+                    if ( Path.GetFullPath( fileName ).EndsWith( f, StringComparison.OrdinalIgnoreCase ) )
+                    {
+                        skipFile = true;
+                    }
+                }
+
+                if ( skipFile )
+                {
+                    continue;
+                }
+
+                string origFileContents = File.ReadAllText( fileName );
+
+                if ( origFileContents.Contains( "<auto-generated" ) )
+                {
+                    continue;
+                }
+
+                if ( origFileContents.StartsWith( newCopyrightBadgeStart ) )
+                {
+                    continue;
+                }
+
+                // get rid of any incorrect header by finding keyword using or namespace
+                int positionNamespace = origFileContents.IndexOf( "namespace ", 0 );
+                int positionUsing = origFileContents.IndexOf( "using ", 0 );
+                int codeStart = positionNamespace > positionUsing ? positionUsing : positionNamespace;
+                codeStart = codeStart < 0 ? 0 : codeStart;
+
+                string newFileContents = origFileContents.Substring( codeStart );
+
+                // try to clean up cases where the badge is after some of the using statements
+                newFileContents = newFileContents.Replace( oldCopyrightBadge1, string.Empty ).Replace( newCopyrightBadge, string.Empty );
+                newFileContents = newFileContents.Replace( oldCopyrightBadge2, string.Empty ).Replace( newCopyrightBadge, string.Empty );
+
+                newFileContents = newCopyrightBadge + newFileContents.TrimStart();
+
+                if ( !origFileContents.Equals( newFileContents ) )
+                {
+                    Console.WriteLine( "Updating header in {0}", fileName );
+                    result++;
+
+                    System.Text.Encoding encoding;
+                    using ( var r = new StreamReader( fileName, detectEncodingFromByteOrderMarks: true ) )
+                    {
+                        encoding = r.CurrentEncoding;
+                    }
+
+                    File.WriteAllText( fileName, newFileContents, encoding );
+                }
+            }
+            return result;
+        }
+
+
     }
 
     public static class HelperExtensions

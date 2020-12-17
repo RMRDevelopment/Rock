@@ -16,8 +16,9 @@
 //
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Runtime.Caching;
+using System.Linq;
+using System.Runtime.Serialization;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
@@ -27,8 +28,12 @@ namespace Rock.CheckIn
     /// <summary>
     /// Cached Check-in Label
     /// </summary>
-    public class KioskLabel
+    [DataContract]
+    [Serializable]
+    public class KioskLabel : ItemCache<KioskLabel>
     {
+        #region Constructors
+
         /// <summary>
         /// Prevents a default instance of the <see cref="KioskLabel"/> class from being created.
         /// </summary>
@@ -36,12 +41,34 @@ namespace Rock.CheckIn
         {
         }
 
+        #endregion Constructors
+
+        #region Lifespan
+
+        /// <summary>
+        /// The amount of time that this item will live in the cache before expiring. This is set to the time from now
+        /// until midnight for each cache item instance.
+        /// </summary>
+        public override TimeSpan? Lifespan
+        {
+            get
+            {
+                // Expire cache items at midnight
+                var now = RockDateTime.Now;
+                var timespan = now.Date.AddDays( 1 ).Subtract( now );
+                return timespan;
+            }
+        }
+
+        #endregion Lifespan
+
         /// <summary>
         /// Gets or sets the GUID.
         /// </summary>
         /// <value>
         /// The GUID.
         /// </value>
+        [DataMember]
         public Guid Guid { get; set; }
 
         /// <summary>
@@ -50,6 +77,7 @@ namespace Rock.CheckIn
         /// <value>
         /// The type of the label.
         /// </value>
+        [DataMember]
         public KioskLabelType LabelType { get; set; }
 
         /// <summary>
@@ -58,6 +86,7 @@ namespace Rock.CheckIn
         /// <value>
         /// The order.
         /// </value>
+        [DataMember]
         public int Order { get; set; }
 
         /// <summary>
@@ -66,6 +95,7 @@ namespace Rock.CheckIn
         /// <value>
         /// The URL.
         /// </value>
+        [DataMember]
         public string Url { get; set; }
 
         /// <summary>
@@ -74,93 +104,118 @@ namespace Rock.CheckIn
         /// <value>
         /// The content of the file.
         /// </value>
+        [DataMember]
         public string FileContent { get; set; }
 
         /// <summary>
-        /// Gets or sets the merge fields.
+        /// Gets the merge fields.
         /// </summary>
         /// <value>
         /// The merge fields.
         /// </value>
-        public Dictionary<string, string> MergeFields { get; set; }
+        public Dictionary<string, string> MergeFields
+        {
+            get
+            {
+                var mergeFields = new Dictionary<string, string>();
+                if ( _mergeCodeDefinedValueIds?.Any() != true )
+                {
+                    // no merge fields
+                    return mergeFields;
+                }
+
+                foreach ( var keyDefinedValueId in _mergeCodeDefinedValueIds )
+                {
+                    var definedValue = DefinedValueCache.Get( keyDefinedValueId.Value );
+                    if ( definedValue != null )
+                    {
+                        string mergeField = definedValue.GetAttributeValue( "MergeField" );
+                        if ( mergeField != null )
+                        {
+                            mergeFields.AddOrIgnore( keyDefinedValueId.Key, mergeField );
+                        }
+                    }
+                }
+
+                return mergeFields;
+            }
+
+            set
+            {
+                // not supported
+            }
+        }
+
+        [DataMember]
+        private Dictionary<string, int> _mergeCodeDefinedValueIds { get; set; } = null;
 
         #region Static Methods
-
-        /// <summary>
-        /// Caches the key.
-        /// </summary>
-        /// <param name="guid">The unique identifier.</param>
-        /// <returns></returns>
-        private static string CacheKey( Guid guid )
-        {
-            return string.Format( "Rock:CheckIn:KioskLabel:{0}", guid );
-        }
 
         /// <summary>
         /// Reads the specified label by guid.
         /// </summary>
         /// <param name="guid">The unique identifier.</param>
         /// <returns></returns>
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use Get( Guid guid ) instead.", true )]
         public static KioskLabel Read( Guid guid )
         {
-            string cacheKey = KioskLabel.CacheKey( guid );
+            return Get( guid );
+        }
 
-            RockMemoryCache cache = RockMemoryCache.Default;
-            KioskLabel label = cache[cacheKey] as KioskLabel;
+        /// <summary>
+        /// Gets the specified label by guid.
+        /// </summary>
+        /// <param name="guid">The unique identifier.</param>
+        /// <returns></returns>
+        public static KioskLabel Get( Guid guid )
+        {
+            return GetOrAddExisting( guid.ToString(), () => Create( guid ) );
+        }
 
-            if ( label != null )
+        /// <summary>
+        /// Creates the KioskLabel
+        /// </summary>
+        /// <param name="guid">The unique identifier.</param>
+        /// <returns></returns>
+        private static KioskLabel Create( Guid guid )
+        {
+            using ( var rockContext = new RockContext() )
             {
-                return label;
-            }
-            else
-            {
-                using ( var rockContext = new RockContext() )
+                var file = new BinaryFileService( rockContext ).Get( guid );
+                if ( file != null )
                 {
-                    var file = new BinaryFileService( rockContext ).Get( guid );
-                    if ( file != null )
+                    var label = new KioskLabel();
+                    label.Guid = file.Guid;
+                    label.Url = string.Format( "{0}GetFile.ashx?id={1}", System.Web.VirtualPathUtility.ToAbsolute( "~" ), file.Id );
+                    label._mergeCodeDefinedValueIds = new Dictionary<string, int>();
+                    label.FileContent = file.ContentsToString();
+
+                    file.LoadAttributes( rockContext );
+
+                    label.LabelType = file.GetAttributeValue( "core_LabelType" ).ConvertToEnum<KioskLabelType>();
+
+                    string attributeValue = file.GetAttributeValue( "MergeCodes" );
+                    if ( !string.IsNullOrWhiteSpace( attributeValue ) )
                     {
-                        label = new KioskLabel();
-                        label.Guid = file.Guid;
-                        label.Url = string.Format( "{0}GetFile.ashx?id={1}", System.Web.VirtualPathUtility.ToAbsolute( "~" ), file.Id );
-                        label.MergeFields = new Dictionary<string, string>();
-                        label.FileContent = file.ContentsToString();
-
-                        file.LoadAttributes( rockContext );
-
-                        label.LabelType = file.GetAttributeValue( "core_LabelType" ).ConvertToEnum<KioskLabelType>();
-
-                        string attributeValue = file.GetAttributeValue( "MergeCodes" );
-                        if ( !string.IsNullOrWhiteSpace( attributeValue ) )
+                        string[] nameValues = attributeValue.Split( new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries );
+                        foreach ( string nameValue in nameValues )
                         {
-                            string[] nameValues = attributeValue.Split( new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries );
-                            foreach ( string nameValue in nameValues )
-                            {
-                                string[] nameAndValue = nameValue.Split( new char[] { '^' }, StringSplitOptions.RemoveEmptyEntries );
-                                if ( nameAndValue.Length == 2 && !label.MergeFields.ContainsKey( nameAndValue[0] ) )
-                                {
-                                    label.MergeFields.Add( nameAndValue[0], nameAndValue[1] );
+                            string[] nameAndValue = nameValue.Split( new char[] { '^' }, StringSplitOptions.RemoveEmptyEntries );
 
-                                    int definedValueId = int.MinValue;
-                                    if ( int.TryParse( nameAndValue[1], out definedValueId ) )
-                                    {
-                                        var definedValue = DefinedValueCache.Read( definedValueId );
-                                        if ( definedValue != null )
-                                        {
-                                            string mergeField = definedValue.GetAttributeValue( "MergeField" );
-                                            if ( mergeField != null )
-                                            {
-                                                label.MergeFields[nameAndValue[0]] = mergeField;
-                                            }
-                                        }
-                                    }
+                            if ( nameAndValue.Length == 2 )
+                            {
+                                string mergeCodeKey = nameAndValue[0];
+                                int? definedValueId = nameAndValue[1].AsIntegerOrNull();
+                                if ( definedValueId.HasValue )
+                                {
+                                    label._mergeCodeDefinedValueIds.AddOrIgnore( mergeCodeKey, definedValueId.Value );
                                 }
                             }
                         }
-
-                        cache.Set( cacheKey, label, new CacheItemPolicy { AbsoluteExpiration = DateTimeOffset.Now.Date.AddDays( 1 ) } );
-
-                        return label;
                     }
+
+                    return label;
                 }
             }
 
@@ -171,10 +226,20 @@ namespace Rock.CheckIn
         /// Flushes the specified guid.
         /// </summary>
         /// <param name="guid">The unique identifier.</param>
-        public static void Flush( Guid guid)
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use Remove( Guid guid ) instead.", true )]
+        public static void Flush( Guid guid )
         {
-            RockMemoryCache cache = RockMemoryCache.Default;
-            cache.Remove( KioskLabel.CacheKey( guid ) );
+            Remove( guid );
+        }
+
+        /// <summary>
+        /// Flushes the specified guid.
+        /// </summary>
+        /// <param name="guid">The unique identifier.</param>
+        public static void Remove( Guid guid)
+        {
+            Remove( guid.ToString() );
         }
 
         #endregion

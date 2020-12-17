@@ -18,9 +18,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
+
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -30,7 +33,7 @@ namespace Rock.Model
     [RockDomain( "CMS" )]
     [Table( "ContentChannelType" )]
     [DataContract]
-    public partial class ContentChannelType : Model<ContentChannelType>
+    public partial class ContentChannelType : Model<ContentChannelType>, ICacheable
     {
 
         #region Entity Properties
@@ -39,7 +42,7 @@ namespace Rock.Model
         /// Gets or sets a flag indicating if this ContentType is part of the Rock core system/framework. 
         /// </summary>
         /// <value>
-        ///   A <see cref="System.Boolean"/> flag that is <c>true</c> if this MarketingCAmpaignAdType is part of the Rock core system/framework; otherwise <c>false</c>.
+        ///   A <see cref="System.Boolean"/> flag that is <c>true</c> if this ContentChannelType is part of the Rock core system/framework; otherwise <c>false</c>.
         /// </value>
         [DataMember]
         public bool IsSystem { get; set; }
@@ -72,13 +75,8 @@ namespace Rock.Model
         ///   <c>true</c> if [include time]; otherwise, <c>false</c>.
         /// </value>
         [DataMember]
-        public bool IncludeTime
-        {
-            get { return _includeTime; }
-            set { _includeTime = value; }
-        }
-        private bool _includeTime = true;
-        
+        public bool IncludeTime { get; set; } = true;
+
         /// <summary>
         /// Gets or sets a value indicating whether [disable priority].
         /// </summary>
@@ -106,6 +104,16 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public bool DisableStatus { get; set; }
+
+        /// <summary>
+        /// A flag indicating if a <see cref="Rock.Model.ContentChannel"/> of this ContentChannelType will be shown in the content channel list.
+        /// Whem false, it means any 'Channel Types Include' settings MUST specifically include in order to show it.
+        /// </summary>
+        /// <value>
+        ///   A <see cref="System.Boolean"/> value that is <c>true</c> if a <see cref="Rock.Model.Group"/> of this Content Channel Type will be shown in the Channel list; otherwise <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool ShowInChannelList { get; set; } = true;
 
         #endregion
 
@@ -166,6 +174,29 @@ namespace Rock.Model
         }
 
         #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return ContentChannelTypeCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            ContentChannelTypeCache.UpdateCachedEntity( Id, entityState );
+        }
+
+        #endregion ICacheable
     }
 
     #region Entity Configuration

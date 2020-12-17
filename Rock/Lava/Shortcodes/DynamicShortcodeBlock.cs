@@ -14,26 +14,26 @@
 // limitations under the License.
 // </copyright>
 //
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+
 using DotLiquid;
-using DotLiquid.Exceptions;
 using DotLiquid.Util;
-using Rock.Data;
-using Rock.Web.Cache;
-using Rock.Model;
-using System;
+
 using Rock.Lava.Blocks;
-using System.Dynamic;
+using Rock.Model;
+using Rock.Utility;
+using Rock.Web.Cache;
 
 namespace Rock.Lava.Shortcodes
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class DynamicShortcodeBlock : RockLavaShortcodeBlockBase
     {
@@ -55,7 +55,7 @@ namespace Rock.Lava.Shortcodes
         public override void OnStartup()
         {
             // get all the block dynamic shortcodes and register them
-            var blockShortCodes = LavaShortcodeCache.All( false ).Where( s => s.TagType == TagType.Block );
+            var blockShortCodes = LavaShortcodeCache.All().Where( s => s.TagType == TagType.Block );
 
             foreach(var shortcode in blockShortCodes )
             {
@@ -75,7 +75,7 @@ namespace Rock.Lava.Shortcodes
         {
             _markup = markup;
             _tagName = tagName;
-            _shortcode = LavaShortcodeCache.Read( _tagName );
+            _shortcode = LavaShortcodeCache.All().Where( c => c.TagName == tagName ).FirstOrDefault();
 
             base.Initialize( tagName, markup, tokens );
         }
@@ -157,7 +157,7 @@ namespace Rock.Lava.Shortcodes
                 _enabledSecurityCommands = context.Registers["EnabledCommands"].ToString();
             }
 
-            var shortcode = LavaShortcodeCache.Read( _tagName );
+            var shortcode = LavaShortcodeCache.Get( _shortcode.Id );
 
             if ( shortcode != null )
             {
@@ -166,7 +166,7 @@ namespace Rock.Lava.Shortcodes
                 // add a unique id so shortcodes have easy access to one
                 parms.AddOrReplace( "uniqueid", "id-" + Guid.NewGuid().ToString() );
 
-                // keep track of the recurrsion depth
+                // keep track of the recursion depth
                 int currentRecurrsionDepth = 0;
                 if ( parms.ContainsKey( "RecursionDepth" ) )
                 {
@@ -174,7 +174,7 @@ namespace Rock.Lava.Shortcodes
 
                     if (currentRecurrsionDepth > _maxRecursionDepth )
                     {
-                        result.Write( "A recursive loop was dected and processing of this shortcode has stopped." );
+                        result.Write( "A recursive loop was detected and processing of this shortcode has stopped." );
                         return;
                     }
                 }
@@ -183,7 +183,7 @@ namespace Rock.Lava.Shortcodes
                 var lavaTemplate = shortcode.Markup;
                 var blockMarkup = _blockMarkup.ToString().ResolveMergeFields( _internalMergeFields, _enabledSecurityCommands );
 
-                // pull child paramters from block content
+                // pull child parameters from block content
                 Dictionary<string, object> childParamters;
                 blockMarkup = GetChildParameters( blockMarkup, out childParamters );
                 foreach(var item in childParamters )
@@ -192,18 +192,22 @@ namespace Rock.Lava.Shortcodes
                 }
 
                 // merge the block markup in
-                if ( blockMarkup.IsNotNullOrWhitespace() )
+                if ( blockMarkup.IsNotNullOrWhiteSpace() )
                 {
-                    Regex rgx = new Regex( @"{{\s*blockContent\s*}}", RegexOptions.IgnoreCase );
-                    lavaTemplate = rgx.Replace( lavaTemplate, blockMarkup );
+                    // JME (7/23/2019) Commented out the two lines below and substituted the line after to allow for better
+                    // processing of the block content. Testing was done on all existing shortcodes but leaving
+                    // this code in place in case a future edge case is found. Could/should remove this in the future.
+                    // Regex rgx = new Regex( @"{{\s*blockContent\s*}}", RegexOptions.IgnoreCase );
+                    // lavaTemplate = rgx.Replace( lavaTemplate, blockMarkup );
+                    parms.AddOrReplace( "blockContent", blockMarkup );
 
                     parms.AddOrReplace( "blockContentExists", true );
                 }
                 else
                 {
                     parms.AddOrReplace( "blockContentExists", false );
-                }  
-                
+                }
+
                 // next ensure they did not use any entity commands in the block that are not allowed
                 // this is needed as the shortcode it configured to allow entities for processing that
                 // might allow more entities than the source block, template, action, etc allows
@@ -218,7 +222,7 @@ namespace Rock.Lava.Shortcodes
                 }
                 else
                 {
-                    if ( shortcode.EnabledLavaCommands.IsNotNullOrWhitespace() )
+                    if ( shortcode.EnabledLavaCommands.IsNotNullOrWhiteSpace() )
                     {
                         _enabledSecurityCommands = shortcode.EnabledLavaCommands;
                     }
@@ -254,7 +258,7 @@ namespace Rock.Lava.Shortcodes
                 {
                     int starTagStartIndex = match.Index;
 
-                    // get the name of the paramter
+                    // get the name of the parameter
                     var parmNameMatch = new Regex( @"[\w-]*" ).Match( blockContent, starTagStartIndex + match.Length );
                     if ( parmNameMatch.Success )
                     {
@@ -284,7 +288,7 @@ namespace Rock.Lava.Shortcodes
                             var dynamicParm = new Dictionary<string, Object>();
                             dynamicParm.Add( "content", parmContent );
 
-                            var parmItems = Regex.Matches( tagParms, "(.*?:'[^']+')" )
+                            var parmItems = Regex.Matches( tagParms, @"(\S*?:'[^']+')" )
                                 .Cast<Match>()
                                 .Select( m => m.Value )
                                 .ToList();
@@ -332,7 +336,7 @@ namespace Rock.Lava.Shortcodes
                         matchExists = false;
                         blockContent = blockContent + "Warning: invalid child parameter definition.";
                     }
-                    
+
                 }
                 else
                 {
@@ -349,7 +353,6 @@ namespace Rock.Lava.Shortcodes
         /// <param name="markup">The markup.</param>
         /// <param name="context">The context.</param>
         /// <returns></returns>
-        /// <exception cref="System.Exception">No parameters were found in your command. The syntax for a parameter is parmName:'' (note that you must use single quotes).</exception>
         private Dictionary<string, object> ParseMarkup( string markup, Context context )
         {
             var parms = new Dictionary<string, object>();
@@ -357,20 +360,17 @@ namespace Rock.Lava.Shortcodes
             LoadBlockMergeFields( context, parms );
 
             // create all the parameters from the shortcode with their default values
-            var shortcodeParms = _shortcode.Parameters.Split( '|' ).ToList();
-            foreach ( var shortcodeParm in shortcodeParms )
+            var shortcodeParms = RockSerializableDictionary.FromUriEncodedString( _shortcode.Parameters );
+
+            foreach ( var shortcodeParm in shortcodeParms.Dictionary )
             {
-                var shortcodeParmKV = shortcodeParm.Split( '^' );
-                if ( shortcodeParmKV.Length == 2 )
-                {
-                    parms.AddOrReplace( shortcodeParmKV[0], shortcodeParmKV[1] );
-                }
+                parms.AddOrReplace( shortcodeParm.Key, shortcodeParm.Value );
             }
 
             // first run lava across the inputted markup
             var resolvedMarkup = markup.ResolveMergeFields( _internalMergeFields );
 
-            var markupItems = Regex.Matches( resolvedMarkup, "(.*?:'[^']+')" )
+            var markupItems = Regex.Matches( resolvedMarkup, @"(\S*?:'[^']+')" )
                 .Cast<Match>()
                 .Select( m => m.Value )
                 .ToList();
@@ -383,6 +383,34 @@ namespace Rock.Lava.Shortcodes
                     parms.AddOrReplace( itemParts[0].Trim().ToLower(), itemParts[1].Trim().Substring( 1, itemParts[1].Length - 2 ) );
                 }
             }
+
+            // OK, now let's look for any passed variables ala: name:variable
+            var variableTokens = Regex.Matches( resolvedMarkup, @"\w*:\w+" )
+                .Cast<Match>()
+                .Select( m => m.Value )
+                .ToList();
+
+            foreach ( var item in variableTokens )
+            {
+                var itemParts = item.Trim().Split( new char[] { ':' }, 2 );
+                if ( itemParts.Length > 1 )
+                {
+                    var scopeKey = itemParts[1].Trim();
+
+                    // context.Scopes is a weird beast can't find a cleaner way to get the object than to iterate over it
+                    foreach ( var scopeItem in context.Scopes )
+                    {
+                        var scopeObject = scopeItem.Where( x => x.Key == scopeKey ).FirstOrDefault();
+
+                        if ( scopeObject.Value != null )
+                        {
+                            parms.AddOrReplace( itemParts[0].Trim().ToLower(), scopeObject.Value );
+                            break;
+                        }
+                    }
+                }
+            }
+
             return parms;
         }
 

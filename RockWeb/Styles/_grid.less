@@ -1,4 +1,4 @@
-﻿/*
+/*
     Used to manage styles related to Rock's internal grid component
 
     1. Bootstrap Overrides
@@ -19,23 +19,30 @@
 // -------------------------
 
 /* If th has a required class, render the required field indicator after the column heading */
-.table thead th.required:after {
+.table thead th.required::after {
   margin-left: 4px;
   font-family: @fa-font-face;
-  font-weight: 900;
   font-size: 6px;
+  font-weight: 900;
   color: #eca9a7;
   vertical-align: super;
-  content: '\f111';
+  content: "\f111";
 }
 
 .table > tbody > tr > td {
   color: @grid-row-even-color;
 }
 
-.table-striped > tbody > tr:nth-child(odd) > td, .table-striped > tbody > tr:nth-child(odd) > th {
-  color: @grid-row-odd-color;
-  background-color: @grid-row-odd-bg;
+.table-striped {
+  > tbody > tr:nth-of-type(odd) {
+    color: @grid-row-odd-color;
+    background-color: @grid-row-odd-bg;
+  }
+
+  > tbody > tr:nth-of-type(even) {
+    color: @grid-row-even-color;
+    background-color: @grid-row-even-bg;
+  }
 }
 
 .table.table-hover > tbody > tr:hover > td {
@@ -49,13 +56,13 @@ td.grid-select-cell {
 
 td.wrap-contents {
   -webkit-hyphens: auto;
-     -moz-hyphens: auto;
-          hyphens: auto;
+  -moz-hyphens: auto;
+
+  -ms-hyphens: auto;
+  hyphens: auto;
   // keep cells from scrolling off screen
   -ms-word-break: break-all;
-      word-break: break-all;
-
-      -ms-hyphens: auto;
+  word-break: break-all;
 }
 
 .table {
@@ -113,22 +120,21 @@ td.wrap-contents {
 // 3. Filter
 // -------------------------
 .grid-filter {
-  padding: 6px 12px;
+  padding: 0;
   color: @grid-filter-color;
   background-color: @grid-filter-bg;
   border-bottom: 1px solid @grid-border-color;
   border-radius: @border-radius-base;
 
   header {
-    height: 24px;
-    padding: 4px;
-    text-align: right;
+    position: absolute;
+    display: inline;
     cursor: pointer;
     border-radius: @border-radius-base @border-radius-base 0 0;
 
     h3 {
       display: inline;
-      margin: 0 2px 0 2px;
+      margin: 0 2px 0 6px;
       font-size: 12px;
       font-weight: @font-weight-light;
       line-height: 16px;
@@ -143,6 +149,19 @@ td.wrap-contents {
     }
   }
 
+  .btn-filter-toggle {
+    position: absolute;
+    z-index: 9; // Stack behind Calendars
+    margin: @table-cell-padding;
+    color: @ui-5;
+    text-decoration: none;
+    background: @grid-footer-bg;
+
+    &.is-open {
+      background: @grid-filter-bg;
+    }
+  }
+
   h4 {
     padding-bottom: 8px;
     margin: 12px 0 20px;
@@ -150,7 +169,11 @@ td.wrap-contents {
   }
 
   .grid-filter-entry {
-    margin-bottom: 12px;
+    padding: @panel-body-padding;
+    padding-top: 37px;
+    border-bottom: 1px solid darken(@grid-filter-bg, 10%);
+
+    h4 { display: none; }
   }
 
   // adjust the background color of pickers in the filters
@@ -172,7 +195,7 @@ td.wrap-contents {
   }
 
   fieldset {
-    margin-bottom: 12px;
+    padding: 37px 16px 8px;
   }
 }
 
@@ -187,22 +210,40 @@ td.wrap-contents {
   border-color: @grid-column-header-border-color;
 
   > a:not(.btn) {
-    display: block;
+    display: inline;
     color: @grid-column-header-text-color;
-  }
-  // sorting
-  &.ascending a::before {
-    padding-right: 5px;
-    font-family: @fa-font-face;
-    font-weight: @fa-theme-weight;
-    content: @fa-var-caret-up;
+    &::after {
+      display: inline;
+      width: 15px;
+      padding-left: 5px;
+      font-family: @fa-font-face;
+      font-weight: @fa-theme-weight;
+      color: #8c9ba5;
+      text-decoration: none;
+      content: @fa-var-caret-down;
+      opacity: 0;
+    }
+
+    &:active,
+    &:active::after {
+      color: @link-color;
+    }
   }
 
-  &.descending a::before {
-    padding-right: 5px;
-    font-family: @fa-font-face;
-    font-weight: @fa-theme-weight;
-    content: @fa-var-caret-down;
+  &:hover a:not(.btn)::after {
+    opacity: 1;
+  }
+
+  // sorting
+  &.descending a:not(.btn)::after {
+    color: @grid-column-header-text-color;
+    opacity: 1;
+  }
+
+  &.ascending a:not(.btn)::after {
+    color: @grid-column-header-text-color;
+    content: @fa-var-caret-up;
+    opacity: 1;
   }
 }
 
@@ -217,22 +258,31 @@ td.wrap-contents {
 
 // pagination
 .grid-paging {
-  color: @grid-pager-color;
-  background-color: @grid-pager-bg;
+  padding: 5px 0;
 
-  .pagination {
+  .grid-pager {
     margin-top: 0;
     margin-bottom: 0;
 
     li {
-       > a {
+      > a {
+        min-width: 23px;
+        padding: 5px 12px;
+        margin: 0 8px 0 0;
         color: @grid-pager-button-color;
+        text-align: center;
         background-color: @grid-pager-button-bg;
         border-color: @grid-pager-button-border;
       }
 
+      &.disabled > a {
+        cursor: default;
+      }
+
       &.active > a {
+        color: @grid-pager-button-active-color;
         background-color: @grid-pager-button-active-bg;
+        border-color: @grid-pager-button-active-border;
       }
     }
   }
@@ -243,13 +293,19 @@ td.wrap-contents {
 
   .grid-pagesize {
     float: left;
+    margin: 0 (@padding-base-horizontal / 2) 0 0;
+  }
+
+  .pagination-text {
+    float: left;
+    font-size: 12px;
   }
 
   .grid-itemcount {
     float: left;
     margin-top: 7px;
     margin-left: 10px;
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 
@@ -265,6 +321,9 @@ td.grid-col-actions {
 
   .btn {
     margin-left: 8px;
+  }
+
+  .btn-grid-action {
     color: @grid-footer-button-text-color;
     background-color: @grid-footer-button-bg;
     border-color: @grid-footer-button-border;
@@ -275,7 +334,6 @@ td.grid-col-actions {
 // -------------------------
 
 .table-light {
-  background-color: transparent;
 
   thead th {
     font-weight: @font-weight-bold;
@@ -298,80 +356,87 @@ td.grid-col-actions {
   .grid-columncommand {
     width: 42px;
     min-width: 42px;
-    // get buttons in the light grid to align over the add in the footer
-    text-align: right;
   }
 }
 
-// 7. Disabled Styles
+.well .table-light {
+  > tfoot > tr > td {
+    background-color: @well-bg;
+  }
+}
+
+// 7. Reusable Styles
 // -------------------------
 
 .table-padded {
-  td, th {
+  td,
+  th {
     padding: 12px !important;
   }
 }
 
+.table-empty {
+  opacity: .6;
+}
+
 // 8. Column Types
 // -------------------------
-
 .grid-select-field {
-  min-width: 40px;
-  // checkbox field
-  text-align: center;
 
-  .checkbox, .radio {
-    padding-left: 0;
-    margin: 4px 0 0 0;
+  .checkbox,
+  .radio {
+    padding-left: 0 !important;
+    margin: 0 !important;
+
+    label {
+      position: relative;
+      display: block;
+      width: @custom-control-indicator-size;
+      padding: 0;
+      margin: 0 auto;
+    }
 
     input {
       float: none;
+      height: 100%;
       margin: 0;
-    }
-
-    &:last-child {
-      margin-bottom: 0;
-      margin-left: -12px;
-    }
-
-    label {
-      padding: 0;
+      vertical-align: middle;
     }
   }
-  // future add this: http://webdesign.tutsplus.com/tutorials/quick-tip-easy-css3-checkboxes-and-radio-buttons--webdesign-8953
 }
 
 //
+.table > thead > tr > th.grid-select-field,
 .table > tbody > tr > td.grid-select-field {
-  padding: 12px 12px 0 12px;
+  padding: 0 12px;
+  vertical-align: middle;
 }
 
-.table > thead > tr > th.grid-select-field {
-  padding: 14px 12px 10px 12px;
-}
 
-.grid .table > thead > tr > th,
-.grid .table > tbody > tr > td {
-  // get buttons and text columns to look good together
-  padding: 12px;
+.grid-table {
+  > thead > tr > th,
+  > tbody > tr > td {
+    // get buttons and text columns to look good together
+    padding: 12px;
 
-  &.grid-columncommand {
-    min-width: 48px;
-  }
+    &.grid-columncommand {
+      min-width: 48px;
+    }
 
-  &.grid-columnreorder {
-    width: 48px;
-    min-width: 48px;
-    padding-top: 12px;
+    &.grid-columnreorder {
+      width: 48px;
+      min-width: 48px;
+      padding-top: 12px;
 
-    a {
-      color: lighten(@text-color, 20%);
+      a {
+        color: lighten(@text-color, 20%);
+      }
     }
   }
-}
 
-.grid .table > tbody > tr > td.grid-columncommand {
-  padding: 6px;
+  > tbody > tr > td.grid-columncommand {
+    padding: 6px;
+  }
 }
 
 .table .color-field {
@@ -388,11 +453,20 @@ td.grid-col-actions {
   max-width: 120px;
 }
 
+.grid-select-cell {
+  .photo-icon {
+    display: inline-block;
+    width: @line-height-computed;
+    height: @line-height-computed;
+    vertical-align: top;
+  }
+}
+
 
 // 9. Row Types
 // -------------------------
 .table > tbody > tr.grid-section-header {
-   > td {
+  > td {
     color: @grid-section-color;
     background-color: @grid-section-bg;
   }
@@ -427,25 +501,26 @@ tr.row-highlight {
   }
 
   &:hover td {
+    color: @grid-column-header-bold-color !important;
     background-color: lighten(@grid-column-header-bold-bg, 10%);
   }
 }
 
 // inactive row
 .table > tbody > tr.is-inactive {
-   > td {
+  > td {
     color: lighten(@grid-row-even-color, 30%);
   }
 }
 
 .table > tbody > tr.is-inactive-person {
-   > td {
+  > td {
     color: lighten(@grid-row-even-color, 30%);
   }
 }
 
 .table > tbody > tr.is-deceased {
-   > td {
+  > td {
     color: @brand-danger;
   }
 }
@@ -461,10 +536,8 @@ tr.row-highlight {
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   -ms-overflow-style: -ms-autohiding-scrollbar;
-}
 
-// classes to show and hide columns based on their priority
-.table-responsive {
+  // classes to show and hide columns based on their priority
   th[data-priority],
   td[data-priority] {
     display: none;

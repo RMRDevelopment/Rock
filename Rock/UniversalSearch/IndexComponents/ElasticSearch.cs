@@ -20,12 +20,11 @@ using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using Elasticsearch.Net;
+
 using Nest;
-using Newtonsoft.Json;
+
 using Newtonsoft.Json.Linq;
+
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
@@ -65,6 +64,10 @@ namespace Rock.UniversalSearch.IndexComponents
                 if ( _client == null )
                 {
                     ConnectToServer();
+                    if ( _client == null )
+                    {
+                        return false;
+                    }
                 }
 
                 return (_client.Ping().IsValid);
@@ -462,7 +465,7 @@ namespace Rock.UniversalSearch.IndexComponents
                                         d.AllIndices().AllTypes()
                                         .Query( q =>
                                             q.Fuzzy( f => f.Value( query )
-                                            .Rewrite( RewriteMultiTerm.TopTermsN ) )
+                                                .Rewrite(MultiTermQueryRewrite.TopTerms(size ?? 10)) )
                                         )
                                     );
                             break;
@@ -490,7 +493,7 @@ namespace Rock.UniversalSearch.IndexComponents
                                     {
                                         if ( !string.IsNullOrWhiteSpace( queryTerm ) )
                                         {
-                                            wildcardQuery &= new QueryStringQuery { Query = queryTerm + "*", Analyzer = "whitespace", Rewrite = RewriteMultiTerm.ScoringBoolean }; // without the rewrite all results come back with the score of 1; analyzer of whitespaces says don't fancy parse things like check-in to 'check' and 'in'
+                                            wildcardQuery &= new QueryStringQuery { Query = queryTerm + "*", Analyzer = "whitespace", MultiTermQueryRewrite = MultiTermQueryRewrite.ScoringBoolean }; // without the rewrite all results come back with the score of 1; analyzer of whitespaces says don't fancy parse things like check-in to 'check' and 'in'
                                         }
                                     }
 
@@ -538,7 +541,7 @@ namespace Rock.UniversalSearch.IndexComponents
 
                             var indexBoost = GlobalAttributesCache.Value( "UniversalSearchIndexBoost" );
 
-                            if ( indexBoost.IsNotNullOrWhitespace() )
+                            if ( indexBoost.IsNotNullOrWhiteSpace() )
                             {
                                 var boostItems = indexBoost.Split( new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries );
                                 foreach (var boostItem in boostItems )
@@ -561,7 +564,7 @@ namespace Rock.UniversalSearch.IndexComponents
 
                 totalResultsAvailable = results.Total;
 
-                // normallize the results to rock search results
+                // normalize the results to rock search results
                 if ( results != null )
                 {
                     foreach ( var hit in results.Hits )

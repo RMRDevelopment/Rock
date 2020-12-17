@@ -41,11 +41,29 @@ namespace RockWeb.Blocks.Administration
         #region Fields
 
         private bool canConfigure = false;
-        private Rock.Web.Cache.PageCache _page = null;
+        private PageCache _page = null;
 
         #endregion
 
         #region Properties
+
+        /// <summary>
+        /// Gets or sets the page identifier being deleted.
+        /// </summary>
+        /// <value>
+        /// The page identifier being deleted.
+        /// </value>
+        private int? PageIdBeingDeleted
+        {
+            get
+            {
+                return ViewState["PageIdBeingDeleted"].ToStringSafe().AsIntegerOrNull();
+            }
+            set
+            {
+                ViewState["PageIdBeingDeleted"] = value;
+            }
+        }
 
         /// <summary>
         /// Gets or sets a value indicating whether [page updated].
@@ -87,7 +105,7 @@ namespace RockWeb.Blocks.Administration
             try
             {
                 int pageId = Convert.ToInt32( PageParameter( "EditPage" ) );
-                _page = Rock.Web.Cache.PageCache.Read( pageId );
+                _page = PageCache.Get( pageId );
 
                 if ( _page != null )
                 {
@@ -107,6 +125,12 @@ namespace RockWeb.Blocks.Administration
                     rGrid.Actions.ShowMergeTemplate = false;
                     rGrid.GridReorder += new GridReorderEventHandler( rGrid_GridReorder );
                     rGrid.GridRebind += new GridRebindEventHandler( rGrid_GridRebind );
+
+                    DialogPage dialogPage = this.Page as DialogPage;
+                    if ( dialogPage != null && _page.ParentPageId != null )
+                    {
+                        dialogPage.SubTitle = string.Format( "<a href='{0}' target='_parent' >parent page</a>", ResolveRockUrl("~/page/" + _page.ParentPageId ) );
+                    }
                 }
                 else
                 {
@@ -159,16 +183,6 @@ namespace RockWeb.Blocks.Administration
             var childPages = pageService.GetByParentPageId( _page.Id ).ToList();
             pageService.Reorder( childPages, e.OldIndex, e.NewIndex );
             rockContext.SaveChanges();
-
-            Rock.Web.Cache.PageCache.Flush( _page.Id );
-
-            foreach ( var page in childPages )
-            {
-                // make sure the PageCache for all the re-ordered pages get flushed so the new Order is updated
-                Rock.Web.Cache.PageCache.Flush( page.Id );
-            }
-
-            _page.FlushChildPages();
             PageUpdated = true;
 
             BindGrid();
@@ -191,16 +205,33 @@ namespace RockWeb.Blocks.Administration
         /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
         protected void rGrid_Delete( object sender, RowEventArgs e )
         {
+            PageIdBeingDeleted = e.RowKeyId;
+            mdDeleteModal.Show();
+        }
+
+        /// <summary>
+        /// Handles the DeleteClick event of the mdDeleteModal control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
+        protected void mdDeleteModal_SaveClick( object sender, EventArgs e )
+        {
+            if ( !PageIdBeingDeleted.HasValue )
+            {
+                return;
+            }
+
             var rockContext = new RockContext();
             var pageService = new PageService( rockContext );
             var siteService = new SiteService( rockContext );
 
-            var page = pageService.Get( e.RowKeyId );
+            var page = pageService.Get( PageIdBeingDeleted.Value );
             if ( page != null )
             {
                 string errorMessage = string.Empty;
                 if ( !pageService.CanDelete( page, out errorMessage ) )
                 {
+                    mdDeleteModal.Hide();
                     mdDeleteWarning.Show( errorMessage, ModalAlertType.Alert );
                     return;
                 }
@@ -228,17 +259,19 @@ namespace RockWeb.Blocks.Administration
 
                 pageService.Delete( page );
 
+                if ( cbDeleteInteractions.Checked )
+                {
+                    var interactionComponentService = new InteractionComponentService( rockContext );
+                    var componentQuery = interactionComponentService.QueryByPage( page );
+                    interactionComponentService.DeleteRange( componentQuery );
+                }
+
                 rockContext.SaveChanges();
 
-                Rock.Web.Cache.PageCache.Flush( page.Id );
                 PageUpdated = true;
-
-                if ( _page != null )
-                {
-                    _page.FlushChildPages();
-                }
             }
 
+            mdDeleteModal.Hide();
             BindGrid();
         }
 
@@ -335,7 +368,7 @@ namespace RockWeb.Blocks.Administration
                     else
                     {
                         page.ParentPageId = null;
-                        page.LayoutId = PageCache.Read( RockPage.PageId ).LayoutId;
+                        page.LayoutId = PageCache.Get( RockPage.PageId ).LayoutId;
                     }
 
                     page.PageTitle = dtbPageName.Text;
@@ -368,12 +401,10 @@ namespace RockWeb.Blocks.Administration
                 if ( page.IsValid )
                 {
                     rockContext.SaveChanges();
-
-                    PageCache.Flush( page.Id );
+                    
                     if ( _page != null )
                     {
                         Rock.Security.Authorization.CopyAuthorization( _page, page, rockContext );
-                        _page.FlushChildPages();
                     }
 
                     BindGrid();
@@ -481,6 +512,5 @@ namespace RockWeb.Blocks.Administration
         }
 
         #endregion
-
     }
 }

@@ -14,9 +14,13 @@
 // limitations under the License.
 // </copyright>
 //
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http;
+using System.Security.Claims;
 using System.Web.Http;
-
+using Microsoft.IdentityModel.Tokens;
+using Rock.Data;
 using Rock.Model;
 using Rock.Security;
 
@@ -33,95 +37,49 @@ namespace Rock.Rest.Controllers
         /// <param name="loginParameters">The login parameters.</param>
         /// <exception cref="System.Web.Http.HttpResponseException"></exception>
         [HttpPost]
-        [System.Web.Http.Route("api/Auth/Login")]
+        [System.Web.Http.Route( "api/Auth/Login" )]
         public void Login( [FromBody]LoginParameters loginParameters )
         {
-            bool valid = false;
-
-            var userLoginService = new UserLoginService( new Rock.Data.RockContext() );
-            var userLogin = userLoginService.GetByUserName( loginParameters.Username );
-            if ( userLogin != null && userLogin.EntityType != null) 
+            if ( !IsLoginValid( loginParameters ) )
             {
-                var component = AuthenticationContainer.GetComponent(userLogin.EntityType.Name);
-                if ( component != null && component.IsActive)
+                throw new HttpResponseException( HttpStatusCode.Unauthorized );
+            }
+
+            Rock.Security.Authorization.SetAuthCookie( loginParameters.Username, loginParameters.Persisted, false );
+        }
+
+        /// <summary>
+        /// Check if the login parameters are valid
+        /// </summary>
+        /// <param name="loginParameters"></param>
+        /// <returns></returns>
+        private bool IsLoginValid( LoginParameters loginParameters )
+        {
+            if ( loginParameters == null || loginParameters.Username.IsNullOrWhiteSpace() )
+            {
+                return false;
+            }
+
+            UserLogin userLogin;
+            using ( var rockContext = new RockContext() )
+            {
+                var userLoginService = new UserLoginService( rockContext );
+                userLogin = userLoginService.GetByUserName( loginParameters.Username );
+
+                if ( userLogin == null || userLogin.EntityType == null )
                 {
-                    if ( component.Authenticate( userLogin, loginParameters.Password ) )
-                    {
-                        valid = true;
-                        Rock.Security.Authorization.SetAuthCookie( loginParameters.Username, loginParameters.Persisted, false );
-                    }
+                    return false;
                 }
             }
 
-            if ( !valid )
-            {
-                throw new HttpResponseException( HttpStatusCode.Unauthorized );
-            }
-        }
+            var component = AuthenticationContainer.GetComponent( userLogin.EntityType.Name );
 
-        /// <summary>
-        /// Use this to Login a user and return an AuthCookie which can be used in subsequent REST calls
-        /// </summary>
-        /// <param name="facebookUser">The facebook user.</param>
-        /// <exception cref="HttpResponseException"></exception>
-        /// <exception cref="System.Web.Http.HttpResponseException"></exception>
-        [HttpPost]
-        [System.Web.Http.Route( "api/Auth/FacebookLogin" )]
-        public void FacebookLogin( [FromBody]Rock.Security.ExternalAuthentication.Facebook.FacebookUser facebookUser )
-        {
-            string userName = Rock.Security.ExternalAuthentication.Facebook.GetFacebookUserName( facebookUser );
-            if ( !string.IsNullOrWhiteSpace( userName ) )
+            if ( component == null || !component.IsActive )
             {
-                Rock.Security.Authorization.SetAuthCookie( userName, false, false );
+                return false;
             }
-            else
-            {
-                throw new HttpResponseException( HttpStatusCode.Unauthorized );
-            }
-        }
 
-        /// <summary>
-        /// Use this to Login a user and return an AuthCookie which can be used in subsequent REST calls
-        /// </summary>
-        /// <param name="googleUser">The google user.</param>
-        /// <exception cref="HttpResponseException"></exception>
-        /// <exception cref="System.Web.Http.HttpResponseException"></exception>
-        [HttpPost]
-        [System.Web.Http.Route("api/Auth/GoogleLogin")]
-        public void GoogleLogin( [FromBody]Rock.Security.ExternalAuthentication.Google.GoogleUser googleUser )
-        {
-            string userName = Rock.Security.ExternalAuthentication.Google.GetGoogleUser(googleUser);
-            if ( !string.IsNullOrWhiteSpace(userName) )
-            {
-                Rock.Security.Authorization.SetAuthCookie(userName, false, false);
-            }
-            else
-            {
-                throw new HttpResponseException(HttpStatusCode.Unauthorized);
-            }
+            return component.Authenticate( userLogin, loginParameters.Password );
         }
-
-        /// <summary>
-        /// Use this to Login a user and return an AuthCookie which can be used in subsequent REST calls
-        /// </summary>
-        /// <param name="twitterUser">The twitter user.</param>
-        /// <exception cref="HttpResponseException"></exception>
-        /// <exception cref="System.Web.Http.HttpResponseException"></exception>
-        [HttpPost]
-        [System.Web.Http.Route( "api/Auth/TwitterLogin" )]
-        public void TwitterLogin( [FromBody]Rock.Security.ExternalAuthentication.Twitter.TwitterUser twitterUser )
-        {
-            string userName = Rock.Security.ExternalAuthentication.Twitter.GetTwitterUser( twitterUser );
-            if ( !string.IsNullOrWhiteSpace( userName ) )
-            {
-                Rock.Security.Authorization.SetAuthCookie( userName, false, false );
-            }
-            else
-            {
-                throw new HttpResponseException( HttpStatusCode.Unauthorized );
-            }
-        }
-
     }
-
 }

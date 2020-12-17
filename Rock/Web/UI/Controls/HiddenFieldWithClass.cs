@@ -16,14 +16,13 @@
 //
 using System.ComponentModel;
 using System.Web.UI;
-using System.Web.UI.WebControls;
 
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
     /// from http://stackoverflow.com/a/8761161/1755417
     /// </summary>
-    public class HiddenFieldWithClass : HiddenField
+    public class HiddenFieldWithClass : HiddenFieldWithValidationProperty
     {
         /// <summary>
         /// Gets or sets the CSS class.

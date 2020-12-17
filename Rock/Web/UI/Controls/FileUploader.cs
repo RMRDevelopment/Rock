@@ -22,6 +22,7 @@ using System.Web.Configuration;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 
@@ -253,6 +254,23 @@ namespace Rock.Web.UI.Controls
 
         #region Properties
 
+
+        /// <summary>
+        /// Gets or sets the text displayed when the mouse pointer hovers over the Web server control.
+        /// </summary>
+        public override string ToolTip
+        {
+            get
+            {
+                return ViewState["ToolTip"] as string;
+            }
+
+            set
+            {
+                ViewState["ToolTip"] = value;
+            }
+        }
+
         /// <summary>
         /// Gets or sets the binary file id.
         /// </summary>
@@ -279,7 +297,15 @@ namespace Rock.Web.UI.Controls
             set
             {
                 EnsureChildControls();
-                _hfBinaryFileId.Value = value.ToString();
+
+                if ( value.HasValue )
+                {
+                    _hfBinaryFileId.Value = value.ToString();
+                }
+                else
+                {
+                    _hfBinaryFileId.Value = "0";
+                }
             }
         }
 
@@ -425,7 +451,7 @@ namespace Rock.Web.UI.Controls
         Bindable( true ),
         Category( "Behavior" ),
         DefaultValue( "true" ),
-        Description( "The Url where files will be uploaded to" )
+        Description( "The URL where files will be uploaded to" )
         ]
         public string UploadUrl
         {
@@ -443,6 +469,30 @@ namespace Rock.Web.UI.Controls
             set
             {
                 ViewState["UploadUrl"] = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the upload button text.
+        /// </summary>
+        /// <value>
+        /// The upload button text.
+        /// </value>
+        public string UploadButtonText
+        {
+            get
+            {
+                string text = ( string ) ViewState["UploadButtonText"];
+                if ( text.IsNullOrWhiteSpace())
+                {
+                    text = this.DisplayMode == UploaderDisplayMode.Button ? "Upload File" : "Upload";
+                }
+
+                return text;
+            }
+            set
+            {
+                ViewState["UploadButtonText"] = value;
             }
         }
 
@@ -538,7 +588,7 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public enum UploaderDisplayMode
         {
@@ -548,9 +598,14 @@ namespace Rock.Web.UI.Controls
             DropZone,
 
             /// <summary>
-            /// As a button
+            /// As a primary button
             /// </summary>
-            Button
+            Button,
+
+            /// <summary>
+            /// As a default button
+            /// </summary>
+            DefaultButton
         }
 
         /// <summary>
@@ -603,6 +658,7 @@ namespace Rock.Web.UI.Controls
             _aRemove.HRef = "#";
             _aRemove.InnerHtml = "<i class='fa fa-times'></i>";
             _aRemove.Attributes["class"] = "remove-file";
+            _aRemove.Attributes["title"] = "Remove File";
 
             _fileUpload = new FileUpload();
             Controls.Add( _fileUpload );
@@ -611,6 +667,8 @@ namespace Rock.Web.UI.Controls
             RequiredFieldValidator.InitialValue = "0";
             RequiredFieldValidator.ControlToValidate = _hfBinaryFileId.ID;
             RequiredFieldValidator.Display = ValidatorDisplay.Dynamic;
+            RequiredFieldValidator.CssClass = "validation-error help-inline";
+            RequiredFieldValidator.ErrorMessage = this.RequiredErrorMessage;
         }
 
         /// <summary>
@@ -626,7 +684,7 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
-        /// This is where you implment the simple aspects of rendering your control.  The rest
+        /// This is where you implement the simple aspects of rendering your control.  The rest
         /// will be handled by calling RenderControlHelper's RenderControl() method.
         /// </summary>
         /// <param name="writer">The writer.</param>
@@ -634,6 +692,12 @@ namespace Rock.Web.UI.Controls
         {
             writer.AddAttribute( "class", "fileupload-group" );
             writer.AddAttribute( "id", this.ClientID );
+
+            if ( ToolTip.IsNotNullOrWhiteSpace() )
+            {
+                writer.AddAttribute( "title", ToolTip );
+            }
+
             writer.RenderBeginTag( HtmlTextWriterTag.Div );
 
             if ( BinaryFileId != null || !string.IsNullOrWhiteSpace( this.UploadedContentFilePath ) )
@@ -645,7 +709,7 @@ namespace Rock.Web.UI.Controls
                 }
                 else
                 {
-                    _aFileName.HRef = string.Format( "{0}GetFile.ashx?isBinaryFile=F&rootFolder={1}&fileName={2}", ResolveUrl( "~" ), Rock.Security.Encryption.EncryptString( this.RootFolder ), BinaryFileId );
+                    _aFileName.HRef = ResolveUrl( this.UploadedContentFilePath );
                     _aFileName.InnerText = this.UploadedContentFilePath;
                 }
 
@@ -684,9 +748,12 @@ namespace Rock.Web.UI.Controls
                     writer.RenderEndTag();
                 }
 
-                writer.Write( @"
-                    <div class='js-upload-progress upload-progress' style='display:none;'>
-                        <i class='fa fa-refresh fa-3x fa-spin'></i>
+                string uploadClass = this.DisplayMode == UploaderDisplayMode.DefaultButton ? "upload-progress-sm" : "upload-progress";
+                string spinnerSize = this.DisplayMode == UploaderDisplayMode.DefaultButton ? "fa-lg" : "fa-3x";
+
+                writer.Write( $@"
+                    <div class='js-upload-progress {uploadClass}' style='display:none;'>
+                        <i class='fa fa-refresh {spinnerSize} fa-spin'></i>
                         <div class='js-upload-progress-percent'></div>
                     </div>" );
 
@@ -694,23 +761,21 @@ namespace Rock.Web.UI.Controls
                 {
                     writer.AddAttribute(HtmlTextWriterAttribute.Class, "fileupload-button");
                 }
+                else if ( this.DisplayMode == UploaderDisplayMode.DefaultButton )
+                {
+                    writer.AddAttribute( HtmlTextWriterAttribute.Class, "fileuploaddefault-button" );
+                }
                 else
                 {
                     writer.AddAttribute(HtmlTextWriterAttribute.Class, "fileupload-dropzone");
                 }
 
                 writer.RenderBeginTag( HtmlTextWriterTag.Div );
-                writer.RenderBeginTag( HtmlTextWriterTag.Span );
-                if ( this.DisplayMode == UploaderDisplayMode.Button )
-                {
-                    writer.Write( "Upload File" );
-                }
-                else
-                {
-                    writer.Write( "Upload" );
-                }
 
+                writer.RenderBeginTag( HtmlTextWriterTag.Span );
+                writer.Write( this.UploadButtonText );
                 writer.RenderEndTag();
+
                 _fileUpload.Attributes["name"] = string.Format( "{0}[]", this.ID );
                 _fileUpload.RenderControl( writer );
                 writer.RenderEndTag();
@@ -856,7 +921,7 @@ Rock.controls.fileUploader.initialize({{
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class FileUploaderEventArgs : EventArgs
     {

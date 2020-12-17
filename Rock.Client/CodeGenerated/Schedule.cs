@@ -59,10 +59,10 @@ namespace Rock.Client
         public string ForeignKey { get; set; }
 
         /// <summary />
-        public string iCalendarContent { get; set; }
+        public string iCalendarContent { get; set; } = @"";
 
         /// <summary />
-        public bool IsActive { get; set; }
+        public bool IsActive { get; set; } = true;
 
         /// <summary>
         /// If the ModifiedByPersonAliasId is being set manually and should not be overwritten with current user when saved, set this value to true
@@ -71,6 +71,9 @@ namespace Rock.Client
 
         /// <summary />
         public string Name { get; set; }
+
+        /// <summary />
+        public int Order { get; set; }
 
         /// <summary />
         public int /* DayOfWeek*/? WeeklyDayOfWeek { get; set; }
@@ -123,6 +126,7 @@ namespace Rock.Client
             this.IsActive = source.IsActive;
             this.ModifiedAuditValuesAlreadyUpdated = source.ModifiedAuditValuesAlreadyUpdated;
             this.Name = source.Name;
+            this.Order = source.Order;
             this.WeeklyDayOfWeek = source.WeeklyDayOfWeek;
             this.WeeklyTimeOfDay = source.WeeklyTimeOfDay;
             this.CreatedDateTime = source.CreatedDateTime;

@@ -15,12 +15,12 @@
 // </copyright>
 //
 using System;
-using System.Web.Http;
 using System.Collections.Generic;
 using System.Linq;
-using Rock.Web.Cache;
-using Rock.Web.UI.Controls;
+using System.Web.Http;
+
 using Rock.Rest.Filters;
+using Rock.Web.Cache;
 
 namespace Rock.Rest.Controllers
 {
@@ -62,7 +62,7 @@ namespace Rock.Rest.Controllers
 
                 foreach ( var additionalMergeObject in additionalMergeObjectList )
                 {
-                    var entityTypeType = EntityTypeCache.Read( additionalMergeObject.EntityTypeId )?.GetEntityType();
+                    var entityTypeType = EntityTypeCache.Get( additionalMergeObject.EntityTypeId )?.GetEntityType();
                     if ( entityTypeType != null )
                     {
                         var dbContext = Rock.Reflection.GetDbContextForEntityType( entityTypeType );

@@ -21,7 +21,6 @@ using System.ComponentModel.Composition;
 using System.Data.Entity;
 using System.Linq;
 
-using Rock.Attribute;
 using Rock.CheckIn;
 using Rock.Data;
 using Rock.Model;
@@ -30,10 +29,10 @@ using Rock.Web.Cache;
 namespace Rock.Workflow.Action.CheckIn
 {
     /// <summary>
-    /// Finds families based on a given search critieria (i.e. phone, barcode, etc)
+    /// Finds families based on a given search criteria (i.e. phone, barcode, etc)
     /// </summary>
     [ActionCategory( "Check-In" )]
-    [Description( "Finds families based on a given search critieria (i.e. phone, barcode, etc)" )]
+    [Description( "Finds families based on a given search criteria (i.e. phone, barcode, etc)" )]
     [Export( typeof( ActionComponent ) )]
     [ExportMetadata( "ComponentName", "Find Families" )]
     public class FindFamilies : CheckInActionComponent
@@ -60,9 +59,9 @@ namespace Rock.Workflow.Action.CheckIn
                     var memberService = new GroupMemberService( rockContext );
                     var groupService = new GroupService( rockContext );
 
-                    int personRecordTypeId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
-                    int familyGroupTypeId = GroupTypeCache.Read( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() ).Id;
-                    var dvInactive = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE.AsGuid() );
+                    int personRecordTypeId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
+                    int familyGroupTypeId = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() ).Id;
+                    var dvInactive = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_INACTIVE.AsGuid() );
 
                     IQueryable<int> familyIdQry = null;
 
@@ -100,7 +99,7 @@ namespace Rock.Workflow.Action.CheckIn
                     else
                     {
                         var familyMemberQry = memberService
-                            .Queryable().AsNoTracking()
+                            .AsNoFilter().AsNoTracking()
                             .Where( m =>
                                 m.Group.GroupTypeId == familyGroupTypeId &&
                                 m.Person.RecordTypeValueId == personRecordTypeId );
@@ -112,22 +111,52 @@ namespace Rock.Workflow.Action.CheckIn
                         }
                         else if ( checkInState.CheckIn.SearchType.Guid.Equals( SystemGuid.DefinedValue.CHECKIN_SEARCH_TYPE_SCANNED_ID.AsGuid() ) )
                         {
-                            var entityIds = new List<int>();
+                            var personIds = new List<int>();
 
-                            var attributeValueService = new AttributeValueService( rockContext );
-                            var attr = AttributeCache.Read( SystemGuid.Attribute.FAMILY_CHECKIN_IDENTIFIERS.AsGuid() );
-                            if ( attr != null )
+                            var dv = DefinedValueCache.Get( SystemGuid.DefinedValue.PERSON_SEARCH_KEYS_ALTERNATE_ID.AsGuid() );
+                            if ( dv != null )
                             {
-                                entityIds = new AttributeValueService( rockContext )
-                                    .Queryable().AsNoTracking()
+                                var searchValueService = new PersonSearchKeyService( rockContext );
+                                var personAliases = searchValueService.Queryable().AsNoTracking()
                                     .Where( v =>
-                                        v.AttributeId == attr.Id &&
-                                        v.EntityId.HasValue &&
-                                        ( "|" + v.Value + "|" ).Contains( "|" + checkInState.CheckIn.SearchValue + "|" ) )
-                                    .Select( v => v.EntityId.Value )
-                                    .ToList();
+                                        v.SearchTypeValueId == dv.Id &&
+                                        v.SearchValue == checkInState.CheckIn.SearchValue )
+                                    .Select( v => v.PersonAlias );
+
+                                if ( personAliases.Any() )
+                                {
+                                    checkInState.CheckIn.CheckedInByPersonAliasId = personAliases.First().Id;
+                                    personIds = personAliases.Select( a => a.PersonId ).ToList();
+                                }
                             }
-                            familyMemberQry = familyMemberQry.Where( f => entityIds.Contains( f.GroupId ) );
+
+                            if ( personIds.Any() )
+                            {
+                                familyMemberQry = familyMemberQry.Where( f => personIds.Contains( f.PersonId ) );
+                            }
+                            else
+                            {
+                                // if there were no matches, try to find a family check-in identifier. V8 has a "run once" job that moves the family identifiers
+                                // to person search values, but in case the job has not yet completed, will still do the check for family ids.
+                                var entityIds = new List<int>();
+
+                                var attributeValueService = new AttributeValueService( rockContext );
+                                var attr = AttributeCache.Get( "8F528431-A438-4488-8DC3-CA42E66C1B37".AsGuid() );
+                                if ( attr != null )
+                                {
+                                    entityIds = new AttributeValueService( rockContext )
+                                        .Queryable().AsNoTracking()
+                                        .Where( v =>
+                                            v.AttributeId == attr.Id &&
+                                            v.EntityId.HasValue &&
+                                            ( "|" + v.Value + "|" ).Contains( "|" + checkInState.CheckIn.SearchValue + "|" ) )
+                                        .Select( v => v.EntityId.Value )
+                                        .ToList();
+                                }
+
+                                familyMemberQry = familyMemberQry.Where( f => entityIds.Contains( f.GroupId ) );
+                            }
+
                         }
                         else if ( checkInState.CheckIn.SearchType.Guid.Equals( SystemGuid.DefinedValue.CHECKIN_SEARCH_TYPE_FAMILY_ID.AsGuid() ) )
                         {
@@ -151,28 +180,42 @@ namespace Rock.Workflow.Action.CheckIn
                         familyIdQry = familyIdQry.Take( maxResults );
                     }
 
-                    var familyIds = familyIdQry.ToList();
+                    // You might think we should do a ToList() on the familyIdQry and use it below,
+                    // but through some extensive testing, we discovered that the next SQL query is better
+                    // optimized if it has the familyIdQry without being to-listed.  It was over 270% slower
+                    // when querying names and 120% slower when querying phone numbers.
 
                     // Load the family members
                     var familyMembers = memberService
-                        .Queryable( "Group,GroupRole,Person" ).AsNoTracking()
-                        .Where( m => familyIds.Contains( m.GroupId ) )
+                        .Queryable().AsNoTracking()
+                        .Where( m => m.Group.GroupTypeId == familyGroupTypeId && familyIdQry.Contains( m.GroupId ) ).Select( a =>
+                        new {
+                            Group = a.Group,
+                            GroupId = a.GroupId,
+                            Order = a.GroupRole.Order,
+                            BirthYear = a.Person.BirthYear,
+                            BirthMonth = a.Person.BirthMonth,
+                            BirthDay = a.Person.BirthDay,
+                            Gender = a.Person.Gender,
+                            NickName = a.Person.NickName,
+                            RecordStatusValueId = a.Person.RecordStatusValueId
+                        } )
                         .ToList();
 
                     // Add each family
-                    foreach ( int familyId in familyIds )
+                    foreach ( int familyId in familyMembers.Select( fm => fm.GroupId ).Distinct() )
                     {
                         // Get each of the members for this family
                         var familyMemberQry = familyMembers
                             .Where( m =>
                                 m.GroupId == familyId &&
-                                m.Person.NickName != null );
+                                m.NickName != null );
 
                         if ( checkInState.CheckInType != null && checkInState.CheckInType.PreventInactivePeople && dvInactive != null )
                         {
                             familyMemberQry = familyMemberQry
                                 .Where( m =>
-                                    m.Person.RecordStatusValueId != dvInactive.Id );
+                                    m.RecordStatusValueId != dvInactive.Id );
                         }
 
                         var thisFamilyMembers = familyMemberQry.ToList();
@@ -184,17 +227,18 @@ namespace Rock.Workflow.Action.CheckIn
                                 .FirstOrDefault();
 
                             var firstNames = thisFamilyMembers
-                                .OrderBy( m => m.GroupRole.Order )
-                                .ThenBy( m => m.Person.BirthYear )
-                                .ThenBy( m => m.Person.BirthMonth )
-                                .ThenBy( m => m.Person.BirthDay )
-                                .ThenBy( m => m.Person.Gender )
-                                .Select( m => m.Person.NickName )
+                                .OrderBy( m => m.Order )
+                                .ThenBy( m => m.BirthYear )
+                                .ThenBy( m => m.BirthMonth )
+                                .ThenBy( m => m.BirthDay )
+                                .ThenBy( m => m.Gender )
+                                .Select( m => m.NickName )
                                 .ToList();
 
                             var family = new CheckInFamily();
                             family.Group = group.Clone( false );
                             family.Caption = group.ToString();
+                            family.FirstNames = firstNames;
                             family.SubCaption = firstNames.AsDelimited( ", " );
                             checkInState.CheckIn.Families.Add( family );
                         }

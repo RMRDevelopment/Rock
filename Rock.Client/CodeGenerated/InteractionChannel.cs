@@ -53,6 +53,15 @@ namespace Rock.Client
         public int? ComponentCacheDuration { get; set; }
 
         /// <summary />
+        public string ComponentCustom1Label { get; set; }
+
+        /// <summary />
+        public string ComponentCustom2Label { get; set; }
+
+        /// <summary />
+        public string ComponentCustomIndexed1Label { get; set; }
+
+        /// <summary />
         public string ComponentDetailTemplate { get; set; }
 
         /// <summary />
@@ -62,10 +71,22 @@ namespace Rock.Client
         public string ComponentListTemplate { get; set; }
 
         /// <summary />
+        public int? EngagementStrength { get; set; }
+
+        /// <summary />
         public Guid? ForeignGuid { get; set; }
 
         /// <summary />
         public string ForeignKey { get; set; }
+
+        /// <summary />
+        public string InteractionCustom1Label { get; set; }
+
+        /// <summary />
+        public string InteractionCustom2Label { get; set; }
+
+        /// <summary />
+        public string InteractionCustomIndexed1Label { get; set; }
 
         /// <summary />
         public string InteractionDetailTemplate { get; set; }
@@ -75,6 +96,9 @@ namespace Rock.Client
 
         /// <summary />
         public string InteractionListTemplate { get; set; }
+
+        /// <summary />
+        public bool IsActive { get; set; } = true;
 
         /// <summary>
         /// If the ModifiedByPersonAliasId is being set manually and should not be overwritten with current user when saved, set this value to true
@@ -135,14 +159,22 @@ namespace Rock.Client
             this.ChannelListTemplate = source.ChannelListTemplate;
             this.ChannelTypeMediumValueId = source.ChannelTypeMediumValueId;
             this.ComponentCacheDuration = source.ComponentCacheDuration;
+            this.ComponentCustom1Label = source.ComponentCustom1Label;
+            this.ComponentCustom2Label = source.ComponentCustom2Label;
+            this.ComponentCustomIndexed1Label = source.ComponentCustomIndexed1Label;
             this.ComponentDetailTemplate = source.ComponentDetailTemplate;
             this.ComponentEntityTypeId = source.ComponentEntityTypeId;
             this.ComponentListTemplate = source.ComponentListTemplate;
+            this.EngagementStrength = source.EngagementStrength;
             this.ForeignGuid = source.ForeignGuid;
             this.ForeignKey = source.ForeignKey;
+            this.InteractionCustom1Label = source.InteractionCustom1Label;
+            this.InteractionCustom2Label = source.InteractionCustom2Label;
+            this.InteractionCustomIndexed1Label = source.InteractionCustomIndexed1Label;
             this.InteractionDetailTemplate = source.InteractionDetailTemplate;
             this.InteractionEntityTypeId = source.InteractionEntityTypeId;
             this.InteractionListTemplate = source.InteractionListTemplate;
+            this.IsActive = source.IsActive;
             this.ModifiedAuditValuesAlreadyUpdated = source.ModifiedAuditValuesAlreadyUpdated;
             this.Name = source.Name;
             this.RetentionDuration = source.RetentionDuration;

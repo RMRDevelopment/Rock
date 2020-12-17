@@ -29,9 +29,9 @@ using Rock.Web.UI.Controls;
 namespace Rock.Field.Types
 {
     /// <summary>
-    /// Field Type used to display a dropdown list of Defined Values for a specific Defined Type
+    /// Field Type used to display a dropdown list of attributes
     /// </summary>
-    public class AttributeFieldType : FieldType
+    public class AttributeFieldType : FieldType, ICachedEntitiesFieldType, IEntityFieldType
     {
 
         #region Configuration
@@ -124,7 +124,7 @@ namespace Rock.Field.Types
                     int? entityTypeId = ( (EntityTypePicker)controls[0] ).SelectedValue.AsIntegerOrNull();
                     if ( entityTypeId.HasValue )
                     {
-                        var entityType = EntityTypeCache.Read( entityTypeId.Value );
+                        var entityType = EntityTypeCache.Get( entityTypeId.Value );
                         if ( entityType != null )
                         {
                             value = entityType.Guid.ToString();
@@ -167,7 +167,7 @@ namespace Rock.Field.Types
                     Guid? entityTypeGuid = configurationValues[ENTITY_TYPE_KEY].Value.AsGuidOrNull();
                     if ( entityTypeGuid.HasValue )
                     {
-                        var entityType = EntityTypeCache.Read( entityTypeGuid.Value );
+                        var entityType = EntityTypeCache.Get( entityTypeGuid.Value );
                         if ( entityType != null )
                         {
                             value = entityType.Id.ToString();
@@ -214,7 +214,7 @@ namespace Rock.Field.Types
                 var names = new List<string>();
                 foreach ( Guid guid in value.Split( new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries ).AsGuidList() )
                 {
-                    var attribute = AttributeCache.Read( guid );
+                    var attribute = AttributeCache.Get( guid );
                     if ( attribute != null )
                     {
                         names.Add( attribute.Name );
@@ -228,6 +228,32 @@ namespace Rock.Field.Types
 
         }
 
+        #endregion
+
+        #region ICachedEntitiesFieldType Members
+        /// <summary>
+        /// Gets the cached attributes.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns></returns>
+        public List<IEntityCache> GetCachedEntities( string value )
+        {
+            var attributes = new List<IEntityCache>();
+
+            if ( !string.IsNullOrWhiteSpace( value ) )
+            {
+                foreach ( Guid guid in value.Split( new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries ).AsGuidList() )
+                {
+                    var attribute = AttributeCache.Get( guid );
+                    if ( attribute != null )
+                    {
+                        attributes.Add( attribute );
+                    }
+                }
+            }
+
+            return attributes;
+        }
         #endregion
 
         #region Edit Control
@@ -260,21 +286,29 @@ namespace Rock.Field.Types
                 Guid? entityTypeGuid = configurationValues[ENTITY_TYPE_KEY].Value.AsGuidOrNull();
                 if ( entityTypeGuid.HasValue )
                 {
-                    var entityType = EntityTypeCache.Read( entityTypeGuid.Value );
+                    var entityType = EntityTypeCache.Get( entityTypeGuid.Value );
                     if ( entityType != null )
                     {
                         Rock.Model.AttributeService attributeService = new Model.AttributeService( new RockContext() );
-                        var attributes = attributeService.GetByEntityTypeId( entityType.Id );
+                        IQueryable<Rock.Model.Attribute> attributeQuery;
                         if ( configurationValues.ContainsKey( QUALIFIER_COLUMN_KEY ) && configurationValues.ContainsKey( QUALIFIER_VALUE_KEY ) )
                         {
-                            attributes = attributeService.Get( entityType.Id, configurationValues[QUALIFIER_COLUMN_KEY].Value, configurationValues[QUALIFIER_VALUE_KEY].Value );
+                            attributeQuery = attributeService
+                                .GetByEntityTypeQualifier( entityType.Id, configurationValues[QUALIFIER_COLUMN_KEY].Value, configurationValues[QUALIFIER_VALUE_KEY].Value, true );
+                                
+                        }
+                        else
+                        {
+                            attributeQuery = attributeService.GetByEntityTypeId( entityType.Id, true );
                         }
 
-                        if ( attributes.Any() )
+                        List<AttributeCache> attributeList = attributeQuery.ToAttributeCacheList();
+
+                        if ( attributeList.Any() )
                         {
-                            foreach ( var attribute in attributes.OrderBy( a => a.Name ) )
+                            foreach ( var attribute in attributeList.OrderBy( a => a.Name ) )
                             {
-                                editControl.Items.Add( new ListItem( attribute.Name, attribute.Id.ToString() ) );
+                                editControl.Items.Add( new ListItem( attribute.Name, attribute.Id.ToString(), attribute.IsActive ) );
                             }
                         }
                         return editControl;
@@ -309,20 +343,27 @@ namespace Rock.Field.Types
                         .Where( i => i.Selected )
                         .Select( i => i.Value ) );
                 }
-            }
 
-            var guids = new List<string>();
-
-            foreach ( int attributeId in ids.AsIntegerList() )
-            {
-                var attribute = Rock.Web.Cache.AttributeCache.Read( attributeId );
-                if ( attribute != null )
+                if ( ids.Count == 0 )
                 {
-                    guids.Add( attribute.Guid.ToString() );
+                    return string.Empty;
                 }
+
+                var guids = new List<string>();
+
+                foreach ( int attributeId in ids.AsIntegerList() )
+                {
+                    var attribute = Rock.Web.Cache.AttributeCache.Get( attributeId );
+                    if ( attribute != null )
+                    {
+                        guids.Add( attribute.Guid.ToString() );
+                    }
+                }
+
+                return guids.AsDelimited( "," );
             }
 
-            return guids.AsDelimited( "," );
+            return null;
         }
 
         /// <summary>
@@ -340,7 +381,7 @@ namespace Rock.Field.Types
                     var ids = new List<string>();
                     foreach ( Guid guid in value.Split( new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries ).AsGuidList() )
                     {
-                        var attribute = Rock.Web.Cache.AttributeCache.Read( guid );
+                        var attribute = Rock.Web.Cache.AttributeCache.Get( guid );
                         if ( attribute != null )
                         {
                             ids.Add( attribute.Id.ToString() );
@@ -407,5 +448,60 @@ namespace Rock.Field.Types
 
         #endregion
 
+        #region IEntityFieldType
+        /// <summary>
+        /// Gets the edit value as the IEntity.Id
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <returns></returns>
+        public int? GetEditValueAsEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues )
+        {
+            var guid = GetEditValue( control, configurationValues ).AsGuid();
+            var item = Rock.Web.Cache.AttributeCache.Get( guid );
+            return item != null ? item.Id : ( int? ) null;
+        }
+
+        /// <summary>
+        /// Sets the edit value from IEntity.Id value
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <param name="id">The identifier.</param>
+        public void SetEditValueFromEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues, int? id )
+        {
+            var item = Rock.Web.Cache.AttributeCache.Get( id ?? 0 );
+            var guidValue = item != null ? item.Guid.ToString() : string.Empty;
+            SetEditValue( control, configurationValues, guidValue );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value )
+        {
+            return GetEntity( value, null );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value, RockContext rockContext )
+        {
+            var guid = value.AsGuidOrNull();
+            if ( guid.HasValue )
+            {
+                rockContext = rockContext ?? new RockContext();
+                return new Model.AttributeService( rockContext ).Get( guid.Value );
+            }
+
+            return null;
+        }
+        #endregion
     }
 }

@@ -15,20 +15,18 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
 
 namespace Rock.Attribute
 {
     /// <summary>
     /// Field Attribute to select a GroupLocationType DefinedValues for the given GroupType id.
+    /// Stored as GroupLocationTypeValue.Guid.
     /// </summary>
     [AttributeUsage( AttributeTargets.Class, AllowMultiple = true, Inherited = true )]
     public class GroupLocationTypeFieldAttribute : FieldAttribute
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="DefinedValueFieldAttribute" /> class.
+        /// Initializes a new instance of the <see cref="GroupLocationTypeFieldAttribute" /> class.
         /// </summary>
         /// <param name="groupTypeGuid">The group type GUID.</param>
         /// <param name="name">The name.</param>
@@ -38,21 +36,60 @@ namespace Rock.Attribute
         /// <param name="category">The category.</param>
         /// <param name="order">The order.</param>
         /// <param name="key">The key.</param>
-        public GroupLocationTypeFieldAttribute( string groupTypeGuid, string name = "", string description = "", bool required = true, string defaultValue = "", string category = "", int order = 0, string key = null )
+        public GroupLocationTypeFieldAttribute( string name, string groupTypeGuid = "", string description = "", bool required = true, string defaultValue = "", string category = "", int order = 0, string key = null )
             : base( name, description, required, defaultValue, category, order, key, typeof( Rock.Field.Types.GroupLocationTypeFieldType ).FullName )
         {
-            var configValue = new Field.ConfigurationValue( groupTypeGuid );
-            FieldConfigurationValues.Add( "groupTypeGuid", configValue );
+            /*
+             * 07/13/2020 - Shaun
+             * This is a workaround because the original constructor for this
+             * class was built to accept groupTypeGuid as the only parameter,
+             * so if any plugins were using the constructor in this manner,
+             * they would be passing the guid into the name parameter, so we
+             * will check there, first.
+             *
+             * Reason: Maintaining backwards compatibility for plugins.
+             */
+            Guid? groupType = name.AsGuidOrNull();
+            if ( groupType == null )
+            {
+                groupType = groupTypeGuid.AsGuidOrNull();
+            }
+            else
+            {
+                // If the name parameter was a guid, then the name and guid are out-of-order and we need to swap them.
+                Name = groupTypeGuid;
+            }
+
+            if ( groupType != null )
+            {
+                var configValue = new Field.ConfigurationValue( groupType.ToString() );
+                FieldConfigurationValues.Add( "groupTypeGuid", configValue );
+            }
 
             if ( string.IsNullOrWhiteSpace( Name ) )
             {
                 Name = "Group Location Type";
             }
+        }
 
-            if ( string.IsNullOrWhiteSpace( Key ) )
+        /// <summary>
+        /// Gets or sets the group type unique identifier.
+        /// </summary>
+        /// <value>
+        /// The group type unique identifier.
+        /// </value>
+        public string GroupTypeGuid
+        {
+            get
             {
-                Key = Name.Replace( " ", string.Empty );
+                return FieldConfigurationValues.GetValueOrNull( "groupTypeGuid" );
+            }
+
+            set
+            {
+                FieldConfigurationValues.AddOrReplace( "groupTypeGuid", new Field.ConfigurationValue( value ) );
             }
         }
+
     }
 }

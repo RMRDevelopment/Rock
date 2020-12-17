@@ -14,24 +14,23 @@
 // limitations under the License.
 // </copyright>
 //
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
+
 using DotLiquid;
-using DotLiquid.Exceptions;
-using DotLiquid.Util;
-using Rock.Data;
-using Rock.Web.Cache;
+
 using Rock.Model;
-using System;
+using Rock.Utility;
+using Rock.Web.Cache;
 
 namespace Rock.Lava.Shortcodes
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class DynamicShortcodeInline : RockLavaShortcodeBase
     {
@@ -43,13 +42,15 @@ namespace Rock.Lava.Shortcodes
 
         Dictionary<string, object> _internalMergeFields;
 
+        const int _maxRecursionDepth = 10;
+
         /// <summary>
         /// Method that will be run at Rock startup
         /// </summary>
         public override void OnStartup()
         {
             // get all the inline dynamic shortcodes and register them
-            var inlineShortCodes = LavaShortcodeCache.All( false ).Where( s => s.TagType == TagType.Inline );
+            var inlineShortCodes = LavaShortcodeCache.All().Where( s => s.TagType == TagType.Inline );
 
             foreach(var shortcode in inlineShortCodes )
             {
@@ -69,7 +70,7 @@ namespace Rock.Lava.Shortcodes
         {
             _markup = markup;
             _tagName = tagName;
-            _shortcode = LavaShortcodeCache.Read( _tagName );
+            _shortcode = LavaShortcodeCache.All().Where( c => c.TagName == tagName ).FirstOrDefault();
 
             base.Initialize( tagName, markup, tokens );
         }
@@ -88,6 +89,20 @@ namespace Rock.Lava.Shortcodes
                 // add a unique id so shortcodes have easy access to one
                 parms.AddOrReplace( "uniqueid", "id-" + Guid.NewGuid().ToString() );
 
+                // keep track of the recursion depth
+                int currentRecurrsionDepth = 0;
+                if ( parms.ContainsKey( "RecursionDepth" ) )
+                {
+                    currentRecurrsionDepth = parms["RecursionDepth"].ToString().AsInteger() + 1;
+
+                    if ( currentRecurrsionDepth > _maxRecursionDepth )
+                    {
+                        result.Write( "A recursive loop was detected and processing of this shortcode has stopped." );
+                        return;
+                    }
+                }
+                parms.AddOrReplace( "RecursionDepth", currentRecurrsionDepth );
+
                 var results = _shortcode.Markup.ResolveMergeFields( parms, _shortcode.EnabledLavaCommands );
                 result.Write( results );
             }
@@ -105,13 +120,22 @@ namespace Rock.Lava.Shortcodes
         /// <param name="markup">The markup.</param>
         /// <param name="context">The context.</param>
         /// <returns></returns>
-        /// <exception cref="System.Exception">No parameters were found in your command. The syntax for a parameter is parmName:'' (note that you must use single quotes).</exception>
         private Dictionary<string, object> ParseMarkup( string markup, Context context )
         {
             var parms = new Dictionary<string, object>();
 
             // first run lava across the inputted markup
             _internalMergeFields = new Dictionary<string, object>();
+
+            // get merge fields loaded by the block or container
+            if ( context.Environments.Count > 0 )
+            {
+                foreach ( var item in context.Environments[0] )
+                {
+                    _internalMergeFields.AddOrReplace( item.Key, item.Value );
+                    parms.AddOrReplace( item.Key, item.Value );
+                }
+            }
 
             // get variables defined in the lava source
             foreach ( var scope in context.Scopes )
@@ -123,29 +147,17 @@ namespace Rock.Lava.Shortcodes
                 }
             }
 
-            // get merge fields loaded by the block or container
-            if ( context.Environments.Count > 0 )
-            {
-                foreach ( var item in context.Environments[0] )
-                {
-                    _internalMergeFields.AddOrReplace( item.Key, item.Value );
-                    parms.AddOrReplace( item.Key, item.Value );
-                }
-            }
             var resolvedMarkup = markup.ResolveMergeFields( _internalMergeFields );
 
             // create all the parameters from the shortcode with their default values
-            var shortcodeParms = _shortcode.Parameters.Split( '|' ).ToList();
-            foreach (var shortcodeParm in shortcodeParms )
+            var shortcodeParms = RockSerializableDictionary.FromUriEncodedString( _shortcode.Parameters );
+
+            foreach ( var shortcodeParm in shortcodeParms.Dictionary )
             {
-                var shortcodeParmKV = shortcodeParm.Split( '^' );
-                if (shortcodeParmKV.Length == 2 )
-                {
-                    parms.AddOrReplace( shortcodeParmKV[0], shortcodeParmKV[1] );
-                }
+                parms.AddOrReplace( shortcodeParm.Key, shortcodeParm.Value );
             }
 
-            var markupItems = Regex.Matches( resolvedMarkup, "(.*?:'[^']+')" )
+            var markupItems = Regex.Matches( resolvedMarkup, @"(\S*?:'[^']+')" )
                 .Cast<Match>()
                 .Select( m => m.Value )
                 .ToList();
@@ -158,6 +170,34 @@ namespace Rock.Lava.Shortcodes
                     parms.AddOrReplace( itemParts[0].Trim().ToLower(), itemParts[1].Trim().Substring( 1, itemParts[1].Length - 2 ) );
                 }
             }
+
+            // OK, now let's look for any passed variables ala: name:variable
+            var variableTokens = Regex.Matches( resolvedMarkup, @"\w*:\w+" )
+                .Cast<Match>()
+                .Select( m => m.Value )
+                .ToList();
+
+            foreach ( var item in variableTokens )
+            {
+                var itemParts = item.Trim().Split( new char[] { ':' }, 2 );
+                if ( itemParts.Length > 1 )
+                {
+                    var scopeKey = itemParts[1].Trim();
+
+                    // context.Scopes is a weird beast can't find a cleaner way to get the object than to iterate over it
+                    foreach ( var scopeItem in context.Scopes )
+                    {
+                        var scopeObject = scopeItem.Where( x => x.Key == scopeKey ).FirstOrDefault();
+
+                        if ( scopeObject.Value != null )
+                        {
+                            parms.AddOrReplace( itemParts[0].Trim().ToLower(), scopeObject.Value );
+                            break;
+                        }
+                    }
+                }
+            }
+
             return parms;
         }
     }

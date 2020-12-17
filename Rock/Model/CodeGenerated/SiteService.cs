@@ -57,6 +57,12 @@ namespace Rock.Model
                 errorMessage = string.Format( "This {0} is assigned to a {1}.", Site.FriendlyTypeName, Block.FriendlyTypeName );
                 return false;
             }  
+ 
+            if ( new Service<PersonalDevice>( Context ).Queryable().Any( a => a.SiteId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Site.FriendlyTypeName, PersonalDevice.FriendlyTypeName );
+                return false;
+            }  
             return true;
         }
     }
@@ -94,16 +100,20 @@ namespace Rock.Model
         public static void CopyPropertiesFrom( this Site target, Site source )
         {
             target.Id = source.Id;
+            target.AdditionalSettings = source.AdditionalSettings;
             target.AllowedFrameDomains = source.AllowedFrameDomains;
             target.AllowIndexing = source.AllowIndexing;
             target.ChangePasswordPageId = source.ChangePasswordPageId;
             target.ChangePasswordPageRouteId = source.ChangePasswordPageRouteId;
             target.CommunicationPageId = source.CommunicationPageId;
             target.CommunicationPageRouteId = source.CommunicationPageRouteId;
+            target.ConfigurationMobilePhoneBinaryFileId = source.ConfigurationMobilePhoneBinaryFileId;
+            target.ConfigurationMobileTabletBinaryFileId = source.ConfigurationMobileTabletBinaryFileId;
             target.DefaultPageId = source.DefaultPageId;
             target.DefaultPageRouteId = source.DefaultPageRouteId;
             target.Description = source.Description;
             target.EnabledForShortening = source.EnabledForShortening;
+            target.EnableExclusiveRoutes = source.EnableExclusiveRoutes;
             target.EnableMobileRedirect = source.EnableMobileRedirect;
             target.EnablePageViews = source.EnablePageViews;
             target.ErrorPage = source.ErrorPage;
@@ -113,8 +123,10 @@ namespace Rock.Model
             target.ForeignKey = source.ForeignKey;
             target.GoogleAnalyticsCode = source.GoogleAnalyticsCode;
             target.IndexStartingLocation = source.IndexStartingLocation;
+            target.IsActive = source.IsActive;
             target.IsIndexEnabled = source.IsIndexEnabled;
             target.IsSystem = source.IsSystem;
+            target.LatestVersionDateTime = source.LatestVersionDateTime;
             target.LoginPageId = source.LoginPageId;
             target.LoginPageRouteId = source.LoginPageRouteId;
             target.MobilePageId = source.MobilePageId;
@@ -126,7 +138,10 @@ namespace Rock.Model
             target.RegistrationPageId = source.RegistrationPageId;
             target.RegistrationPageRouteId = source.RegistrationPageRouteId;
             target.RequiresEncryption = source.RequiresEncryption;
+            target.SiteLogoBinaryFileId = source.SiteLogoBinaryFileId;
+            target.SiteType = source.SiteType;
             target.Theme = source.Theme;
+            target.ThumbnailBinaryFileId = source.ThumbnailBinaryFileId;
             target.CreatedDateTime = source.CreatedDateTime;
             target.ModifiedDateTime = source.ModifiedDateTime;
             target.CreatedByPersonAliasId = source.CreatedByPersonAliasId;

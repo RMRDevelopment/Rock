@@ -43,7 +43,7 @@ namespace RockWeb.Blocks.Fundraising
 {% assign dateRangePartsSize = dateRangeParts | Size %}
 {% if dateRangePartsSize == 2 %}
     {{ dateRangeParts[0] | Date:'MMMM dd, yyyy' }} to {{ dateRangeParts[1] | Date:'MMMM dd, yyyy' }}<br/>
-{% elsif dateRangePartsSize == 1  %}      
+{% elsif dateRangePartsSize == 1 %}
     {{ dateRangeParts[0] | Date:'MMMM dd, yyyy' }}
 {% endif %}
 {{ Group | Attribute:'OpportunityLocation' }}
@@ -55,7 +55,7 @@ namespace RockWeb.Blocks.Fundraising
 </p>
 ", order: 1 )]
 
-    [LinkedPage( "Participant Page", "The partipant page for a participant of this fundraising opportunity", required: false, order: 2 )]
+    [LinkedPage( "Participant Page", "The participant page for a participant of this fundraising opportunity", required: false, order: 2 )]
     [LinkedPage( "Main Page", "The main page for the fundraising opportunity", required: false, order: 3 )]
     public partial class FundraisingLeaderToolbox : RockBlock
     {

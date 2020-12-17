@@ -14,8 +14,6 @@
 // limitations under the License.
 // </copyright>
 //
-using System.ComponentModel;
-using System.Collections.Generic;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
@@ -62,17 +60,19 @@ namespace Rock.Web.UI.Controls
                     writer.AddStyleAttribute( key, this.Style[key] );
                 }
 
-                writer.RenderBeginTag( HtmlTextWriterTag.A );
-                writer.AddAttribute("class", "fa fa-question-circle");
-                writer.RenderBeginTag( HtmlTextWriterTag.I );
-                writer.RenderEndTag();
-                writer.RenderEndTag();
+                if ( !this.Visible )
+                {
+                    writer.AddStyleAttribute( "display", "none" );
+                }
 
-                writer.AddAttribute( "class", "alert alert-info help-message" );
-                writer.AddAttribute( "style", "display:none" );
-                writer.RenderBeginTag( HtmlTextWriterTag.Div );
-                writer.RenderBeginTag( HtmlTextWriterTag.Small );
-                writer.Write( this.Text.ConvertCrLfToHtmlBr().Trim() );
+                writer.AddAttribute("data-toggle", "tooltip");
+                writer.AddAttribute("data-placement", "auto");
+                writer.AddAttribute("data-container", "body");
+                writer.AddAttribute("data-html", "true");
+                writer.AddAttribute("title", this.Text.ConvertCrLfToHtmlBr().Trim() );
+                writer.RenderBeginTag( HtmlTextWriterTag.A );
+                writer.AddAttribute("class", "fa fa-info-circle");
+                writer.RenderBeginTag( HtmlTextWriterTag.I );
                 writer.RenderEndTag();
                 writer.RenderEndTag();
             }

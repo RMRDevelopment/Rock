@@ -15,7 +15,6 @@
 // </copyright>
 //
 using System;
-using System.Web;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
@@ -77,12 +76,40 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
+        /// Gets or sets the tooltip.
+        /// </summary>
+        /// <value>
+        /// The tooltip.
+        /// </value>
+        public string ToolTip
+        {
+            get
+            {
+                // Uncomment this if we want to have a default value
+                //string tooltip = ViewState["Tooltip"] as string;
+                //if ( string.IsNullOrWhiteSpace( tooltip ) )
+                //{
+                //    tooltip = "Secure";
+                //    ViewState["Tooltip"] = tooltip;
+                //}
+                //return tooltip;
+
+                return ViewState["Tooltip"] as string;
+            }
+            set
+            {
+                ViewState["Tooltip"] = value;
+            }
+        }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="SecurityField" /> class.
         /// </summary>
         public SecurityField()
             : base()
         {
             this.ItemStyle.HorizontalAlign = HorizontalAlign.Center;
+            this.HeaderStyle.HorizontalAlign = HorizontalAlign.Center;
             this.HeaderStyle.CssClass = "grid-columncommand";
             this.ItemStyle.CssClass = "grid-columncommand";
         }
@@ -104,8 +131,8 @@ namespace Rock.Web.UI.Controls
         public string TitleField { get; set; }
 
         /// <summary>
-        /// When exporting a grid with an Export source of ColumnOutput, this property controls whether a column is included
-        /// in the export or not
+        /// When exporting a grid to Excel, this property controls whether a column is included
+        /// in the export. See <seealso cref="ExcelExportBehavior" />.
         /// </summary>
         public override ExcelExportBehavior ExcelExportBehavior
         {
@@ -188,6 +215,7 @@ namespace Rock.Web.UI.Controls
 
                 // height attribute is used by the modal that pops up when the button is clicked
                 aSecure.Attributes.Add( "height", "500px" );
+                aSecure.Attributes.Add( "title", securityField.ToolTip );
 
                 HtmlGenericControl buttonIcon = new HtmlGenericControl( "i" );
                 buttonIcon.Attributes.Add( "class", securityField.IconCssClass );

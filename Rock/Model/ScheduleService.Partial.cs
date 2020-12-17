@@ -15,12 +15,13 @@
 // </copyright>
 //
 using System;
-using System.Data.Entity;
 using System.Collections.Generic;
+using System.Data.Entity;
 using System.Linq;
 
 using Rock.Data;
 using Rock.Web.Cache;
+using System.Data;
 
 namespace Rock.Model
 {
@@ -40,6 +41,8 @@ namespace Rock.Model
         /// <param name="scheduleIds">The schedule ids.</param>
         /// <param name="loadSummaryData">if set to <c>true</c> [load summary data].</param>
         /// <returns></returns>
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use AttendanceService class methods instead", true )]
         public List<ScheduleOccurrence> GetGroupOccurrences( Group group, DateTime? fromDateTime, DateTime? toDateTime,
             List<int> locationIds, List<int> scheduleIds, bool loadSummaryData )
         {
@@ -57,6 +60,8 @@ namespace Rock.Model
         /// <param name="loadSummaryData">if set to <c>true</c> [load summary data].</param>
         /// <param name="campusId">The campus identifier.</param>
         /// <returns></returns>
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use AttendanceService class methods instead", true )]
         public List<ScheduleOccurrence> GetGroupOccurrences( Group group, DateTime? fromDateTime, DateTime? toDateTime, 
             List<int> locationIds, List<int> scheduleIds, bool loadSummaryData, int? campusId )
         {
@@ -198,7 +203,7 @@ namespace Rock.Model
 
                     if ( campusId.HasValue )
                     {
-                        var familyGroupType = GroupTypeCache.Read( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() );
+                        var familyGroupType = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() );
                         var campusQry = new GroupMemberService( rockContext )
                             .Queryable()
                             .Where( g =>
@@ -285,10 +290,10 @@ namespace Rock.Model
                     if ( !string.IsNullOrWhiteSpace( groupSchedule.iCalendarContent ) )
                     {
                         // If schedule has an iCal schedule, get all the past occurrences 
-                        foreach ( var occurrence in groupSchedule.GetOccurrences( startDate, endDate ) )
+                        foreach ( var occurrence in groupSchedule.GetICalOccurrences( startDate, endDate ) )
                         {
                             var scheduleOccurrence = new ScheduleOccurrence(
-                                occurrence.Period.StartTime.Date, occurrence.Period.StartTime.TimeOfDay, groupSchedule.Id, groupSchedule.Name );
+                                occurrence.Period.StartTime.Date, occurrence.Period.StartTime.Value.TimeOfDay, groupSchedule.Id, groupSchedule.Name );
                             if ( !existingDates.Contains( scheduleOccurrence.Date ) )
                             {
                                 newOccurrences.Add( scheduleOccurrence );
@@ -337,7 +342,7 @@ namespace Rock.Model
                     if ( newOccurrences.Any() )
                     {
                         // Filter Exclusions
-                        var groupType = GroupTypeCache.Read( group.GroupTypeId );
+                        var groupType = GroupTypeCache.Get( group.GroupTypeId );
                         foreach ( var exclusion in groupType.GroupScheduleExclusions )
                         {
                             if ( exclusion.Start.HasValue && exclusion.End.HasValue )
@@ -371,6 +376,8 @@ namespace Rock.Model
         /// </summary>
         /// <param name="group">The group.</param>
         /// <param name="occurrence">The occurrence.</param>
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use AttendanceService class methods instead", true )]
         public void LoadSummaryData( Group group, ScheduleOccurrence occurrence )
         {
             if ( group != null && occurrence != null )
@@ -414,6 +421,8 @@ namespace Rock.Model
         /// <param name="group">The group.</param>
         /// <param name="occurrence">The occurrence.</param>
         /// <returns></returns>
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use AttendanceService class methods instead", true )]
         public IQueryable<Attendance> GetAttendance( Group group, ScheduleOccurrence occurrence )
         {
             if ( group != null && occurrence != null )

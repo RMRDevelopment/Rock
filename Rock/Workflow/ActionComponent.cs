@@ -16,7 +16,7 @@
 //
 using System;
 using System.Collections.Generic;
-using System.Web;
+
 using Rock.Data;
 using Rock.Extension;
 using Rock.Model;
@@ -62,16 +62,6 @@ namespace Rock.Workflow
         /// <param name="errorMessages">The error messages.</param>
         /// <returns></returns>
         public abstract Boolean Execute( RockContext rockContext, WorkflowAction action, Object entity, out List<string> errorMessages );
-
-        /// <summary>
-        /// Loads the attributes.
-        /// </summary>
-        /// <param name="action">The action.</param>
-        [Obsolete("Don't Use this. The ActionTypeCache will already have the attributes loaded automatically")]
-        public void LoadAttributes( WorkflowAction action )
-        {
-            action.ActionType.LoadAttributes();
-        }
 
         /// <summary>
         /// Use GetAttributeValue( WorkflowAction action, string key) instead.  Workflow action attribute values are 
@@ -125,6 +115,45 @@ namespace Rock.Workflow
         }
 
         /// <summary>
+        /// Gets a model from the attribute value, which should be the GUID
+        /// </summary>
+        /// <typeparam name="T">The entity, like FinancialAccount or Group</typeparam>
+        /// <param name="action">The action</param>
+        /// <param name="key">The key</param>
+        /// <param name="checkWorkflowAttributeValue">if set to <c>true</c> and the returned value is a guid, check to see if the workflow 
+        /// or activity contains an attribute with that guid. This is useful when using the WorkflowTextOrAttribute field types to get the 
+        /// actual value or workflow value.</param>
+        /// <param name="rockContext">The context</param>
+        /// <returns>The model if it can be resolved or null</returns>
+        protected T GetEntityFromAttributeValue<T>( WorkflowAction action, string key, bool checkWorkflowAttributeValue, RockContext rockContext ) where T : Entity<T>, new()
+        {
+            var modelGuid = GetAttributeValue( action, key, checkWorkflowAttributeValue ).AsGuid();
+
+            if ( modelGuid.IsEmpty() )
+            {
+                return default( T );
+            }
+
+            return new Service<T>( rockContext ).Get( modelGuid );
+        }
+
+        /// <summary>
+        /// Gets a person from the attribute value, which should be the alias GUID
+        /// </summary>
+        /// <param name="action">The action</param>
+        /// <param name="key">The key</param>
+        /// <param name="checkWorkflowAttributeValue">if set to <c>true</c> and the returned value is a guid, check to see if the workflow 
+        /// or activity contains an attribute with that guid. This is useful when using the WorkflowTextOrAttribute field types to get the 
+        /// actual value or workflow value.</param>
+        /// <param name="rockContext">The context</param>
+        /// <returns>The person if it can be resolved or null</returns>
+        protected Person GetPersonFromAttributeValue( WorkflowAction action, string key, bool checkWorkflowAttributeValue, RockContext rockContext )
+        {
+            var personAlias = GetEntityFromAttributeValue<PersonAlias>( action, key, checkWorkflowAttributeValue, rockContext );
+            return personAlias == null ? ( Person ) null : personAlias.Person;
+        }
+
+        /// <summary>
         /// Gets the attribute value.
         /// </summary>
         /// <param name="action">The action.</param>
@@ -141,17 +170,17 @@ namespace Rock.Workflow
                 Guid? attributeGuid = value.AsGuidOrNull();
                 if ( attributeGuid.HasValue )
                 {
-                    var attribute = AttributeCache.Read( attributeGuid.Value );
+                    var attribute = AttributeCache.Get( attributeGuid.Value );
                     if ( attribute != null )
                     {
-                        value = action.GetWorklowAttributeValue( attributeGuid.Value );
+                        value = action.GetWorkflowAttributeValue( attributeGuid.Value );
                         if ( !string.IsNullOrWhiteSpace( value ) )
                         {
-                            if ( attribute.FieldTypeId == FieldTypeCache.Read( SystemGuid.FieldType.ENCRYPTED_TEXT.AsGuid() ).Id )
+                            if ( attribute.FieldTypeId == FieldTypeCache.Get( SystemGuid.FieldType.ENCRYPTED_TEXT.AsGuid() ).Id )
                             {
                                 value = Security.Encryption.DecryptString( value );
                             }
-                            else if ( attribute.FieldTypeId == FieldTypeCache.Read( SystemGuid.FieldType.SSN.AsGuid() ).Id )
+                            else if ( attribute.FieldTypeId == FieldTypeCache.Get( SystemGuid.FieldType.SSN.AsGuid() ).Id )
                             {
                                 value = Rock.Field.Types.SSNFieldType.UnencryptAndClean( value );
                             }
@@ -177,7 +206,8 @@ namespace Rock.Workflow
             {
                 if ( actionType.Attributes == null )
                 {
-                    actionType.LoadAttributes();
+                    // shouldn't happen since actionType is a ModelCache<,> type 
+                    return string.Empty;
                 }
 
                 var values = actionType.AttributeValues;
@@ -258,7 +288,7 @@ namespace Rock.Workflow
         /// <param name="value">The value.</param>
         protected AttributeCache SetWorkflowAttributeValue( WorkflowAction action, Guid guid, string value )
         {
-            var attr = AttributeCache.Read( guid );
+            var attr = AttributeCache.Get( guid );
             if ( attr != null )
             {
                 if ( attr.EntityTypeId == new Rock.Model.Workflow().TypeId )

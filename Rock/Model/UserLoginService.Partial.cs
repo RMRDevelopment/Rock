@@ -15,11 +15,9 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Web;
-using System.Web.Security;
 
 using Rock.Data;
 using Rock.Security;
@@ -54,7 +52,7 @@ namespace Rock.Model
         }
 
         /// <summary>
-        /// Gets<see cref="Rock.Model.UserLogin"/> by User Name
+        /// Gets<see cref="Rock.Model.UserLogin"/> by User Name, with eager loading of the Person and PersonAliases
         /// </summary>
         /// <param name="userName">A <see cref="System.String"/> representing the UserName to search for.</param>
         /// <returns>A <see cref="UserLogin"/> entity where the UserName matches the provided value.</returns>
@@ -66,13 +64,23 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Returns true if there is a UserLogin record matching the specified userName
+        /// </summary>
+        /// <param name="userName">Name of the user.</param>
+        /// <returns></returns>
+        public bool Exists( string userName )
+        {
+            return Queryable().Where( u => u.UserName == userName ).Any();
+        }
+
+        /// <summary>
         /// Sets the a <see cref="Rock.Model.UserLogin">UserLogin's</see> password.
         /// </summary>
         /// <param name="user">The <see cref="Rock.Model.UserLogin"/> to change the password for.</param>
         /// <param name="password">A <see cref="System.String"/> representing the new password.</param>
         public void SetPassword( UserLogin user, string password )
         {
-            var entityType = EntityTypeCache.Read( user.EntityTypeId ?? 0);
+            var entityType = EntityTypeCache.Get( user.EntityTypeId ?? 0 );
 
             var authenticationComponent = AuthenticationContainer.GetComponent( entityType.Name );
             if ( authenticationComponent == null || !authenticationComponent.IsActive )
@@ -86,43 +94,6 @@ namespace Rock.Model
         }
 
         /// <summary>
-        /// Updates the <see cref="Rock.Model.UserLogin"/> failed password attempt count.
-        /// </summary>
-        /// <param name="user">The <see cref="Rock.Model.UserLogin"/> to update the failure count on.</param>
-        private void UpdateFailureCount( UserLogin user )
-        {
-            int passwordAttemptWindow = 0;
-            int maxInvalidPasswordAttempts = int.MaxValue;
-
-            var globalAttributes = GlobalAttributesCache.Read();
-            if ( !Int32.TryParse( globalAttributes.GetValue( "PasswordAttemptWindow" ), out passwordAttemptWindow ) )
-                passwordAttemptWindow = 0;
-            if ( !Int32.TryParse( globalAttributes.GetValue( "MaxInvalidPasswordAttempts" ), out maxInvalidPasswordAttempts ) )
-                maxInvalidPasswordAttempts = int.MaxValue;
-
-            DateTime firstAttempt = user.FailedPasswordAttemptWindowStartDateTime ?? DateTime.MinValue;
-            int attempts = user.FailedPasswordAttemptCount ?? 0;
-
-            TimeSpan window = new TimeSpan( 0, passwordAttemptWindow, 0 );
-            if ( RockDateTime.Now.CompareTo( firstAttempt.Add( window ) ) < 0 )
-            {
-                attempts++;
-                if ( attempts >= maxInvalidPasswordAttempts )
-                {
-                    user.IsLockedOut = true;
-                    user.LastLockedOutDateTime = RockDateTime.Now;
-                }
-
-                user.FailedPasswordAttemptCount = attempts;
-            }
-            else
-            {
-                user.FailedPasswordAttemptCount = 1;
-                user.FailedPasswordAttemptWindowStartDateTime = RockDateTime.Now;
-            }
-        }
-
-        /// <summary>
         /// Returns a <see cref="Rock.Model.UserLogin"/> by an encrypted confirmation code.
         /// </summary>
         /// <param name="code">A <see cref="System.String"/> containing the encrypted confirmation code to search for.</param>
@@ -132,10 +103,11 @@ namespace Rock.Model
             if ( !string.IsNullOrEmpty( code ) )
             {
                 string identifier = string.Empty;
-                try { identifier = Rock.Security.Encryption.DecryptString( code ); }
+                try
+                { identifier = Rock.Security.Encryption.DecryptString( code ); }
                 catch { }
 
-                if ( identifier.StartsWith( "ROCK|" ) )
+                if ( identifier.IsNotNullOrWhiteSpace() && identifier.StartsWith( "ROCK|" ) )
                 {
                     string[] idParts = identifier.Split( '|' );
                     if ( idParts.Length == 4 )
@@ -249,7 +221,7 @@ namespace Rock.Model
         /// <returns>A <see cref="System.Boolean"/> value that indicates if the password is valid. <c>true</c> if valid; otherwise <c>false</c>.</returns>
         public static bool IsPasswordValid( string password )
         {
-            var globalAttributes = GlobalAttributesCache.Read();
+            var globalAttributes = GlobalAttributesCache.Get();
             string passwordRegex = globalAttributes.GetValue( "PasswordRegularExpression" );
             if ( string.IsNullOrEmpty( passwordRegex ) )
             {
@@ -263,12 +235,58 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Determines whether a new UserLogin with the specified parameters would be valid
+        /// </summary>
+        /// <param name="userName">Name of the user.</param>
+        /// <param name="password">The password.</param>
+        /// <param name="passwordConfirm">The password confirm.</param>
+        /// <param name="errorTitle">The error title.</param>
+        /// <param name="errorMessage">The error message.</param>
+        /// <returns>
+        ///   <c>true</c> if [is valid new user login] [the specified user name]; otherwise, <c>false</c>.
+        /// </returns>
+        public static bool IsValidNewUserLogin( string userName, string password, string passwordConfirm, out string errorTitle, out string errorMessage )
+        {
+            errorTitle = null;
+            errorMessage = null;
+            if ( string.IsNullOrWhiteSpace( userName ) || string.IsNullOrWhiteSpace( password ) )
+            {
+                errorTitle = "Missing Information";
+                errorMessage = "A username and password are required when saving an account";
+                return false;
+            }
+
+            if ( new UserLoginService( new RockContext() ).Exists( userName ) )
+            {
+                errorTitle = "Invalid Username";
+                errorMessage = "The selected Username is already being used. Please select a different Username";
+                return false;
+            }
+
+            if ( !UserLoginService.IsPasswordValid( password ) )
+            {
+                errorTitle = string.Empty;
+                errorMessage = UserLoginService.FriendlyPasswordRules();
+                return false;
+            }
+
+            if ( passwordConfirm != password )
+            {
+                errorTitle = "Invalid Password";
+                errorMessage = "The password and password confirmation do not match";
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Returns a user friendly description of the password rules.
         /// </summary>
         /// <returns>A user friendly description of the password rules.</returns>
         public static string FriendlyPasswordRules()
         {
-            var globalAttributes = GlobalAttributesCache.Read();
+            var globalAttributes = GlobalAttributesCache.Get();
             string passwordRegex = globalAttributes.GetValue( "PasswordRegexFriendlyDescription" );
             if ( string.IsNullOrEmpty( passwordRegex ) )
             {
@@ -281,12 +299,12 @@ namespace Rock.Model
         }
 
         /// <summary>
-        /// Creates the specified rock context.
+        /// Creates a new <see cref="Rock.Model.UserLogin" /> and saves it to the database.
         /// </summary>
         /// <param name="rockContext">The rock context.</param>
         /// <param name="person">The person.</param>
         /// <param name="serviceType">Type of the service.</param>
-        /// <param name="entityTypeId">The entity type identifier.</param>
+        /// <param name="entityTypeId">The EntityTypeId of the <see cref="Rock.Model.EntityType"/> for the authentication service that this UserLogin user will use.</param>
         /// <param name="username">The username.</param>
         /// <param name="password">The password.</param>
         /// <param name="isConfirmed">if set to <c>true</c> [is confirmed].</param>
@@ -307,13 +325,13 @@ namespace Rock.Model
             string username,
             string password,
             bool isConfirmed,
-            bool isRequirePasswordChange)
+            bool isRequirePasswordChange )
         {
             if ( person != null )
             {
                 var userLoginService = new UserLoginService( rockContext );
 
-                var entityType = EntityTypeCache.Read( entityTypeId );
+                var entityType = EntityTypeCache.Get( entityTypeId );
                 if ( entityType != null )
                 {
                     UserLogin user = userLoginService.GetByUserName( username );
@@ -343,10 +361,10 @@ namespace Rock.Model
                     userLoginService.Add( user );
                     rockContext.SaveChanges();
 
-                    var historyCategory = CategoryCache.Read( Rock.SystemGuid.Category.HISTORY_PERSON_ACTIVITY.AsGuid(), rockContext );
+                    var historyCategory = CategoryCache.Get( Rock.SystemGuid.Category.HISTORY_PERSON_ACTIVITY.AsGuid(), rockContext );
                     if ( historyCategory != null )
                     {
-                        var changes = new List<string>();
+                        var changes = new History.HistoryChangeList();
                         History.EvaluateChange( changes, "User Login", string.Empty, username );
                         HistoryService.SaveChanges( rockContext, typeof( Person ), historyCategory.Guid, person.Id, changes );
                     }
@@ -365,12 +383,12 @@ namespace Rock.Model
         }
 
         /// <summary>
-        /// Creates a new <see cref="Rock.Model.UserLogin" />
+        /// Creates a new <see cref="Rock.Model.UserLogin" /> and saves it to the database
         /// </summary>
         /// <param name="rockContext">The rock context.</param>
         /// <param name="person">The <see cref="Rock.Model.Person" /> that this <see cref="UserLogin" /> will be associated with.</param>
         /// <param name="serviceType">The <see cref="Rock.Model.AuthenticationServiceType" /> type of Login</param>
-        /// <param name="entityTypeId">The entity type identifier.</param>
+        /// <param name="entityTypeId">The EntityTypeId of the <see cref="Rock.Model.EntityType"/> for the authentication service that this UserLogin user will use.</param>
         /// <param name="username">A <see cref="System.String" /> containing the UserName.</param>
         /// <param name="password">A <see cref="System.String" /> containing the unhashed/unencrypted password.</param>
         /// <param name="isConfirmed">A <see cref="System.Boolean" /> flag indicating if the user has been confirmed.</param>
@@ -389,81 +407,133 @@ namespace Rock.Model
         }
 
         /// <summary>
-        /// Updates the last login and writes to the person's history log
+        /// Updates the last login, writes to the person's history log, and saves changes to the database
         /// </summary>
         /// <param name="userName">Name of the user.</param>
         public static void UpdateLastLogin( string userName )
         {
-            if ( !string.IsNullOrWhiteSpace( userName ))
+            if ( string.IsNullOrWhiteSpace( userName ) )
             {
-                using ( var rockContext = new RockContext() )
+                return;
+            }
+
+            int? personId = null;
+            bool impersonated = userName.StartsWith( "rckipid=" );
+            using ( var rockContext = new RockContext() )
+            {
+                if ( !impersonated )
                 {
-                    int? personId = null;
-                    bool impersonated = userName.StartsWith( "rckipid=" );
-
-                    if ( !impersonated )
+                    var userLogin = new UserLoginService( rockContext ).Queryable().Where( a => a.UserName == userName ).FirstOrDefault();
+                    if ( userLogin != null )
                     {
-                        var userLogin = new UserLoginService( rockContext ).GetByUserName( userName );
-                        if ( userLogin != null )
-                        {
-                            userLogin.LastLoginDateTime = RockDateTime.Now;
-                            personId = userLogin.PersonId;
-                        }
+                        userLogin.LastLoginDateTime = RockDateTime.Now;
+                        personId = userLogin.PersonId;
+                        rockContext.SaveChanges();
                     }
-                    else
-                    {
-                        var impersonationToken = userName.Substring( 8 );
-                        personId = new PersonService( rockContext ).GetByImpersonationToken( impersonationToken, false, null )?.Id;
-                    }
-
-                    if ( personId.HasValue )
-                    {
-                        var summary = new System.Text.StringBuilder();
-                        if ( impersonated )
-                        {
-                            summary.Append( "Impersonated user logged in" );
-
-                            var impersonatedByUser = HttpContext.Current?.Session["ImpersonatedByUser"] as UserLogin;
-                            if ( impersonatedByUser != null )
-                            {
-                                summary.Append( $" ( impersonated by { impersonatedByUser.Person.FullName } ) " );
-                            }
-                        }
-                        else
-                        {
-                            summary.AppendFormat( "User logged in with <span class='field-name'>{0}</span> username", userName );
-                        }
-                        
-                        if ( HttpContext.Current != null && HttpContext.Current.Request != null )
-                        {
-                            string cleanUrl = PersonToken.ObfuscateRockMagicToken( HttpContext.Current.Request.Url.AbsoluteUri );
-
-                            // obfuscate the url specified in the returnurl, just in case it contains any sensitive information (like a rckipid)
-                            Regex returnurlRegEx = new Regex( @"returnurl=([^&]*)" );
-                            cleanUrl = returnurlRegEx.Replace( cleanUrl, "returnurl=XXXXXXXXXXXXXXXXXXXXXXXXXXXX" );
-
-                            summary.AppendFormat( ", to <span class='field-value'>{0}</span>, from <span class='field-value'>{1}</span>",
-                                cleanUrl, HttpContext.Current.Request.UserHostAddress );
-                        }
-
-                        summary.Append( "." );
-
-                        var historyService = new HistoryService( rockContext );
-                        var personEntityTypeId = EntityTypeCache.Read( "Rock.Model.Person" ).Id;
-                        var activityCategoryId = CategoryCache.Read( Rock.SystemGuid.Category.HISTORY_PERSON_ACTIVITY.AsGuid(), rockContext ).Id;
-
-                        historyService.Add( new History
-                        {
-                            EntityTypeId = personEntityTypeId,
-                            CategoryId = activityCategoryId,
-                            EntityId = personId.Value,
-                            Summary = summary.ToString(),
-                            Verb = "LOGIN"
-                        } );
-                    }
-
-                    rockContext.SaveChanges();
                 }
+                else
+                {
+                    var impersonationToken = userName.Substring( 8 );
+                    personId = new PersonService( rockContext ).GetByImpersonationToken( impersonationToken, false, null )?.Id;
+                }
+            }
+
+            if ( personId == null )
+            {
+                return;
+            }
+
+            var relatedDataBuilder = new System.Text.StringBuilder();
+            int? relatedEntityTypeId = null;
+            int? relatedEntityId = null;
+
+            if ( impersonated )
+            {
+                var impersonatedByUser = HttpContext.Current?.Session["ImpersonatedByUser"] as UserLogin;
+
+                relatedEntityTypeId = EntityTypeCache.GetId<Rock.Model.Person>();
+                relatedEntityId = impersonatedByUser?.PersonId;
+
+                if ( impersonatedByUser != null )
+                {
+                    relatedDataBuilder.Append( $" impersonated by { impersonatedByUser.Person.FullName }" );
+                }
+            }
+
+            if ( HttpContext.Current != null && HttpContext.Current.Request != null )
+            {
+                string cleanUrl = PersonToken.ObfuscateRockMagicToken( HttpContext.Current.Request.Url.AbsoluteUri );
+
+                // obfuscate the URL specified in the returnurl, just in case it contains any sensitive information (like a rckipid)
+                Regex returnurlRegEx = new Regex( @"returnurl=([^&]*)" );
+                cleanUrl = returnurlRegEx.Replace( cleanUrl, "returnurl=XXXXXXXXXXXXXXXXXXXXXXXXXXXX" );
+
+                relatedDataBuilder.AppendFormat( " to <span class='field-value'>{0}</span>, from <span class='field-value'>{1}</span>",
+                    cleanUrl, Rock.Web.UI.RockPage.GetClientIpAddress() );
+            }
+
+            var historyChangeList = new History.HistoryChangeList();
+            var historyChange = historyChangeList.AddChange( History.HistoryVerb.Login, History.HistoryChangeType.Record, userName );
+
+            if ( relatedDataBuilder.Length > 0 )
+            {
+                historyChange.SetRelatedData( relatedDataBuilder.ToString(), null, null );
+            }
+
+            var historyList = HistoryService.GetChanges( typeof( Rock.Model.Person ), Rock.SystemGuid.Category.HISTORY_PERSON_ACTIVITY.AsGuid(), personId.Value, historyChangeList, null, null, null, null, null );
+
+            new Rock.Transactions.SaveHistoryTransaction( historyList ).Enqueue();
+        }
+
+        /// <summary>
+        /// Call this method if the login attempt fails.  Updates the
+        /// <see cref="Rock.Model.UserLogin"/> failed password attempt count.
+        /// </summary>
+        /// <param name="user">The <see cref="Rock.Model.UserLogin"/> to update the failure count on.</param>
+        public static void UpdateFailureCount( UserLogin user )
+        {
+            var globalAttributes = GlobalAttributesCache.Get();
+
+            // Get the global attribute that defines what the window in minutes of time
+            // are between the first unsuccessful login and the point in time where those
+            // failed logins will be forgiven
+            var passwordAttemptWindow = globalAttributes.GetValue( "PasswordAttemptWindow" ).AsIntegerOrNull() ?? 0;
+            var passwordAttemptWindowMinutes = TimeSpan.FromMinutes( passwordAttemptWindow );
+
+            // Get the global attribute that defines the total number of failed attempts that are
+            // permitted within the window before the use is locked out
+            var maxInvalidPasswordAttempts = globalAttributes.GetValue( "MaxInvalidPasswordAttempts" ).AsIntegerOrNull() ?? int.MaxValue;
+
+            // Get the current state of this user's failed login attempts
+            var firstAttempt = user.FailedPasswordAttemptWindowStartDateTime ?? DateTime.MinValue;
+            var attempts = user.FailedPasswordAttemptCount ?? 0;
+            var endOfWindow = firstAttempt.Add( passwordAttemptWindowMinutes );
+
+            // Determine if the user is still inside the window where failed logins have not
+            // yet been forgiven
+            var inWindow = RockDateTime.Now < endOfWindow;
+
+            if ( inWindow )
+            {
+                // The user is within the window meaning the failed logins are accumulating and
+                // cannot yet be forgiven
+                attempts++;
+
+                if ( attempts >= maxInvalidPasswordAttempts )
+                {
+                    user.IsLockedOut = true;
+                    user.LastLockedOutDateTime = RockDateTime.Now;
+                }
+
+                user.FailedPasswordAttemptCount = attempts;
+            }
+            else
+            {
+                // The user is outside the window, so failed logins can be forgiven and the
+                // database record tracking fields can be reset to only reflect this single
+                // failed login
+                user.FailedPasswordAttemptCount = 1;
+                user.FailedPasswordAttemptWindowStartDateTime = RockDateTime.Now;
             }
         }
 

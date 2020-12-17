@@ -16,13 +16,11 @@
 //
 using System;
 using System.Collections.Generic;
-using System.Data.Entity;
 using System.Net.Mail;
 using System.Linq;
 
 using Rock.Extension;
 using Rock.Model;
-using Rock.Web.Cache;
 
 namespace Rock.Communication
 {
@@ -83,7 +81,7 @@ namespace Rock.Communication
                     valid = false;
                 }
 
-                else if ( recipient.Communication.ListGroupId.HasValue  )
+                else if ( recipient.Communication.ListGroupId.HasValue )
                 {
                     // if this communication is being sent to a list, make sure the recipient is still an active member of the list
                     GroupMemberStatus? groupMemberStatus = null;
@@ -91,7 +89,7 @@ namespace Rock.Communication
                     {
                         groupMemberStatus = new GroupMemberService( rockContext ).Queryable()
                             .Where( a => a.PersonId == person.Id && a.GroupId == recipient.Communication.ListGroupId )
-                            .Select(a => a.GroupMemberStatus ).FirstOrDefault();
+                            .Select( a => a.GroupMemberStatus ).FirstOrDefault();
                     }
 
                     if ( groupMemberStatus != null )
@@ -127,15 +125,20 @@ namespace Rock.Communication
         /// <returns></returns>
         public virtual string ResolveText( string content, Person person, string enabledLavaCommands, Dictionary<string, object> mergeFields, string appRoot = "", string themeRoot = "" )
         {
+            if ( content.IsNullOrWhiteSpace() )
+            {
+                return content;
+            }
+
             string value = content.ResolveMergeFields( mergeFields, person, enabledLavaCommands );
             value = value.ReplaceWordChars();
 
-            if ( themeRoot.IsNotNullOrWhitespace() )
+            if ( themeRoot.IsNotNullOrWhiteSpace() )
             {
                 value = value.Replace( "~~/", themeRoot );
             }
 
-            if ( appRoot.IsNotNullOrWhitespace() )
+            if ( appRoot.IsNotNullOrWhiteSpace() )
             {
                 value = value.Replace( "~/", appRoot );
                 value = value.Replace( @" src=""/", @" src=""" + appRoot );
@@ -147,77 +150,29 @@ namespace Rock.Communication
             return value;
         }
 
-        #region Obsolete
-
         /// <summary>
-        /// Sends the specified communication.
+        /// Resolves the text and adds it to the CommunicationRecipient.SentMessage object.
+        /// Don't forget to call RockContext.SaveChanges() to persist to the DB.
         /// </summary>
-        /// <param name="communication">The communication.</param>
-        [Obsolete( "Use Send( Communication communication, Dictionary<string, string> mediumAttributes ) instead" )]
-        public abstract void Send( Model.Communication communication );
-
-        /// <summary>
-        /// Sends the specified template.
-        /// </summary>
-        /// <param name="template">The template.</param>
-        /// <param name="recipients">The recipients.</param>
+        /// <param name="content">The content.</param>
+        /// <param name="person">The person.</param>
+        /// <param name="enabledLavaCommands">The enabled lava commands.</param>
+        /// <param name="mergeFields">The merge fields.</param>
+        /// <param name="communicationRecipient">The communication recipient.</param>
         /// <param name="appRoot">The application root.</param>
         /// <param name="themeRoot">The theme root.</param>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public abstract void Send( SystemEmail template, List<RecipientData> recipients, string appRoot, string themeRoot );
+        /// <returns></returns>
+        public virtual string ResolveText( string content, Person person, CommunicationRecipient communicationRecipient, string enabledLavaCommands, Dictionary<string, object> mergeFields, string appRoot = "", string themeRoot = "" )
+        {
+            string value = ResolveText( content, person, enabledLavaCommands, mergeFields, appRoot, themeRoot );
 
-        /// <summary>
-        /// Sends the specified medium data to the specified list of recipients.
-        /// </summary>
-        /// <param name="mediumData">The medium data.</param>
-        /// <param name="recipients">The recipients.</param>
-        /// <param name="appRoot">The application root.</param>
-        /// <param name="themeRoot">The theme root.</param>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public abstract void Send(Dictionary<string, string> mediumData, List<string> recipients, string appRoot, string themeRoot);
+            if ( communicationRecipient != null )
+            {
+                communicationRecipient.SentMessage = value;
+            }
 
-        /// <summary>
-        /// Sends the specified recipients.
-        /// </summary>
-        /// <param name="recipients">The recipients.</param>
-        /// <param name="from">From.</param>
-        /// <param name="subject">The subject.</param>
-        /// <param name="body">The body.</param>
-        /// <param name="appRoot">The application root.</param>
-        /// <param name="themeRoot">The theme root.</param>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public abstract void Send(List<string> recipients, string from, string subject, string body, string appRoot = null, string themeRoot = null);
-
-        /// <summary>
-        /// Sends the specified recipients.
-        /// </summary>
-        /// <param name="recipients">The recipients.</param>
-        /// <param name="from">From.</param>
-        /// <param name="subject">The subject.</param>
-        /// <param name="body">The body.</param>
-        /// <param name="appRoot">The application root.</param>
-        /// <param name="themeRoot">The theme root.</param>
-        /// /// <param name="attachments">Attachments.</param>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public abstract void Send(List<string> recipients, string from, string subject, string body, string appRoot = null, string themeRoot = null, List<Attachment> attachments = null);
-
-
-        /// <summary>
-        /// Sends the specified recipients.
-        /// </summary>
-        /// <param name="recipients">The recipients.</param>
-        /// <param name="from">From.</param>
-        /// <param name="fromName">From name.</param>
-        /// <param name="subject">The subject.</param>
-        /// <param name="body">The body.</param>
-        /// <param name="appRoot">The application root.</param>
-        /// <param name="themeRoot">The theme root.</param>
-        /// <param name="attachments">The attachments.</param>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public abstract void Send( List<string> recipients, string from, string fromName, string subject, string body, string appRoot = null, string themeRoot = null, List<Attachment> attachments = null );
-
-        #endregion
-
+            return value;
+        }
     }
-   
+
 }

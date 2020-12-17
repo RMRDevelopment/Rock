@@ -16,6 +16,8 @@
 //
 using System;
 
+using Rock.Web.Cache;
+
 namespace Rock.Attribute
 {
     /// <summary>
@@ -28,28 +30,6 @@ namespace Rock.Attribute
         private const string DEFINED_TYPE_KEY = "definedtype";
         private const string CUSTOM_VALUES = "customvalues";
         private const string ALLOW_HTML = "allowhtml";
-
-        /* Developer Note: When adding new params to a Field Attribute, we could just add new Properties instead to avoid backwards compatibily issues. 
-         * See AllowHtml below as an example, and the GroupList block for how to initialize it
-         */
-
-        /// <summary>
-        /// Sets a value indicating whether [allow HTML].
-        /// </summary>
-        /// <value>
-        ///   <c>true</c> if [allow HTML]; otherwise, <c>false</c>.
-        /// </value>
-        public bool AllowHtml
-        {
-            get
-            {
-                return FieldConfigurationValues.GetValueOrNull( ALLOW_HTML ).AsBoolean();
-            }
-            set
-            {
-                FieldConfigurationValues.AddOrReplace( ALLOW_HTML, new Field.ConfigurationValue( value.ToString() ) );
-            }
-        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ValueListFieldAttribute"/> class.
@@ -78,7 +58,7 @@ namespace Rock.Attribute
             Guid? guid = definedTypeGuid.AsGuidOrNull();
             if ( guid.HasValue )
             {
-                var definedType = Rock.Web.Cache.DefinedTypeCache.Read( guid.Value );
+                var definedType = DefinedTypeCache.Get( guid.Value );
                 if ( definedType != null )
                 {
                     var definedTypeConfigValue = new Field.ConfigurationValue( definedType.Id.ToString() );
@@ -102,7 +82,7 @@ namespace Rock.Attribute
         /// <param name="defaultValue">The default value.</param>
         /// <param name="valuePrompt">The text to display as a prompt in the label textbox.</param>
         /// <param name="definedTypeGuid">An Optional Defined Type Guid to select values from, otherwise values will be free-form text fields..</param>
-        /// <param name="customValues">Optional list of options to use for the values.  Format is either 'value1,value2,value3,...', or 'value1:text1,value2:text2,value3:text3,...'.</param>
+        /// <param name="customValues">Optional list of options to use for the values.  Format is either 'value1,value2,value3,...', or 'value1^text1,value2^text2,value3^text3,...'.</param>
         /// <param name="category">The category.</param>
         /// <param name="order">The order.</param>
         /// <param name="key">The key.</param>
@@ -111,6 +91,43 @@ namespace Rock.Attribute
            : this( name, description, required, defaultValue, valuePrompt, definedTypeGuid, customValues, category, order, key, 
             typeof( Rock.Field.Types.ValueListFieldType ).FullName )
         {
+        }
+
+        /// <summary>
+        /// Sets a value indicating whether [allow HTML].
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [allow HTML]; otherwise, <c>false</c>.
+        /// </value>
+        public bool AllowHtml
+        {
+            get
+            {
+                return FieldConfigurationValues.GetValueOrNull( ALLOW_HTML ).AsBoolean();
+            }
+            set
+            {
+                FieldConfigurationValues.AddOrReplace( ALLOW_HTML, new Field.ConfigurationValue( value.ToString() ) );
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the value prompt.
+        /// </summary>
+        /// <value>
+        /// The value prompt.
+        /// </value>
+        public string ValuePrompt
+        {
+            get
+            {
+                return FieldConfigurationValues.GetValueOrNull( VALUE_PROMPT_KEY );
+            }
+
+            set
+            {
+                FieldConfigurationValues.AddOrReplace( VALUE_PROMPT_KEY, new Field.ConfigurationValue( value ) );
+            }
         }
     }
 }

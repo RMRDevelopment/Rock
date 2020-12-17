@@ -16,6 +16,7 @@
 //
 using System;
 using System.Reflection;
+
 using Rock.Web.Cache;
 
 namespace Rock.Transactions
@@ -47,7 +48,7 @@ namespace Rock.Transactions
         /// </summary>
         public void Execute()
         {
-            var entityType = EntityTypeCache.Read( EntityTypeId );
+            var entityType = EntityTypeCache.Get( EntityTypeId );
 
             if ( entityType != null )
             {

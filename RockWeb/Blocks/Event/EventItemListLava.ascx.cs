@@ -39,7 +39,7 @@ namespace RockWeb.Blocks.Event
     [Category( "Event" )]
     [Description( "Renders calendar items using Lava." )]
 
-    [EventCalendarField( "Event Calendar", "The event calendar to be displayed", true, "1", order: 0 )]
+    [EventCalendarField( "Event Calendar", "The event calendar to be displayed", true, "8A444668-19AF-4417-9C74-09F842572974", order: 0 )]
     [CampusesField( "Campuses", "List of which campuses to show occurrences for. This setting will be ignored if 'Use Campus Context' is enabled.", required: false, order: 1, includeInactive:true )]
     [BooleanField( "Use Campus Context", "Determine if the campus should be read from the campus context of the page.", order: 2 )]
     [LinkedPage( "Details Page", "Detail page for events", order: 3 )]
@@ -137,7 +137,7 @@ namespace RockWeb.Blocks.Event
             // Filter by campus (always include the "All Campuses" events)
             if ( GetAttributeValue( "UseCampusContext" ).AsBoolean() )
             {
-                var campusEntityType = EntityTypeCache.Read<Campus>();
+                var campusEntityType = EntityTypeCache.Get<Campus>();
                 var contextCampus = RockPage.GetCurrentContext( campusEntityType ) as Campus;
 
                 if ( contextCampus != null )
@@ -180,12 +180,16 @@ namespace RockWeb.Blocks.Event
             foreach ( var occurrenceDates in occurrencesWithDates )
             {
                 var eventItemOccurrence = occurrenceDates.EventItemOccurrence;
+                var eventDurationInMinutes = eventItemOccurrence.Schedule.DurationInMinutes;
+
                 foreach ( var datetime in occurrenceDates.Dates )
                 {
                     CalendarEventDates.Add( datetime.Date );
 
                     if ( datetime >= dateRange.Start.Value && datetime < dateRange.End.Value )
                     {
+                        var occurrenceEndTime = datetime.AddMinutes( eventDurationInMinutes );
+
                         eventOccurrenceSummaries.Add( new EventOccurrenceSummary
                         {
                             EventItemOccurrence = eventItemOccurrence,
@@ -194,6 +198,8 @@ namespace RockWeb.Blocks.Event
                             DateTime = datetime,
                             Date = datetime.ToShortDateString(),
                             Time = datetime.ToShortTimeString(),
+                            EndDate = occurrenceEndTime.ToShortDateString(),
+                            EndTime = occurrenceEndTime.ToShortTimeString(),
                             Location = eventItemOccurrence.Campus != null ? eventItemOccurrence.Campus.Name : "All Campuses",
                             Description = eventItemOccurrence.EventItem.Description,
                             Summary = eventItemOccurrence.EventItem.Summary,
@@ -230,7 +236,7 @@ namespace RockWeb.Blocks.Event
         /// <summary>
         /// A class to store event item occurrence data for liquid
         /// </summary>
-        [DotLiquid.LiquidType( "EventItem", "EventItemOccurrence", "DateTime", "Name", "Date", "Time", "Location", "Description", "Summary", "DetailPage" )]
+        [DotLiquid.LiquidType( "EventItem", "EventItemOccurrence", "DateTime", "Name", "Date", "Time", "EndDate", "EndTime", "Location", "Description", "Summary", "DetailPage" )]
         public class EventOccurrenceSummary
         {
             /// <summary>
@@ -280,6 +286,22 @@ namespace RockWeb.Blocks.Event
             /// The time.
             /// </value>
             public string Time { get; set; }
+
+            /// <summary>
+            /// Gets or sets the end date.
+            /// </summary>
+            /// <value>
+            /// The end date.
+            /// </value>
+            public string EndDate { get; set; }
+
+            /// <summary>
+            /// Gets or sets the end time.
+            /// </summary>
+            /// <value>
+            /// The end time.
+            /// </value>
+            public string EndTime { get; set; }
 
             /// <summary>
             /// Gets or sets the location.

@@ -16,6 +16,7 @@
 //
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+
 using Rock.Model;
 
 namespace Rock
@@ -28,7 +29,7 @@ namespace Rock
         #region Geography extension methods
 
         /// <summary>
-        /// Coordinateses the specified geography.
+        /// Coordinates the specified geography.
         /// </summary>
         /// <param name="geography">The geography.</param>
         /// <returns></returns>

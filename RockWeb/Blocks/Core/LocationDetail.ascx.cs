@@ -39,17 +39,35 @@ namespace RockWeb.Blocks.Core
     [Category( "Core" )]
     [Description( "Displays the details of the given location." )]
 
-    [CodeEditorField( "Map HTML", "The HTML to use for displaying group location maps. Liquid syntax is used to render data from the following data structure: points[type, latitude, longitude], polygons[type, polygon_wkt, google_encoded_polygon]", CodeEditorMode.Lava, CodeEditorTheme.Rock, 300, false, @"
-    {% if point or polygon %}
-        <div class='group-location-map'>
-            <img class='img-thumbnail' src='//maps.googleapis.com/maps/api/staticmap?sensor=false&size=350x200&format=png&style=feature:all|saturation:0|hue:0xe7ecf0&style=feature:road|saturation:-70&style=feature:transit|visibility:off&style=feature:poi|visibility:off&style=feature:water|visibility:simplified|saturation:-60{% if point %}&markers=color:0x779cb1|{{ point.latitude }},{{ point.longitude }}{% endif %}{% if polygon %}&path=fillcolor:0x779cb155|color:0xFFFFFF00|enc:{{ polygon.google_encoded_polygon }}{% endif %}&visual_refresh=true'/>
-        </div>
-    {% endif %}
-" )]
-    [DefinedValueField( Rock.SystemGuid.DefinedType.MAP_STYLES, "Map Style", "The map theme that should be used for styling the GeoPicker map.", true, false, Rock.SystemGuid.DefinedValue.MAP_STYLE_ROCK )]
+    [CodeEditorField( "Map HTML",
+        Description = "The HTML to use for displaying group location maps. Lava syntax is used to render data from the following data structure: points[type, latitude, longitude], polygons[type, polygon_wkt, google_encoded_polygon]",
+        EditorMode = CodeEditorMode.Lava,
+        EditorTheme = CodeEditorTheme.Rock,
+        EditorHeight = 300,
+        IsRequired = false,
+        DefaultValue = @"{% if point or polygon %}
+    <div class='group-location-map'>
+        <img class='img-thumbnail' src='//maps.googleapis.com/maps/api/staticmap?sensor=false&size=350x200&format=png&style=feature:all|saturation:0|hue:0xe7ecf0&style=feature:road|saturation:-70&style=feature:transit|visibility:off&style=feature:poi|visibility:off&style=feature:water|visibility:simplified|saturation:-60{% if point %}&markers=color:0x779cb1|{{ point.latitude }},{{ point.longitude }}{% endif %}{% if polygon %}&path=fillcolor:0x779cb155|color:0xFFFFFF00|enc:{{ polygon.google_encoded_polygon }}{% endif %}&visual_refresh=true'/>
+    </div>
+{% endif %}",
+        Key = AttributeKey.MapHtml)]
+
+    [DefinedValueField( "Map Style",
+        DefinedTypeGuid = Rock.SystemGuid.DefinedType.MAP_STYLES,
+        Description = "The map theme that should be used for styling the GeoPicker map.",
+        IsRequired = true,
+        AllowMultiple = false,
+        DefaultValue = Rock.SystemGuid.DefinedValue.MAP_STYLE_ROCK,
+        Key = AttributeKey.MapStyle )]
 
     public partial class LocationDetail : RockBlock, IDetailBlock
     {
+        public static class AttributeKey
+        {
+            public const string MapStyle = "MapStyle";
+            public const string MapHtml = "MapHTML";
+        }
+
         private int? _personId = null;
 
         private int? LocationTypeValueId
@@ -69,7 +87,7 @@ namespace RockWeb.Blocks.Core
             base.OnInit( e );
 
             btnDelete.Attributes["onclick"] = string.Format( "javascript: return Rock.dialogs.confirmDelete(event, '{0}');", Location.FriendlyTypeName );
-            btnSecurity.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.Location ) ).Id;
+            btnSecurity.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.Location ) ).Id;
 
             ddlPrinter.Items.Clear();
             ddlPrinter.DataSource = new DeviceService( new RockContext() )
@@ -79,10 +97,32 @@ namespace RockWeb.Blocks.Core
             ddlPrinter.DataBind();
             ddlPrinter.Items.Insert( 0, new ListItem( None.Text, None.IdValue ) );
 
-            RockPage.AddCSSLink( ResolveRockUrl( "~/Styles/fluidbox.css" ) );
-            RockPage.AddScriptLink( ResolveRockUrl( "~/Scripts/imagesloaded.min.js" ) );
-            RockPage.AddScriptLink( ResolveRockUrl( "~/Scripts/jquery.fluidbox.min.js" ) );
+            RockPage.AddCSSLink( "~/Styles/fluidbox.css" );
+            RockPage.AddScriptLink( "~/Scripts/imagesloaded.min.js" );
+            RockPage.AddScriptLink( "~/Scripts/jquery.fluidbox.min.js" );
             ScriptManager.RegisterStartupScript( lImage, lImage.GetType(), "image-fluidbox", "$('.photo a').fluidbox();", true );
+
+            BuildAttributeEdits( GetLocation(), false );
+        }
+
+        /// <summary>
+        /// Restores the view-state information from a previous user control request that was saved by the <see cref="M:System.Web.UI.UserControl.SaveViewState" /> method.
+        /// </summary>
+        /// <param name="savedState">An <see cref="T:System.Object" /> that represents the user control state to be restored.</param>
+        protected override void LoadViewState( object savedState )
+        {
+            base.LoadViewState( savedState );
+
+            var location = GetLocation();
+
+            //Changing the LocationTypeValue will change which attributes appear.
+            //But we just loaded whatever was in the database which may not match what was selected.
+            if ( LocationTypeValueId != location.LocationTypeValueId )
+            {
+                location.LocationTypeValueId = LocationTypeValueId;
+                location.LoadAttributes();
+                BuildAttributeEdits( location, false );
+            }
         }
 
         /// <summary>
@@ -97,34 +137,8 @@ namespace RockWeb.Blocks.Core
 
             if ( !Page.IsPostBack )
             {
-                string locationId = PageParameter( "LocationId" );
-
-                if ( !string.IsNullOrWhiteSpace( locationId ) )
-                {
-                    ShowDetail( locationId.AsInteger(), PageParameter( "ParentLocationId" ).AsIntegerOrNull() );
-                }
-                else
-                {
-                    pnlDetails.Visible = false;
-                }
-            }
-            else
-            {
-                // Rebuild the attribute controls on postback based on group type
-                if ( pnlDetails.Visible )
-                {
-                    int? locationId = PageParameter( "LocationId" ).AsIntegerOrNull();
-                    if ( locationId.HasValue && locationId.Value > 0 )
-                    {
-                        var location = new LocationService(new RockContext()).Get( locationId.Value );
-                        if ( location != null )
-                        {
-                            location.LoadAttributes();
-                            BuildAttributeEdits( location, true );
-                        }
-                    }
-                   
-                }
+                Location location = GetLocation();
+                ShowDetail( location.Id );
             }
         }
 
@@ -139,9 +153,7 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void btnEdit_Click( object sender, EventArgs e )
         {
-            LocationService locationService = new LocationService( new RockContext() );
-            Location location = locationService.Get( int.Parse( hfLocationId.Value ) );
-            ShowEditDetails( location );
+            ShowEditDetails();
         }
 
         /// <summary>
@@ -151,11 +163,11 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void btnDelete_Click( object sender, EventArgs e )
         {
-            int? parentLocationId = null;
-
-            var rockContext = new RockContext();
+            RockContext rockContext = new RockContext();
             LocationService locationService = new LocationService( rockContext );
-            Location location = locationService.Get( hfLocationId.Value.AsInteger() );
+            Location location = GetLocation( locationService );
+
+            int? parentLocationId = null;
 
             if ( location != null )
             {
@@ -172,8 +184,7 @@ namespace RockWeb.Blocks.Core
                 locationService.Delete( location );
                 rockContext.SaveChanges();
 
-                FlushCampus( locationId );
-                Rock.CheckIn.KioskDevice.FlushAll();
+                Rock.CheckIn.KioskDevice.Clear();
             }
 
             // reload page, selecting the deleted location's parent
@@ -195,26 +206,12 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void btnSave_Click( object sender, EventArgs e )
         {
-            Location location = null;
-
-            var rockContext = new RockContext();
+            RockContext rockContext = new RockContext();
             LocationService locationService = new LocationService( rockContext );
+            Location location = GetLocation( locationService );
+
             AttributeService attributeService = new AttributeService( rockContext );
             AttributeQualifierService attributeQualifierService = new AttributeQualifierService( rockContext );
-
-            int locationId = int.Parse( hfLocationId.Value );
-
-            if ( locationId != 0 )
-            {
-                location = locationService.Get( locationId );
-                FlushCampus( locationId );
-            }
-
-            if ( location == null )
-            { 
-                location = new Location();
-                location.Name = string.Empty;
-            }
 
             string previousName = location.Name;
 
@@ -227,7 +224,7 @@ namespace RockWeb.Blocks.Core
 
             location.Name = tbName.Text;
             location.IsActive = cbIsActive.Checked;
-            location.LocationTypeValueId = ddlLocationType.SelectedValueAsId();
+            location.LocationTypeValueId = dvpLocationType.SelectedValueAsId();
             if ( gpParentLocation != null && gpParentLocation.Location != null )
             {
                 location.ParentLocationId = gpParentLocation.Location.Id;
@@ -239,7 +236,7 @@ namespace RockWeb.Blocks.Core
 
             location.PrinterDeviceId = ddlPrinter.SelectedValueAsInt();
 
-            acAddress.GetValues(location);
+            acAddress.GetValues( location );
 
             location.GeoPoint = geopPoint.SelectedValue;
             if ( geopPoint.SelectedValue != null )
@@ -252,9 +249,6 @@ namespace RockWeb.Blocks.Core
 
             location.SoftRoomThreshold = nbSoftThreshold.Text.AsIntegerOrNull();
             location.FirmRoomThreshold = nbFirmThreshold.Text.AsIntegerOrNull();
-
-            location.LoadAttributes( rockContext );
-            Rock.Attribute.Helper.GetEditValues( phAttributeEdits, location );
 
             if ( !Page.IsValid )
             {
@@ -279,7 +273,7 @@ namespace RockWeb.Blocks.Core
                 }
                 rockContext.SaveChanges();
 
-                if (orphanedImageId.HasValue)
+                if ( orphanedImageId.HasValue )
                 {
                     BinaryFileService binaryFileService = new BinaryFileService( rockContext );
                     var binaryFile = binaryFileService.Get( orphanedImageId.Value );
@@ -291,15 +285,16 @@ namespace RockWeb.Blocks.Core
                     }
                 }
 
+                location.LoadAttributes( rockContext );
+                Rock.Attribute.Helper.GetEditValues( phAttributeEdits, location );
                 location.SaveAttributeValues( rockContext );
-
             } );
 
-            // If this is a names location (or was previouisly)
-            if ( !string.IsNullOrWhiteSpace( location.Name ) || ( previousName ?? string.Empty ) != (location.Name ?? string.Empty ) )
+            // If this is a names location (or was previously)
+            if ( !string.IsNullOrWhiteSpace( location.Name ) || ( previousName ?? string.Empty ) != ( location.Name ?? string.Empty ) )
             {
                 // flush the checkin config
-                Rock.CheckIn.KioskDevice.FlushAll();
+                Rock.CheckIn.KioskDevice.Clear();
             }
 
             if ( _personId.HasValue )
@@ -308,7 +303,7 @@ namespace RockWeb.Blocks.Core
             }
             else
             {
-                Rock.CheckIn.KioskDevice.FlushAll();
+                Rock.CheckIn.KioskDevice.Clear();
 
                 var qryParams = new Dictionary<string, string>();
                 qryParams["LocationId"] = location.Id.ToString();
@@ -351,9 +346,7 @@ namespace RockWeb.Blocks.Core
                 else
                 {
                     // Cancelling on Edit.  Return to Details
-                    LocationService locationService = new LocationService( new RockContext() );
-                    Location location = locationService.Get( int.Parse( hfLocationId.Value ) );
-                    ShowReadonlyDetails( location );
+                    ShowReadonlyDetails( GetLocation() );
                 }
             }
         }
@@ -365,20 +358,13 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void btnStandardize_Click( object sender, EventArgs e )
         {
-            int locationId = hfLocationId.Value.AsInteger();
-
-            var rockContext = new RockContext();
-            var service = new LocationService( rockContext );
-            var location = service.Get( locationId );
-            if (location == null)
-            {
-                // if they are adding a new named location, there won't be a location record yet, so just make a new one for the verification
-                location = new Location();
-            }
+            RockContext rockContext = new RockContext();
+            LocationService locationService = new LocationService( rockContext );
+            Location location = GetLocation( locationService );
 
             acAddress.GetValues( location );
 
-            service.Verify( location, true );
+            locationService.Verify( location, true );
 
             rockContext.SaveChanges();
 
@@ -397,15 +383,11 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void ddlLocationType_SelectedIndexChanged( object sender, EventArgs e )
         {
-            var location = new LocationService( new RockContext() ).Get( hfLocationId.Value.AsInteger() );
-            if ( location == null )
-            {
-                location = new Location();
-            }
-            location.LocationTypeValueId = ddlLocationType.SelectedValueAsId();
-
-            phAttributeEdits.Controls.Clear();
+            Location location = GetLocation();
+            location.LocationTypeValueId = dvpLocationType.SelectedValueAsId();
+            LocationTypeValueId = location.LocationTypeValueId;
             location.LoadAttributes();
+            Rock.Attribute.Helper.GetEditValues( phAttributeEdits, location );
             BuildAttributeEdits( location, true );
         }
 
@@ -417,38 +399,24 @@ namespace RockWeb.Blocks.Core
         /// Shows the detail.
         /// </summary>
         /// <param name="locationId">The location identifier.</param>
+        /// <param name="parentLocationId">The parent location identifier.</param>
         public void ShowDetail( int locationId )
         {
-            ShowDetail( locationId, null );
-        }
-
-        /// <summary>
-        /// Shows the detail.
-        /// </summary>
-        /// <param name="locationId">The location identifier.</param>
-        /// <param name="parentLocationId">The parent location identifier.</param>
-        public void ShowDetail( int locationId, int? parentLocationId )
-        {
+            Location location = GetLocation();
             pnlDetails.Visible = false;
-
-            bool editAllowed = true;
-
-            Location location = null;
 
             if ( !locationId.Equals( 0 ) )
             {
-                location = new LocationService( new RockContext() ).Get( locationId );
                 pdAuditDetails.SetEntity( location, ResolveRockUrl( "~" ) );
             }
-
-            if ( location == null )
+            else
             {
-                location = new Location { Id = 0, IsActive = true, ParentLocationId = parentLocationId };
                 // hide the panel drawer that show created and last modified dates
                 pdAuditDetails.Visible = false;
+
             }
 
-            editAllowed = location.IsAuthorized( Authorization.EDIT, CurrentPerson );
+            bool editAllowed = location.IsAuthorized( Authorization.EDIT, CurrentPerson );
 
             pnlDetails.Visible = true;
             hfLocationId.Value = location.Id.ToString();
@@ -479,7 +447,7 @@ namespace RockWeb.Blocks.Core
                 }
                 else
                 {
-                    ShowEditDetails( location );
+                    ShowEditDetails();
                 }
             }
 
@@ -489,8 +457,12 @@ namespace RockWeb.Blocks.Core
         /// Shows the edit details.
         /// </summary>
         /// <param name="location">The location.</param>
-        private void ShowEditDetails( Location location )
+        private void ShowEditDetails()
         {
+            RockContext rockContext = new RockContext();
+            LocationService locationService = new LocationService( rockContext );
+            Location location = GetLocation( locationService );
+
             divAdvSettings.Visible = !_personId.HasValue;
             cbIsActive.Visible = !_personId.HasValue;
             geopFence.Visible = !_personId.HasValue;
@@ -536,34 +508,34 @@ namespace RockWeb.Blocks.Core
             nbSoftThreshold.Text = location.SoftRoomThreshold.HasValue ? location.SoftRoomThreshold.Value.ToString() : "";
             nbFirmThreshold.Text = location.FirmRoomThreshold.HasValue ? location.FirmRoomThreshold.Value.ToString() : "";
 
-            Guid mapStyleValueGuid = GetAttributeValue( "MapStyle" ).AsGuid();
+            Guid mapStyleValueGuid = GetAttributeValue( AttributeKey.MapStyle ).AsGuid();
             geopPoint.MapStyleValueGuid = mapStyleValueGuid;
             geopFence.MapStyleValueGuid = mapStyleValueGuid;
 
-            var rockContext = new RockContext();
-            var locationService = new LocationService( rockContext );
             var attributeService = new AttributeService( rockContext );
 
-            ddlLocationType.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.LOCATION_TYPE.AsGuid() ), true );
+            dvpLocationType.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.LOCATION_TYPE.AsGuid() ).Id;
 
             gpParentLocation.Location = location.ParentLocation ?? locationService.Get( location.ParentLocationId ?? 0 );
 
             // LocationType depends on Selected ParentLocation
-            if ( location.Id == 0 && ddlLocationType.Items.Count > 1 )
+            if ( location.Id == 0 && dvpLocationType.Items.Count > 1 )
             {
-                // if this is a new location 
-                ddlLocationType.SelectedIndex = 0;
+                // if this is a new location
+                dvpLocationType.SelectedIndex = 0;
             }
             else
             {
-                ddlLocationType.SetValue( location.LocationTypeValueId );
+                dvpLocationType.SetValue( location.LocationTypeValueId );
             }
 
             location.LoadAttributes( rockContext );
+            BuildAttributeEdits( location, true );
         }
 
         private void BuildAttributeEdits( Location location, bool setValues )
         {
+            phAttributeEdits.Controls.Clear();
             Rock.Attribute.Helper.AddEditControls( location, phAttributeEdits, setValues, BlockValidationGroup );
         }
 
@@ -627,12 +599,12 @@ namespace RockWeb.Blocks.Core
 
             if ( location.SoftRoomThreshold.HasValue )
             {
-                descriptionList.Add( "Threshold", location.SoftRoomThreshold.Value.ToString( "N0" ) ); ;
+                descriptionList.Add( "Threshold", location.SoftRoomThreshold.Value.ToString( "N0" ) );
             }
 
             if ( location.FirmRoomThreshold.HasValue )
             {
-                descriptionList.Add( "Threshold (Absolute)", location.FirmRoomThreshold.Value.ToString( "N0" ) ); ;
+                descriptionList.Add( "Threshold (Absolute)", location.FirmRoomThreshold.Value.ToString( "N0" ) );
             }
 
             string fullAddress = location.GetFullStreetAddress().ConvertCrLfToHtmlBr();
@@ -647,15 +619,15 @@ namespace RockWeb.Blocks.Core
             Rock.Attribute.Helper.AddDisplayControls( location, phAttributes );
 
             phMaps.Controls.Clear();
-            var mapStyleValue = DefinedValueCache.Read( GetAttributeValue( "MapStyle" ) );
-            var googleAPIKey = GlobalAttributesCache.Read().GetValue( "GoogleAPIKey" );
+            var mapStyleValue = DefinedValueCache.Get( GetAttributeValue( AttributeKey.MapStyle ) );
+            var googleAPIKey = GlobalAttributesCache.Get().GetValue( "GoogleAPIKey" );
 
             if ( mapStyleValue == null )
             {
-                mapStyleValue = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.MAP_STYLE_ROCK );
+                mapStyleValue = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.MAP_STYLE_ROCK );
             }
 
-            if ( mapStyleValue != null && ! string.IsNullOrWhiteSpace( googleAPIKey ) )
+            if ( mapStyleValue != null && !string.IsNullOrWhiteSpace( googleAPIKey ) )
             {
                 string mapStyle = mapStyleValue.GetAttributeValue( "StaticMapStyle" );
 
@@ -667,7 +639,7 @@ namespace RockWeb.Blocks.Core
                         string mapLink = System.Text.RegularExpressions.Regex.Replace( mapStyle, @"\{\s*MarkerPoints\s*\}", markerPoints );
                         mapLink = System.Text.RegularExpressions.Regex.Replace( mapLink, @"\{\s*PolygonPoints\s*\}", string.Empty );
                         mapLink += "&sensor=false&size=350x200&zoom=13&format=png&key=" + googleAPIKey;
-                        phMaps.Controls.Add( new LiteralControl ( string.Format( "<div class='group-location-map'><img class='img-thumbnail' src='{0}'/></div>", mapLink ) ) );
+                        phMaps.Controls.Add( new LiteralControl( string.Format( "<div class='group-location-map'><img class='img-thumbnail' src='{0}'/></div>", mapLink ) ) );
                     }
 
                     if ( location.GeoFence != null )
@@ -687,6 +659,40 @@ namespace RockWeb.Blocks.Core
 
         }
 
+        /// <summary>Gets the location.</summary>
+        /// <returns></returns>
+        private Location GetLocation()
+        {
+            return GetLocation( new LocationService( new RockContext() ) );
+        }
+
+        /// <summary>Gets the location.</summary>
+        /// <param name="locationService">The location service.</param>
+        /// <returns></returns>
+        private Location GetLocation( LocationService locationService )
+        {
+            var location = locationService.Get( PageParameter( "LocationId" ).AsInteger() );
+            if ( location == null )
+            {
+                location = new Location
+                {
+                    Id = 0,
+                    IsActive = true,
+                    ParentLocationId = PageParameter( "ParentLocationId" ).AsIntegerOrNull(),
+                    State = acAddress.GetDefaultState(),
+                    Country = acAddress.GetDefaultCountry()
+                };
+            }
+
+            if ( LocationTypeValueId.HasValue )
+            {
+                location.LocationTypeValueId = LocationTypeValueId.Value;
+            }
+
+            location.LoadAttributes();
+            return location;
+        }
+
         /// <summary>
         /// Sets the edit mode.
         /// </summary>
@@ -699,16 +705,6 @@ namespace RockWeb.Blocks.Core
             this.HideSecondaryBlocks( editable );
         }
 
-        // Flush any cached campus that uses location
-        private void FlushCampus( int locationId )
-        {
-            foreach ( var campus in CampusCache.All()
-                .Where( c => c.LocationId == locationId ) )
-            {
-                CampusCache.Flush( campus.Id );
-            }
-        }
-            
         #endregion
     }
 }

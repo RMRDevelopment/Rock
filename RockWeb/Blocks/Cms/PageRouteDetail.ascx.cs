@@ -29,6 +29,7 @@ using Rock.Model;
 using Rock.Security;
 using Rock.Web.Cache;
 using Rock.Web.UI;
+using Rock.Attribute;
 
 namespace RockWeb.Blocks.Cms
 {
@@ -61,9 +62,25 @@ namespace RockWeb.Blocks.Cms
 
             nbErrorMessage.Visible = false;
 
+            var pageRouteId = PageParameter( "PageRouteId" ).AsInteger();
+
             if ( !Page.IsPostBack )
             {
-                ShowDetail( PageParameter( "pageRouteId" ).AsInteger() );
+                ShowDetail( pageRouteId );
+            }
+
+            // Add any attribute controls. 
+            // This must be done here regardless of whether it is a postback so that the attribute values will get saved.
+            var pageRoute = new PageRouteService( new RockContext() ).Get( pageRouteId );
+            if ( pageRoute == null )
+            {
+                pageRoute = new PageRoute();
+            }
+            if ( !pageRoute.IsSystem )
+            {
+                pageRoute.LoadAttributes();
+                phAttributes.Controls.Clear();
+                Helper.AddEditControls( pageRoute, phAttributes, true, BlockValidationGroup );
             }
         }
 
@@ -95,6 +112,8 @@ namespace RockWeb.Blocks.Cms
             }
 
             pageRoute.Route = tbRoute.Text.Trim();
+            pageRoute.IsGlobal = cbIsGlobal.Checked;
+
             int selectedPageId = int.Parse( ppPage.SelectedValue );
             pageRoute.PageId = selectedPageId;
 
@@ -105,7 +124,7 @@ namespace RockWeb.Blocks.Cms
             }
 
             int? siteId = null;
-            var pageCache = PageCache.Read( selectedPageId );
+            var pageCache = PageCache.Get( selectedPageId );
             if ( pageCache != null && pageCache.Layout != null )
             {
                 siteId = pageCache.Layout.SiteId;
@@ -134,49 +153,21 @@ namespace RockWeb.Blocks.Cms
             }
             else
             {
-                rockContext.SaveChanges();
+                pageRoute.LoadAttributes( rockContext );
 
-                // Remove previous route
-                var oldRoute = RouteTable.Routes.OfType<Route>().FirstOrDefault( a => a.RouteIds().Contains( pageRoute.Id ) );
-                if ( oldRoute != null )
+                rockContext.WrapTransaction( () =>
                 {
-                    var pageAndRouteIds = oldRoute.DataTokens["PageRoutes"] as List<Rock.Web.PageAndRouteId>;
-                    pageAndRouteIds = pageAndRouteIds.Where( p => p.RouteId != pageRoute.Id ).ToList();
-                    if ( pageAndRouteIds.Any() )
+                    rockContext.SaveChanges();
+                    if ( !pageRoute.IsSystem )
                     {
-                        oldRoute.DataTokens["PageRoutes"] = pageAndRouteIds;
+                        Rock.Attribute.Helper.GetEditValues( phAttributes, pageRoute );
+                        pageRoute.SaveAttributeValues( rockContext );
                     }
-                    else
-                    {
-                        RouteTable.Routes.Remove( oldRoute );
-                    }
-                }
+                } );
 
-                // Remove the '{shortlink}' route (will be added back after specific routes)
-                var shortLinkRoute = RouteTable.Routes.OfType<Route>().Where( r => r.Url == "{shortlink}" ).FirstOrDefault();
-                if ( shortLinkRoute != null )
-                {
-                    RouteTable.Routes.Remove( shortLinkRoute );
-                }
+                PageCache.FlushPage( pageCache.Id );
 
-                // Add new route
-                var pageAndRouteId = new Rock.Web.PageAndRouteId { PageId = pageRoute.PageId, RouteId = pageRoute.Id };
-                var existingRoute = RouteTable.Routes.OfType<Route>().FirstOrDefault( r => r.Url == pageRoute.Route );
-                if ( existingRoute != null )
-                {
-                    var pageAndRouteIds = existingRoute.DataTokens["PageRoutes"] as List<Rock.Web.PageAndRouteId>;
-                    pageAndRouteIds.Add( pageAndRouteId );
-                    existingRoute.DataTokens["PageRoutes"] = pageAndRouteIds;
-                }
-                else
-                {
-                    var pageAndRouteIds = new List<Rock.Web.PageAndRouteId>();
-                    pageAndRouteIds.Add( pageAndRouteId );
-                    RouteTable.Routes.AddPageRoute( pageRoute.Route, pageAndRouteIds );
-                }
-
-                RouteTable.Routes.Add( new Route( "{shortlink}", new Rock.Web.RockRouteHandler() ) );
-
+                Rock.Web.RockRouteHandler.ReregisterRoutes();
                 NavigateToParentPage();
             }
         }
@@ -236,32 +227,33 @@ namespace RockWeb.Blocks.Cms
             ShowSite();
 
             tbRoute.Text = pageRoute.Route;
+            cbIsGlobal.Checked = pageRoute.IsGlobal;
 
-            // render UI based on Authorized and IsSystem
-            bool readOnly = false;
-
+            // render UI based on Authorized and IsSystem. Do IsSystem check first so the IsUserAuthorized check can overwrite the settings.
             nbEditModeMessage.Text = string.Empty;
-            if ( !IsUserAuthorized( Authorization.EDIT ) )
-            {
-                readOnly = true;
-                nbEditModeMessage.Text = EditModeMessage.ReadOnlyEditActionNotAllowed( PageRoute.FriendlyTypeName );
-            }
 
             if ( pageRoute.IsSystem )
             {
-                readOnly = true;
-                nbEditModeMessage.Text = EditModeMessage.ReadOnlySystem( PageRoute.FriendlyTypeName );
+                nbEditModeMessage.Text = EditModeMessage.System( PageRoute.FriendlyTypeName );
+
+                ppPage.Enabled = false;
+                tbRoute.ReadOnly = true;
+                cbIsGlobal.Enabled = true;
+                btnSave.Visible = true;
             }
 
-            if ( readOnly )
+            if ( !IsUserAuthorized( Authorization.EDIT ) )
             {
+                nbEditModeMessage.Text = EditModeMessage.ReadOnlyEditActionNotAllowed( PageRoute.FriendlyTypeName );
+
                 lActionTitle.Text = ActionTitle.View( PageRoute.FriendlyTypeName ).FormatAsHtmlTitle();
                 btnCancel.Text = "Close";
-            }
 
-            ppPage.Enabled = !readOnly;
-            tbRoute.ReadOnly = readOnly;
-            btnSave.Visible = !readOnly;
+                ppPage.Enabled = false;
+                tbRoute.ReadOnly = true;
+                cbIsGlobal.Enabled = false;
+                btnSave.Visible = false;
+            }
         }
 
         private void ShowSite()
@@ -271,7 +263,7 @@ namespace RockWeb.Blocks.Cms
             int? pageId = ppPage.SelectedValueAsInt();
             if ( pageId.HasValue )
             {
-                var page = PageCache.Read( pageId.Value );
+                var page = PageCache.Get( pageId.Value );
                 if ( page != null && page.Layout != null && page.Layout.Site != null )
                 {
                     lSite.Text = page.Layout.Site.Name;

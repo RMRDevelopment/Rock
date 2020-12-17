@@ -25,6 +25,7 @@ using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
+using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
 
@@ -37,10 +38,26 @@ namespace RockWeb.Blocks.Core
     [Category( "Core" )]
     [Description( "Lists all the defined types and allows for managing them and their values." )]
 
-    [LinkedPage( "Detail Page", order: 0 )]
-    [CategoryField( "Categories", "If block should only display Defined Types from specific categories, select the categories here.", true, "Rock.Model.DefinedType", order: 1 )]
+    [LinkedPage( "Detail Page",
+        Order = 0,
+        Key = AttributeKey.DetailPage )]
+
+    [CategoryField( AttributeKey.Categories,
+        Description = "If block should only display Defined Types from specific categories, select the categories here.",
+        AllowMultiple = true,
+        EntityTypeName = "Rock.Model.DefinedType",
+        Order = 1,
+        IsRequired = false,
+        Key = AttributeKey.Categories )]
+
     public partial class DefinedTypeList : RockBlock, ICustomGridColumns
     {
+        public static class AttributeKey
+        {
+            public const string DetailPage = "DetailPage";
+            public const string Categories = "Categories";
+        }
+
         #region Control Methods
 
         private List<Guid> _categoryGuids = null;
@@ -53,7 +70,7 @@ namespace RockWeb.Blocks.Core
         {
             base.OnInit( e );
 
-            _categoryGuids = GetAttributeValue( "Categories" ).SplitDelimitedValues().AsGuidList();
+            _categoryGuids = GetAttributeValue( AttributeKey.Categories ).SplitDelimitedValues().AsGuidList();
             if ( _categoryGuids.Any() )
             {
                 tFilter.Visible = false;
@@ -76,6 +93,9 @@ namespace RockWeb.Blocks.Core
             bool canAddEditDelete = IsUserAuthorized( Authorization.EDIT );
             gDefinedType.Actions.ShowAdd = canAddEditDelete;
             gDefinedType.IsDeleteEnabled = canAddEditDelete;
+
+            var securityField = gDefinedType.ColumnsOfType<SecurityField>().FirstOrDefault();
+            securityField.EntityTypeId = EntityTypeCache.Get( typeof( DefinedType ) ).Id;
         }
 
         /// <summary>
@@ -121,7 +141,7 @@ namespace RockWeb.Blocks.Core
                 int? categoryId = e.Value.AsIntegerOrNull();
                 if ( categoryId.HasValue )
                 {
-                    var category = Rock.Web.Cache.CategoryCache.Read( categoryId.Value );
+                    var category = CategoryCache.Get( categoryId.Value );
                     if ( category != null )
                     {
                         e.Value = category.Name;
@@ -149,7 +169,7 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void gDefinedType_Add( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "definedTypeId", 0 );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "DefinedTypeId", 0 );
         }
 
         /// <summary>
@@ -159,7 +179,7 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gDefinedType_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "definedTypeId", e.RowKeyId );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "DefinedTypeId", e.RowKeyId );
         }
 
         /// <summary>
@@ -275,7 +295,7 @@ namespace RockWeb.Blocks.Core
                     } )
                 .ToList();
 
-            // SanitizeHtml can't be compilied into a SQL query so we have to ToList() the data and then sanitize the field in the List<T>
+            // SanitizeHtml can't be compiled into a SQL query so we have to ToList() the data and then sanitize the field in the List<T>
             //gDefinedType.DataSource = dataSource
             //    .Select( a =>
             //        new

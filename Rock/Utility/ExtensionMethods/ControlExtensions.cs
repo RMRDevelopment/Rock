@@ -16,10 +16,13 @@
 //
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Web.UI.WebControls;
+
+using Rock.Web.Cache;
 
 namespace Rock
 {
@@ -155,6 +158,31 @@ namespace Rock
             return null;
         }
 
+        /// <summary>
+        /// Finds the first parent control matching the specified condition
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="condition">The condition.</param>
+        /// <returns></returns>
+        public static System.Web.UI.Control FindFirstParentWhere( this System.Web.UI.Control control, Func<System.Web.UI.Control, bool> condition )
+        {
+            if ( control != null )
+            {
+                var parentControl = control.Parent;
+                while ( parentControl != null )
+                {
+                    if ( condition( parentControl ) )
+                    {
+                        return parentControl;
+                    }
+
+                    parentControl = parentControl.Parent;
+                }
+            }
+
+            return null;
+        }
+
         #endregion Control Extensions
 
         #region WebControl Extensions
@@ -167,7 +195,7 @@ namespace Rock
         public static WebControl AddCssClass( this WebControl webControl, string className )
         {
             // if the className is blank, don't do anything
-            if ( className.IsNotNullOrWhitespace() )
+            if ( className.IsNotNullOrWhiteSpace() )
             {
                 // if the webControl doesn't have a CssClass yet, simply set it to the className
                 if ( webControl.CssClass.IsNullOrWhiteSpace() )
@@ -188,6 +216,26 @@ namespace Rock
             }
 
             return webControl;
+        }
+
+        /// <summary>
+        /// Determines whether web control's CssClass includes the specified className
+        /// </summary>
+        /// <param name="webControl">The web control.</param>
+        /// <param name="className">Name of the class.</param>
+        /// <returns>
+        ///   <c>true</c> if [has CSS class] [the specified class name]; otherwise, <c>false</c>.
+        /// </returns>
+        public static bool HasCssClass( this WebControl webControl, string className )
+        {
+            if (className.IsNullOrWhiteSpace() || webControl == null)
+            {
+                return false;
+            }
+
+            string css = webControl.CssClass;
+            string match = @"(^|\s+)" + className + @"($|\s+)";
+            return Regex.IsMatch( css, match, RegexOptions.IgnoreCase );
         }
 
         /// <summary>
@@ -221,17 +269,30 @@ namespace Rock
         #region HtmlControl Extensions
 
         /// <summary>
-        /// Adds a CSS class name to an html control.
+        /// Adds a CSS class name to an html control, will not add duplicates.
         /// </summary>
         /// <param name="htmlControl">The html control.</param>
         /// <param name="className">Name of the class.</param>
         public static void AddCssClass( this System.Web.UI.HtmlControls.HtmlControl htmlControl, string className )
         {
-            string match = @"\b" + className + "\b";
+            if ( className.IsNullOrWhiteSpace() )
+            {
+                return;
+            }
+
             string css = htmlControl.Attributes["class"] ?? string.Empty;
 
-            if ( !Regex.IsMatch( css, match, RegexOptions.IgnoreCase ) )
-                htmlControl.Attributes["class"] = Regex.Replace( css + " " + className, @"^\s+", "", RegexOptions.IgnoreCase );
+            if ( css.IsNullOrWhiteSpace() )
+            {
+                htmlControl.Attributes["class"] = className;
+                return;
+            }
+
+            string pattern = $"\\b{className}\\b";
+            if ( !Regex.IsMatch( css, pattern, RegexOptions.IgnoreCase ) )
+            {
+                htmlControl.Attributes["class"] += $" {className}";
+            }
         }
 
         /// <summary>
@@ -241,11 +302,16 @@ namespace Rock
         /// <param name="className">Name of the class.</param>
         public static void RemoveCssClass( this System.Web.UI.HtmlControls.HtmlControl htmlControl, string className )
         {
-            string match = @"\s*\b" + className + @"\b";
+            if (className.IsNullOrWhiteSpace() || htmlControl.Attributes["class"].IsNullOrWhiteSpace() )
+            {
+                return;
+            }
+
+            string match = $"\\s*\\b{className}\\b";
             string css = htmlControl.Attributes["class"] ?? string.Empty;
 
-            if ( Regex.IsMatch( css, match, RegexOptions.IgnoreCase ) )
-                htmlControl.Attributes["class"] = Regex.Replace( css, match, "", RegexOptions.IgnoreCase );
+            //the internals of regex.replace do a match before trying a replace. https://referencesource.microsoft.com/#System/regex/system/text/regularexpressions/RegexReplacement.cs,261
+            htmlControl.Attributes["class"] = Regex.Replace( css, match, "", RegexOptions.IgnoreCase );
         }
 
         #endregion HtmlControl Extensions
@@ -266,6 +332,16 @@ namespace Rock
         }
 
         /// <summary>
+        /// Sets the Selected property of each item to true for each of the given matching Guid values.
+        /// </summary>
+        /// <param name="listBox">The list box.</param>
+        /// <param name="values">The values.</param>
+        public static void SetValues( this ListBox listBox, IEnumerable<Guid> values )
+        {
+            listBox.SetValues( values.Select( v => v.ToString() ).ToList() );
+        }
+
+        /// <summary>
         /// Sets the Selected property of each item to true for each given matching int values.
         /// </summary>
         /// <param name="listBox">The list box.</param>
@@ -274,8 +350,7 @@ namespace Rock
         {
             foreach ( ListItem item in listBox.Items )
             {
-                int numValue = int.MinValue;
-                item.Selected = int.TryParse( item.Value, out numValue ) && values.Contains( numValue );
+                listBox.SetValues( values.Select( v => v.ToString() ).ToList() );
             }
         }
 
@@ -284,7 +359,7 @@ namespace Rock
         #region CheckBoxList Extensions
 
         /// <summary>
-        /// Sets the Selected property of each item to true for each given matching string values.
+        /// Sets the Selected property of each item to true for each of the given matching string values.
         /// </summary>
         /// <param name="checkBoxList">The check box list.</param>
         /// <param name="values">The values.</param>
@@ -292,7 +367,7 @@ namespace Rock
         {
             if ( checkBoxList is Rock.Web.UI.Controls.CampusesPicker )
             {
-                // Campus Picker will add the items if neccessary, so needs to be handled differently
+                // Campus Picker will add the items if necessary, so needs to be handled differently
                 ( (Rock.Web.UI.Controls.CampusesPicker)checkBoxList ).SelectedCampusIds = values.AsIntegerList();
             }
             else
@@ -305,25 +380,23 @@ namespace Rock
         }
 
         /// <summary>
-        /// Sets the Selected property of each item to true for each given matching int values.
+        /// Sets the Selected property of each item to true for each of the given matching Guid values.
+        /// </summary>
+        /// <param name="checkBoxList">The check box list.</param>
+        /// <param name="values">The values.</param>
+        public static void SetValues( this CheckBoxList checkBoxList, IEnumerable<Guid> values )
+        {
+            checkBoxList.SetValues( values.Select( v => v.ToString()).ToList() );
+        }
+
+        /// <summary>
+        /// Sets the Selected property of each item to true for each of the given matching int values.
         /// </summary>
         /// <param name="checkBoxList">The check box list.</param>
         /// <param name="values">The values.</param>
         public static void SetValues( this CheckBoxList checkBoxList, IEnumerable<int> values )
         {
-            if ( checkBoxList is Rock.Web.UI.Controls.CampusesPicker )
-            {
-                // Campus Picker will add the items if neccessary, so needs to be handled differently
-                ( (Rock.Web.UI.Controls.CampusesPicker)checkBoxList ).SelectedCampusIds = values.ToList();
-            }
-            else
-            {
-                foreach ( ListItem item in checkBoxList.Items )
-                {
-                    int numValue = int.MinValue;
-                    item.Selected = int.TryParse( item.Value, out numValue ) && values.Contains( numValue );
-                }
-            }
+            checkBoxList.SetValues( values.Select( v => v.ToString() ).ToList() );
         }
 
         #endregion CheckBoxList Extensions
@@ -347,6 +420,12 @@ namespace Rock
                     // A Campus Picker can be configured to only load Active Campuses, but if trying to set the value to an Inactive Campus, it'll add that campus to the list
                     // so this is a special case
                     ( (Rock.Web.UI.Controls.CampusPicker)listControl ).SelectedCampusId = intValue.Value;
+                }
+                else if ( listControl is Rock.Web.UI.Controls.IDefinedValuePicker && intValue.HasValue)
+                {
+                    // A DefinedValuePicker can be configured to only load Active DefinedValues, but if trying to set the value to an Inactive DefinedValue, it'll add that DefinedValue to the list
+                    // so this is a special case
+                    ( listControl as Rock.Web.UI.Controls.IDefinedValuePicker ).SelectedDefinedValuesId = new int[] { intValue.Value };
                 }
                 else
                 {
@@ -427,7 +506,8 @@ namespace Rock
         /// <param name="listControl">The list control.</param>
         /// <param name="insertBlankOption">if set to <c>true</c> [insert blank option].</param>
         /// <param name="ignoreTypes">any enums that should not be included in the list control</param>
-        public static void BindToEnum<T>( this ListControl listControl, bool insertBlankOption = false, T[] ignoreTypes = null )
+        /// <param name="sortAlpha">Sort the collection by value in alpha asc, otherwise sorts by enum order.</param>
+        public static void BindToEnum<T>( this ListControl listControl, bool insertBlankOption = false, T[] ignoreTypes = null, bool sortAlpha = false )
         {
             var enumType = typeof( T );
             var dictionary = new Dictionary<int, string>();
@@ -448,11 +528,22 @@ namespace Rock
                 }
                 else
                 {
-                    dictionary.Add( Convert.ToInt32( value ), name.SplitCase() );
+                    // if the Enum has a [Description] attribute, use the description text
+                    var description = fieldInfo.GetCustomAttribute<DescriptionAttribute>()?.Description ?? name.SplitCase();
+
+                    dictionary.Add( Convert.ToInt32( value ), description );
                 }
             }
 
-            listControl.DataSource = dictionary;
+            if (sortAlpha)
+            {
+                listControl.DataSource = dictionary.OrderBy( x => x.Value );
+            }
+            else
+            {
+                listControl.DataSource = dictionary;
+            }
+
             listControl.DataTextField = "Value";
             listControl.DataValueField = "Key";
             listControl.DataBind();
@@ -464,14 +555,29 @@ namespace Rock
         }
 
         /// <summary>
-        /// Binds to the values of a definedType using the definedValue's Id as the listitem value
+        /// Binds to the values of a definedType using the definedValue's Id as the listitem value.
+        /// NOTE: In most cases, instead of using BindToDefinedType, use <see cref="Rock.Web.UI.Controls.DefinedValuePicker"/> instead
         /// </summary>
         /// <param name="listControl">The list control.</param>
         /// <param name="definedType">Type of the defined.</param>
         /// <param name="insertBlankOption">if set to <c>true</c> [insert blank option].</param>
         /// <param name="useDescriptionAsText">if set to <c>true</c> [use description as text].</param>
-        public static void BindToDefinedType( this ListControl listControl, Rock.Web.Cache.DefinedTypeCache definedType, bool insertBlankOption = false, bool useDescriptionAsText = false )
+        [RockObsolete( "1.9" )]
+        [Obsolete( "Use DefinedValuePicker instead." )]
+        public static void BindToDefinedType( this ListControl listControl, DefinedTypeCache definedType, bool insertBlankOption = false, bool useDescriptionAsText = false )
         {
+            // For IDefinedValuePicker types: Before this section of code was added, BindToDefinedType did not update DefinedTypeId, because not all ListControls have it.
+            // If BindToDefinedType was used instead of DefinedTypeId, the control did show the defined values and the user was be able to pick it, and save.
+            // However, when the selected value(s) was/were set pragmatically, the list gets re-populated using DefinedTypeId. Because it is not set, the list will be empty except for the selected value(s)
+            // For IDefinedValuePicker DefinedTypeId should be set instead of using BindToDefinedType.
+            if ( listControl is Rock.Web.UI.Controls.IDefinedValuePicker )
+            {
+                Web.UI.Controls.IDefinedValuePicker definedValuePicker = ( Rock.Web.UI.Controls.IDefinedValuePicker ) listControl;
+                definedValuePicker.DefinedTypeId = definedType.Id;
+                definedValuePicker.DisplayDescriptions = useDescriptionAsText;
+                return;
+            }
+
             var ds = definedType.DefinedValues
                 .Select( v => new
                 {
@@ -496,11 +602,11 @@ namespace Rock
         /// Returns the Value as Int or null if Value is <see cref="T:Rock.Constants.None"/>.
         /// </summary>
         /// <param name="listControl">The list control.</param>
-        /// <param name="NoneAsNull">if set to <c>true</c>, will return Null if SelectedValue = <see cref="T:Rock.Constants.None" /> </param>
+        /// <param name="noneAsNull">if set to <c>true</c>, will return Null if SelectedValue = <see cref="T:Rock.Constants.None" /> </param>
         /// <returns></returns>
-        public static int? SelectedValueAsInt( this ListControl listControl, bool NoneAsNull = true )
+        public static int? SelectedValueAsInt( this ListControl listControl, bool noneAsNull = true )
         {
-            if ( NoneAsNull )
+            if ( noneAsNull )
             {
                 if ( listControl == null || listControl.SelectedValue.Equals( Rock.Constants.None.Id.ToString() ) )
                 {

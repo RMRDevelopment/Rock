@@ -26,7 +26,6 @@ using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
-using Rock.Workflow;
 
 namespace Rock.Workflow.Action
 {
@@ -67,7 +66,7 @@ namespace Rock.Workflow.Action
 
             if ( !campusAttributeGuid.IsEmpty() )
             {
-                campusGuid = action.GetWorklowAttributeValue( campusAttributeGuid ).AsGuidOrNull();
+                campusGuid = action.GetWorkflowAttributeValue( campusAttributeGuid ).AsGuidOrNull();
 
                 if ( campusGuid.HasValue )
                 {
@@ -109,7 +108,7 @@ namespace Rock.Workflow.Action
             if ( group != null )
             {                
                 // get the group attribute where we'll store the matching group.
-                var groupAttribute = AttributeCache.Read( GetAttributeValue( action, "Group" ).AsGuid(), rockContext );
+                var groupAttribute = AttributeCache.Get( GetAttributeValue( action, "Group" ).AsGuid(), rockContext );
                 if ( groupAttribute != null )
                 {
                     SetWorkflowAttributeValue( action, groupAttribute.Guid, group.Guid.ToStringSafe() );

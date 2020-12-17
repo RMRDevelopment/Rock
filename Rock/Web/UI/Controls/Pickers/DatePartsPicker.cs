@@ -24,9 +24,9 @@ using System.Web.UI.WebControls;
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select individual parts (month, day, year) of a date
     /// </summary>
-    public class DatePartsPicker : CompositeControl, IRockControl
+    public class DatePartsPicker : CompositeControl, IRockControl, IRockChangeHandlerControl
     {
         #region IRockControl implementation
 
@@ -405,12 +405,18 @@ namespace Rock.Web.UI.Controls
         protected void dateList_SelectedIndexChanged( object sender, EventArgs e )
         {
             SelectedDatePartsChanged?.Invoke( this, e );
+            ValueChanged?.Invoke( this, e );
         }
 
         /// <summary>
         /// Occurs when [selected date parts changed].
         /// </summary>
         public event EventHandler SelectedDatePartsChanged;
+
+        /// <summary>
+        /// Occurs when the selected value has changed
+        /// </summary>
+        public event EventHandler ValueChanged;
 
         /// <summary>
         /// Populates the drop downs.
@@ -468,7 +474,7 @@ namespace Rock.Web.UI.Controls
         /// <param name="writer">The writer.</param>
         public void RenderBaseControl( HtmlTextWriter writer )
         {
-            bool needsAutoPostBack = SelectedDatePartsChanged != null;
+            bool needsAutoPostBack = SelectedDatePartsChanged != null || ValueChanged != null;
             monthDropDownList.AutoPostBack = needsAutoPostBack;
             dayDropDownList.AutoPostBack = needsAutoPostBack;
             yearDropDownList.AutoPostBack = needsAutoPostBack;
@@ -542,7 +548,7 @@ namespace Rock.Web.UI.Controls
                 if ( selectedMonth.HasValue && selectedDay.HasValue )
                 {
                     // if they picked a day of the month that is invalid, just round it to last day that month;
-                    int correctedDayOfMonth = Math.Min( DateTime.DaysInMonth( DateTime.MinValue.Year, selectedMonth.Value ), selectedDay.Value );
+                    int correctedDayOfMonth = Math.Min( DateTime.DaysInMonth( selectedYear ?? DateTime.MinValue.Year, selectedMonth.Value ), selectedDay.Value );
 
                     var date = new DateTime( ( selectedYear.HasValue ? selectedYear.Value : DateTime.MinValue.Year ), selectedMonth.Value, correctedDayOfMonth );
                     if ( !this.AllowFutureDates && date > RockDateTime.Today )

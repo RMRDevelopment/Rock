@@ -18,16 +18,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Web;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using Rock.Data;
-using Rock.Model;
+
+using Rock.Web.Cache;
 
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class WorkflowFormActionList : CompositeControl
     {
@@ -96,7 +97,14 @@ namespace Rock.Web.UI.Controls
             _activityControls = new List<RockDropDownList>();
             _responseControls = new List<RockTextBox>();
 
-            string[] nameValues = this.Value.Split( new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries );
+            // Unpack the field values from a delimited string, and then decode any .
+            // Any delimiters that are part of a field value are URL-encoded.
+
+            var nameValues = this.Value.Split( new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries )
+                .AsEnumerable()
+                .Select( s => HttpUtility.UrlDecode( s ) )
+                .ToArray();
+
             for ( int i = 0; i < nameValues.Length; i++ )
             {
                 string[] nameValueResponse = nameValues[i].Split( new char[] { '^' } );
@@ -118,7 +126,7 @@ namespace Rock.Web.UI.Controls
                 ddlButtonHtml.AddCssClass( "form-action-button" );
                 ddlButtonHtml.AddCssClass( "form-control" );
                 ddlButtonHtml.AddCssClass( "js-form-action-input" );
-                var definedType = Rock.Web.Cache.DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.BUTTON_HTML.AsGuid() );
+                var definedType = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.BUTTON_HTML.AsGuid() );
                 foreach( var definedValue in definedType.DefinedValues )
                 {
                     var li = new ListItem( definedValue.Value, definedValue.Guid.ToString() );
@@ -169,10 +177,10 @@ namespace Rock.Web.UI.Controls
             _hfValue.RenderControl( writer );
 
             StringBuilder valueHtml = new StringBuilder();
-            valueHtml.Append( @"<div class=""row"">" );
+            valueHtml.Append( @"<div class=""form-row"">" );
             valueHtml.Append( @"<div class=""col-sm-2""><input class=""form-action-key form-control js-form-action-input"" type=""text"" placeholder=""Action""></input></div>" );
             valueHtml.Append( @"<div class=""col-sm-2""><select class=""form-action-button form-control js-form-action-input"">" );
-            var definedType = Rock.Web.Cache.DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.BUTTON_HTML.AsGuid() );
+            var definedType = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.BUTTON_HTML.AsGuid() );
             foreach ( var definedValue in definedType.DefinedValues )
             {
                 valueHtml.AppendFormat( @"<option value=""{0}"">{1}</option>", definedValue.Guid.ToString(), definedValue.Value );
@@ -185,7 +193,7 @@ namespace Rock.Web.UI.Controls
             }
             valueHtml.Append( @"</select></div>" );
             valueHtml.Append( @"<div class=""col-sm-4""><input class=""form-action-response form-control js-form-action-input"" type=""text"" placeholder=""Response Text""></input></div>" );
-            valueHtml.Append( @"<div class=""col-sm-1""><a href=""#"" class=""btn btn-sm btn-danger form-action-remove""><i class=""fa fa-minus-circle""></i></a></div></div>" );
+            valueHtml.Append( @"<div class=""col-sm-1""><a href=""#"" class=""btn btn-sm btn-danger form-action-remove""><i class=""fa fa-times""></i></a></div></div>" );
 
             var hfValueHtml = new HtmlInputHidden();
             hfValueHtml.AddCssClass( "js-value-html" );
@@ -245,32 +253,32 @@ namespace Rock.Web.UI.Controls
 
             for (int i = 0; i < _actionControls.Count; i++)
             {
-                writer.AddAttribute( HtmlTextWriterAttribute.Class, "row" );
+                writer.AddAttribute( HtmlTextWriterAttribute.Class, "form-row" );
                 writer.RenderBeginTag( HtmlTextWriterTag.Div );
 
                 // Write Action
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "col-sm-2" );
                 writer.RenderBeginTag( HtmlTextWriterTag.Div );
                 _actionControls[i].RenderControl( writer );
-                writer.RenderEndTag();  
+                writer.RenderEndTag();
 
                 // Write Button Type
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "col-sm-2" );
                 writer.RenderBeginTag( HtmlTextWriterTag.Div );
                 _buttonHtmlControls[i].RenderControl( writer );
-                writer.RenderEndTag();  
+                writer.RenderEndTag();
 
                 // Write Activity Value
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "col-sm-3" );
                 writer.RenderBeginTag( HtmlTextWriterTag.Div );
                 _activityControls[i].RenderControl( writer );
-                writer.RenderEndTag();  
+                writer.RenderEndTag();
 
                 // Write Response
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "col-sm-4" );
                 writer.RenderBeginTag( HtmlTextWriterTag.Div );
                 _responseControls[i].RenderControl( writer );
-                writer.RenderEndTag();  
+                writer.RenderEndTag();
 
                 // Write Remove Button
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "col-sm-1" );
@@ -278,7 +286,7 @@ namespace Rock.Web.UI.Controls
                 writer.AddAttribute( HtmlTextWriterAttribute.Href, "#" );
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "btn btn-sm btn-danger form-action-remove" );
                 writer.RenderBeginTag( HtmlTextWriterTag.A );
-                writer.AddAttribute( HtmlTextWriterAttribute.Class, "fa fa-minus-circle" );
+                writer.AddAttribute( HtmlTextWriterAttribute.Class, "fa fa-times" );
                 writer.RenderBeginTag( HtmlTextWriterTag.I );
                 writer.RenderEndTag();  // I
                 writer.RenderEndTag();  // A
@@ -311,35 +319,49 @@ namespace Rock.Web.UI.Controls
         /// </summary>
         private void RegisterClientScript()
         {
+            // Add client script to pack the field values into a delimited string.
+            // Any delimiters that are part of a field value are URL-encoded.
             string script = @"
     function updateFormActions( e ) {
         var $actionList = e.closest('div.form-action-list');
         var newValue = '';
-        $actionList.find('div.form-action-rows:first').children('div.row').each(function( index ) {
-            newValue += 
-                $(this).find('.form-action-key:first').val() + '^' + 
-                $(this).find('.form-action-button:first').val() + '^' + 
-                $(this).find('.form-action-value:first').val() + '^' + 
-                $(this).find('.form-action-response:first').val() + '|'
+        var valueDelimiters = ['^', '|'];
+
+        var replaceDelimiters = function(input) {
+            valueDelimiters.forEach(function (v, i, a) {
+                var re = new RegExp('\\' + v, 'g');
+                if (input.indexOf(v) > -1) {
+                    input = input.replace(re, encodeURIComponent(v));
+                }
+            });
+            return input;
+        };
+
+        $actionList.find('div.form-action-rows').first().children('div.form-row').each(function( index ) {
+                newValue +=
+                    replaceDelimiters( $(this).find('.form-action-key').first().val() ) + '^' + 
+                    replaceDelimiters( $(this).find('.form-action-button').first().val() ) + '^' + 
+                    replaceDelimiters( $(this).find('.form-action-value').first().val() ) + '^' + 
+                    replaceDelimiters( $(this).find('.form-action-response').first().val() ) + '|'
         });
-        $actionList.children('input:first').val(newValue);            
+        $actionList.children('input').first().val(newValue);
     }
 
-    $('a.form-action-add').click(function (e) {
+    $('a.form-action-add').on('click', function (e) {
         e.preventDefault();
         var $actionList = $(this).closest('.form-action-list');
-        $actionList.find('div.form-action-rows:first').append($actionList.find('.js-value-html').val());
+        $actionList.find('div.form-action-rows').first().append($actionList.find('.js-value-html').val());
     });
 
     $(document).on('click', 'a.form-action-remove', function (e) {
         e.preventDefault();
         var $rows = $(this).closest('div.form-action-rows');
-        $(this).closest('div.row').remove();
-        updateFormActions($rows);            
+        $(this).closest('div.form-row').remove();
+        updateFormActions($rows);
     });
 
     $(document).on('focusout', '.js-form-action-input', function (e) {
-        updateFormActions($(this));            
+        updateFormActions($(this));
     });
 ";
 

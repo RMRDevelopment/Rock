@@ -68,10 +68,10 @@ namespace Rock.Workflow.Action
             Guid? guidPersonAttribute = personAttributeValue.AsGuidOrNull();
             if ( guidPersonAttribute.HasValue )
             {
-                var attributePerson = AttributeCache.Read( guidPersonAttribute.Value, rockContext );
+                var attributePerson = AttributeCache.Get( guidPersonAttribute.Value, rockContext );
                 if ( attributePerson != null || attributePerson.FieldType.Class != "Rock.Field.Types.PersonFieldType" )
                 {
-                    string attributePersonValue = action.GetWorklowAttributeValue( guidPersonAttribute.Value );
+                    string attributePersonValue = action.GetWorkflowAttributeValue( guidPersonAttribute.Value );
                     if ( !string.IsNullOrWhiteSpace( attributePersonValue ) )
                     {
                         Guid personAliasGuid = attributePersonValue.AsGuid();
@@ -99,14 +99,14 @@ namespace Rock.Workflow.Action
 
             // determine the location type to edit
             DefinedValueCache locationType = null;
-            var locationTypeAttributeValue = action.GetWorklowAttributeValue( GetAttributeValue( action, "LocationTypeAttribute" ).AsGuid() );
+            var locationTypeAttributeValue = action.GetWorkflowAttributeValue( GetAttributeValue( action, "LocationTypeAttribute" ).AsGuid() );
             if ( locationTypeAttributeValue != null )
             {
-                locationType = DefinedValueCache.Read( locationTypeAttributeValue.AsGuid() );
+                locationType = DefinedValueCache.Get( locationTypeAttributeValue.AsGuid() );
             }
             if ( locationType == null )
             {
-                locationType = DefinedValueCache.Read( GetAttributeValue( action, "LocationType" ).AsGuid() );
+                locationType = DefinedValueCache.Get( GetAttributeValue( action, "LocationType" ).AsGuid() );
             }
             if ( locationType == null )
             {
@@ -124,7 +124,7 @@ namespace Rock.Workflow.Action
                 Guid? locationAttributeValueGuid = locationAttributeValue.AsGuidOrNull();
                 if ( locationAttributeValueGuid.HasValue )
                 {
-                    locationGuid = action.GetWorklowAttributeValue( locationAttributeValueGuid.Value ).AsGuidOrNull();
+                    locationGuid = action.GetWorkflowAttributeValue( locationAttributeValueGuid.Value ).AsGuidOrNull();
                 }
             }
 
@@ -144,7 +144,7 @@ namespace Rock.Workflow.Action
             Guid? mailingValueGuid = mailingValue.AsGuidOrNull();
             if ( mailingValueGuid.HasValue )
             {
-                mailingValue = action.GetWorklowAttributeValue( mailingValueGuid.Value );
+                mailingValue = action.GetWorkflowAttributeValue( mailingValueGuid.Value );
             }
             else
             {
@@ -157,7 +157,7 @@ namespace Rock.Workflow.Action
             Guid? mappedValueGuid = mappedValue.AsGuidOrNull();
             if ( mappedValueGuid.HasValue )
             {
-                mappedValue = action.GetWorklowAttributeValue( mappedValueGuid.Value );
+                mappedValue = action.GetWorkflowAttributeValue( mappedValueGuid.Value );
             }
             else
             {
@@ -229,7 +229,9 @@ namespace Rock.Workflow.Action
 
                 if ( locationUpdated  )
                 {
-                    var groupChanges = new List<string> { string.Format( "<em>(Location was updated by the '{0}' workflow)</em>", action.ActionTypeCache.ActivityType.WorkflowType.Name ) };
+                    var groupChanges = new History.HistoryChangeList();
+                    groupChanges.AddChange( History.HistoryVerb.Modify, History.HistoryChangeType.Record, "Location" ).SourceOfChange = $"{action.ActionTypeCache.ActivityType.WorkflowType.Name} workflow";
+
                     foreach ( var fm in family.Members )
                     {
                         HistoryService.SaveChanges(
@@ -241,7 +243,9 @@ namespace Rock.Workflow.Action
                             family.Name,
                             typeof( Group ),
                             family.Id,
-                            false );
+                            false,
+                            null,
+                            rockContext.SourceOfChange );
                     }
                 }
 

@@ -5,14 +5,17 @@
         <asp:Panel ID="pnlDetails" runat="server" Visible="false" CssClass="panel panel-block">
             
             <div class="panel-heading">
-                <h1 class="panel-title"><i class="fa fa-clock-o"></i> <asp:Literal ID="lActionTitle" runat="server" /></h1>
+                <h1 class="panel-title">
+                    <i class="fa fa-clock-o"></i>
+                    <asp:Literal ID="lActionTitle" runat="server" />
+                </h1>
             </div>
             <Rock:PanelDrawer ID="pdAuditDetails" runat="server"></Rock:PanelDrawer>
             <div class="panel-body">
 
                 <asp:HiddenField ID="hfId" runat="server" />
                 
-                <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
                 <Rock:NotificationBox ID="nbEditModeMessage" runat="server" NotificationBoxType="Info" />
                 
                 <div class="row">
@@ -35,14 +38,15 @@
                         <Rock:RockDropDownList ID="ddlNotificationStatus" runat="server" Label="Notification Status" />
                         <Rock:RockTextBox ID="tbNotificationEmails" runat="server" Label="Notification Emails" Help="Additional email addresses that the notification email should be sent to for this job. Emails are sent using the 'Job Notification' system email template. If there are recipients defined in the template, it will send a job notification to those, too. <span class='tip tip-lava'></span>"/>
                         <Rock:NotificationBox ID="nbJobTypeError" runat="server" NotificationBoxType="Danger" Dismissable="true" />
-                        <Rock:RockDropDownList ID="ddlJobTypes" runat="server" Label="Job Type" OnSelectedIndexChanged="ddlJobTypes_SelectedIndexChanged" AutoPostBack="true"  Required="true" />
-                        <Rock:DynamicPlaceholder ID="phAttributes" runat="server" ></Rock:DynamicPlaceholder>
-                        <Rock:DynamicPlaceholder ID="phAttributesReadOnly" runat="server" Visible="false" ></Rock:DynamicPlaceholder>
+                        <Rock:RockDropDownList ID="ddlJobTypes" runat="server" Label="Job Type" EnhanceForLongLists="true" OnSelectedIndexChanged="ddlJobTypes_SelectedIndexChanged" AutoPostBack="true"  Required="true" />
+                        <Rock:AttributeValuesContainer ID="avcAttributes" runat="server" />
+                        <Rock:AttributeValuesContainer ID="avcAttributesReadOnly" runat="server" Visible="false" />
                     </div>
                     <div class="col-md-6">
                         <Rock:DataTextBox ID="tbCronExpression" runat="server" SourceTypeName="Rock.Model.ServiceJob, Rock" PropertyName="CronExpression" 
-                            Help="Add a valid cron expression. Need help? Try <a href='http://www.cronmaker.com' target='_blank'>CronMaker</a>." AutoPostBack="true" OnTextChanged="tbCronExpression_TextChanged"  />
+                            Help="Add a valid cron expression. Need help? Try <a href='http://www.cronmaker.com' target='_blank'>CronMaker</a>.<br>Examples:<br>Daily at 2:15am: <em>0 15 2 1/1 * ? *</em><br>Every Monday and Friday at 4:30pm: <em>0 30 16 ? * MON,FRI *</em>" AutoPostBack="true" OnTextChanged="tbCronExpression_TextChanged"  />
                         <Rock:RockLiteral ID="lCronExpressionDesc" Label="Cron Description" runat="server" />
+                        <Rock:NumberBox ID="nbHistoryCount" runat="server" Label="Job History Count" Help="The number of job history records to keep for this job instance." CssClass="input-width-lg" MinimumValue="0" />
                         <Rock:RockLiteral ID="lLastStatusMessage" Label="Last Status Message" runat="server" />
                     </div>
                 </div>

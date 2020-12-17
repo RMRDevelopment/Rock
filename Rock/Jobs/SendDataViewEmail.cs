@@ -16,28 +16,30 @@
 //
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Web;
-using System.IO;
+using System.ComponentModel;
+using System.Data.Entity;
 using System.Data.SqlClient;
+using System.Linq;
+using System.Text;
+using System.Web;
 
 using Quartz;
 
-using Rock;
 using Rock.Attribute;
-using Rock.Model;
-using Rock.Data;
-using Rock.Web.Cache;
-using Rock.Web;
 using Rock.Communication;
-using System.Data.Entity;
+using Rock.Data;
+using Rock.Model;
+using Rock.Reporting;
 
 namespace Rock.Jobs
 {
     /// <summary>
-    /// The job will send a Lava email template to a list of people returned from the dataview. 
+    /// This job will send a Lava email template to a list of people returned from the dataview.
     /// </summary>
-    [SystemEmailField( "System Email", "The email template that will be sent.", true, "" )]
+    [DisplayName( "Send Data View Email" )]
+    [Description( "This job will send a Lava email template to a list of people returned from the dataview." )]
+
+    [SystemCommunicationField( "System Email", "The email template that will be sent.", true, "" )]
     [DataViewField( "DataView", "The dataview the email will be sent to.", true, "", "Rock.Model.Person" )]
     [IntegerField( "Database Timeout", "The number of seconds to wait before reporting a database timeout.", false, 180 )]
     [DisallowConcurrentExecution]
@@ -60,59 +62,79 @@ namespace Rock.Jobs
             var emailTemplateGuid = dataMap.GetString( "SystemEmail" ).AsGuidOrNull();
             var dataViewGuid = dataMap.GetString( "DataView" ).AsGuidOrNull();
 
-            if( dataViewGuid != null && emailTemplateGuid.HasValue )
+            if ( dataViewGuid == null || emailTemplateGuid == null )
             {
-                var rockContext = new RockContext();
-                var dataView = new DataViewService( rockContext ).Get( (Guid)dataViewGuid );
+                return;
+            }
 
-                List<IEntity> resultSet = null;
-                var errorMessages = new List<string>();
-                var dataTimeout = dataMap.GetString( "DatabaseTimeout" ).AsIntegerOrNull() ?? 180;
-                try
-                {
-                    var qry = dataView.GetQuery( null, rockContext, dataTimeout, out errorMessages );
-                    if( qry != null )
-                    {
-                        resultSet = qry.AsNoTracking().ToList();
-                    }
-                }
-                catch( Exception exception )
-                {
-                    ExceptionLogService.LogException( exception, HttpContext.Current );
-                    while( exception != null )
-                    {
-                        if( exception is SqlException && (exception as SqlException).Number == -2 )
-                        {
-                            // if there was a SQL Server Timeout, have the warning be a friendly message about that.
-                            errorMessages.Add( "This dataview did not complete in a timely manner. You can try again or adjust the timeout setting of this block." );
-                            exception = exception.InnerException;
-                        }
-                        else
-                        {
-                            errorMessages.Add( exception.Message );
-                            exception = exception.InnerException;
-                        }
+            var rockContext = new RockContext();
+            var dataView = new DataViewService( rockContext ).Get( ( Guid ) dataViewGuid );
 
-                        return;
-                    }
+            List<IEntity> resultSet;
+            Exception dataViewException = null;
+            try
+            {
+                var dataViewGetQueryArgs = new DataViewGetQueryArgs
+                {
+                    DatabaseTimeoutSeconds = dataMap.GetString( "DatabaseTimeout" ).AsIntegerOrNull() ?? 180
+                };
+
+                var qry = dataView.GetQuery( dataViewGetQueryArgs );
+                resultSet = qry.AsNoTracking().ToList();
+            }
+            catch ( Exception exception )
+            {
+                dataViewException = exception;
+                var sqlTimeoutException = ReportingHelper.FindSqlTimeoutException( exception );
+
+                if ( sqlTimeoutException != null )
+                {
+                    var exceptionMessage = $"The dataview did not complete in a timely manner. You can try again or adjust the timeout setting of this job.";
+                    dataViewException = new RockDataViewFilterExpressionException( dataView.DataViewFilter, exceptionMessage, sqlTimeoutException ); 
                 }
 
-                var recipients = new List<RecipientData>();
-                if( resultSet.Any() )
+                HttpContext context2 = HttpContext.Current;
+                ExceptionLogService.LogException( dataViewException, context2 );
+                context.Result = dataViewException.Message;
+                throw dataViewException;
+            }
+
+            var recipients = new List<RockEmailMessageRecipient>();
+            if ( resultSet.Any() )
+            {
+                foreach ( Person person in resultSet )
                 {
-                    foreach( Person person in resultSet )
+                    if ( !person.IsEmailActive || person.Email.IsNullOrWhiteSpace() || person.EmailPreference == EmailPreference.DoNotEmail )
                     {
-                        var mergeFields = Lava.LavaHelper.GetCommonMergeFields( null );
-                        mergeFields.Add( "Person", person );
-                        recipients.Add( new RecipientData( person.Email, mergeFields ) );
+                        continue;
                     }
+
+                    var mergeFields = Lava.LavaHelper.GetCommonMergeFields( null );
+                    mergeFields.Add( "Person", person );
+                    recipients.Add( new RockEmailMessageRecipient( person, mergeFields ) );
                 }
+            }
 
-                var emailMessage = new RockEmailMessage( emailTemplateGuid.Value );
-                emailMessage.SetRecipients( recipients );
-                emailMessage.Send();
+            var emailMessage = new RockEmailMessage( emailTemplateGuid.Value );
+            emailMessage.SetRecipients( recipients );
 
-                context.Result = string.Format( "{0} emails sent", recipients.Count() );
+            var emailSendErrors = new List<string>();
+            emailMessage.Send( out emailSendErrors );
+
+            context.Result = string.Format( "{0} emails sent", recipients.Count() );
+
+            if ( emailSendErrors.Any() )
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine();
+                sb.Append( string.Format( "{0} Errors: ", emailSendErrors.Count() ) );
+                emailSendErrors.ForEach( e => { sb.AppendLine(); sb.Append( e ); } );
+                string errorMessage = sb.ToString();
+                context.Result += errorMessage;
+                var exception = new Exception( errorMessage );
+                HttpContext context2 = HttpContext.Current;
+                ExceptionLogService.LogException( exception, context2 );
+                throw exception;
             }
         }
     }

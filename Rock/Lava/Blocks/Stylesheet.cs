@@ -19,12 +19,14 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
-using System.Runtime.Caching;
 using System.Text.RegularExpressions;
 using System.Web;
+
 using dotless.Core;
 using dotless.Core.configuration;
+
 using DotLiquid;
+
 using Rock.Utility;
 using Rock.Web.Cache;
 using Rock.Web.UI;
@@ -33,7 +35,7 @@ namespace Rock.Lava.Blocks
 {
     /// <summary>
     /// Sql stores the result of provided SQL query into a variable.
-    /// 
+    ///
     /// {% sql results %}
     /// SELECT [FirstName], [LastName] FROM [Person]
     /// {% endsql %}
@@ -136,10 +138,9 @@ namespace Rock.Lava.Blocks
                         if ( parms.ContainsKey( "cacheduration" ) )
                         {
                             var cacheKey = stylesheet.GetHashCode().ToString();
-                            RockMemoryCache cache = RockMemoryCache.Default;
-                            var cachedStylesheet = cache[cacheKey] as string;
+                            var cachedStylesheet = RockCache.Get( cacheKey ) as string;
 
-                            if ( cachedStylesheet.IsNotNullOrWhitespace() )
+                            if ( cachedStylesheet.IsNotNullOrWhiteSpace() )
                             {
                                 stylesheet = cachedStylesheet;
                             }
@@ -148,14 +149,14 @@ namespace Rock.Lava.Blocks
                                 stylesheet = LessWeb.Parse( stylesheet, dotLessConfiguration );
 
                                 // check if we should cache this
-                                if ( parms.ContainsKey( "cacheduration" ) && stylesheet.IsNotNullOrWhitespace() )
+                                if ( parms.ContainsKey( "cacheduration" ) && stylesheet.IsNotNullOrWhiteSpace() )
                                 {
                                     int cacheDuration = 0;
                                     Int32.TryParse( parms["cacheduration"], out cacheDuration );
 
                                     if ( cacheDuration > 0 )
                                     {
-                                        cache.Set( cacheKey, stylesheet, new CacheItemPolicy { AbsoluteExpiration = DateTimeOffset.Now.AddSeconds( cacheDuration ) } );
+                                        RockCache.AddOrUpdate( cacheKey, null, stylesheet, RockDateTime.Now.AddSeconds( cacheDuration ) );
                                     }
                                 }
 
@@ -184,7 +185,7 @@ namespace Rock.Lava.Blocks
                 if ( parms.ContainsKey("id") )
                 {
                     var identifier = parms["id"];
-                    if ( identifier.IsNotNullOrWhitespace() )
+                    if ( identifier.IsNotNullOrWhiteSpace() )
                     {
                         var controlId = "css-" + identifier;
 
@@ -210,7 +211,6 @@ namespace Rock.Lava.Blocks
         /// <param name="markup">The markup.</param>
         /// <param name="context">The context.</param>
         /// <returns></returns>
-        /// <exception cref="System.Exception">No parameters were found in your command. The syntax for a parameter is parmName:'' (note that you must use single quotes).</exception>
         private Dictionary<string, string> ParseMarkup( string markup, Context context )
         {
             // first run lava across the inputted markup
@@ -238,7 +238,7 @@ namespace Rock.Lava.Blocks
             var parms = new Dictionary<string, string>();
             parms.Add( "cacheduration", "0" );
 
-            var markupItems = Regex.Matches( resolvedMarkup, "(.*?:'[^']+')" )
+            var markupItems = Regex.Matches( resolvedMarkup, @"(\S*?:'[^']+')" )
                 .Cast<Match>()
                 .Select( m => m.Value )
                 .ToList();

@@ -139,6 +139,9 @@ $('.js-panel-toggle').on('click', function (e) {
             // get list of original values
             Dictionary<string, string> originalValues = GetVariables( _variableFile );
 
+            // get list of current overrides
+            Dictionary<string, string> overrideValues = GetVariables( _variableOverrideFile );
+
             StringBuilder overrideFile = new StringBuilder();
 
             if ( pnlFontAwesomeSettings.Visible )
@@ -149,6 +152,12 @@ $('.js-panel-toggle').on('click', function (e) {
 
                 overrideFile.AppendLine( string.Format( "{0} {1};", FontAwesomeHelper.VariableOverridesTokens.FontWeightValueLineStart, selectedPrimaryWeight.WeightValue ) );
                 overrideFile.AppendLine( string.Format( "{0} '{1}';", FontAwesomeHelper.VariableOverridesTokens.FontWeightNameLineStart, selectedPrimaryWeight.WeightName ) );
+
+                if ( FontAwesomeHelper.HasFontAwesomeProKey() )
+                {
+                    overrideFile.AppendLine( "@fa-edition: 'pro';" );
+                }
+
                 overrideFile.AppendLine();
 
                 if ( !selectedPrimaryWeight.IncludedInFree )
@@ -194,12 +203,49 @@ $('.js-panel-toggle').on('click', function (e) {
                             secondaryValue = originalValue + originalValue.Substring( 1, 3 );
                         }
 
-                        if ( originalValue != textBoxControl.Text && secondaryValue != textBoxControl.Text )
+                        if ( originalValue.ToLower() != textBoxControl.Text.ToLower() && secondaryValue.ToLower() != textBoxControl.Text.ToLower() )
                         {
                             overrideFile.Append( string.Format( "@{0}: {1};{2}", variableName, textBoxControl.Text, Environment.NewLine ) );
                         }
                     }
                 }
+                else if ( control is Rock.Web.UI.Controls.ImageUploader )
+                {
+                    var fileUploader = ( Rock.Web.UI.Controls.ImageUploader ) control;
+                    var fileName = fileUploader.NonBinaryFileSrc.Replace("~", "");
+
+                    string variableName = fileUploader.ID.Replace( " ", "-" ).ToLower();
+
+                    // Check if there is an override value and it doesn't match the current value then we need
+                    // to clean-up (delete) the file
+                    if ( overrideValues.ContainsKey( variableName ) )
+                    {
+                        if ( fileName.ToLower() != overrideValues[variableName].ToLower().Replace( "'", "" ) )
+                        {
+                            var fileSystemPath = Server.MapPath( "~" + overrideValues[variableName].Replace( "'", "" ).Replace( "\"", "" ) );
+
+                            // Delete file
+                            if ( File.Exists( fileSystemPath ) )
+                            {
+                                File.Delete( fileSystemPath );
+                            }
+                        }
+                    }
+
+                    // find original value
+                    if ( originalValues.ContainsKey( variableName ) )
+                    {
+                        string originalValue = originalValues[variableName].Replace( "'", "" ).Replace( "\"", "" );
+
+                        var originalFile = originalValue.Replace( "../", string.Format( "{0}Themes/{1}/", Request.ApplicationPath, _themeName ) );
+
+                        if ( originalFile.ToLower() != fileName.ToLower() )
+                        {
+                            overrideFile.Append( string.Format( "@{0}: '{1}';{2}", variableName, fileName, Environment.NewLine ) );
+                        }
+                    }
+                }
+
             }
 
             File.WriteAllText( _variableOverrideFile, overrideFile.ToString() );
@@ -209,7 +255,8 @@ $('.js-panel-toggle').on('click', function (e) {
             var theme = new RockTheme( _themeName );
             if ( !theme.Compile( out messages ) )
             {
-                nbMessages.Text = "Unable to compile";
+                nbMessages.NotificationBoxType = NotificationBoxType.Danger;
+                nbMessages.Text = string.Format( "An error occurred while compiling the {0} theme.\nMessage: <pre>{1}</pre>", theme.Name, messages );;
                 nbMessages.Visible = true;
             }
             else
@@ -245,12 +292,19 @@ $('.js-panel-toggle').on('click', function (e) {
                 alternateFontWeights = FontAwesomeHelper.FontAwesomeIconCssWeights.Where( a => a.IsConfigurable && a.IncludedInFree && a.WeightName != selectedWeight ).ToList();
             }
 
-
-            var selectedAlternateFonts = cblFontAwesomeAlternateFonts.Items.OfType<ListItem>().Where( a => a.Selected ).Select( a => a.Value ).ToList();
-            cblFontAwesomeAlternateFonts.Items.Clear();
-            foreach ( var fontWeight in alternateFontWeights )
+            if ( alternateFontWeights.Count > 0 )
             {
-                cblFontAwesomeAlternateFonts.Items.Add( new ListItem( fontWeight.DisplayName, fontWeight.WeightName ) { Selected = selectedAlternateFonts.Contains( fontWeight.WeightName ) } );
+                cblFontAwesomeAlternateFonts.Visible = true;
+                var selectedAlternateFonts = cblFontAwesomeAlternateFonts.Items.OfType<ListItem>().Where( a => a.Selected ).Select( a => a.Value ).ToList();
+                cblFontAwesomeAlternateFonts.Items.Clear();
+                foreach ( var fontWeight in alternateFontWeights )
+                {
+                    cblFontAwesomeAlternateFonts.Items.Add( new ListItem( fontWeight.DisplayName, fontWeight.WeightName ) { Selected = selectedAlternateFonts.Contains( fontWeight.WeightName ) } );
+                }
+            }
+            else
+            {
+                cblFontAwesomeAlternateFonts.Visible = false;
             }
         }
 
@@ -263,6 +317,8 @@ $('.js-panel-toggle').on('click', function (e) {
         /// </summary>
         public void ShowDetail( string themeName )
         {
+            lThemeName.Text = themeName + " Theme";
+
             // Font Awesome stuff
             // TODO: Read LESS files for current setup
 
@@ -343,11 +399,7 @@ $('.js-panel-toggle').on('click', function (e) {
         private void BuildControls()
         {
             bool inPanel = false;
-
-            /*Rock.Web.UI.Controls.ImageUploader fupTest = new Rock.Web.UI.Controls.ImageUploader();
-            fupTest.ID = "test";
-            fupTest.BinaryFileTypeGuid
-            phThemeControls.Controls.Add( fupTest );*/
+            List<string> lessColorFunctions = new List<string>() { "lighten", "darken", "saturate", "desaturate", "fadein", "fadeout", "fade", "spin", "mix" };
 
             if ( !string.IsNullOrWhiteSpace( _themeName ) )
             {
@@ -408,10 +460,18 @@ $('.js-panel-toggle').on('click', function (e) {
                         }
 
                         bool showInEditor = false;
+                        bool expandPanel = false;
                         if ( title.Contains( "*show in editor*" ) )
                         {
                             showInEditor = true;
+                            expandPanel = true;
                             title = title.Replace( "*show in editor*", string.Empty );
+
+                            if ( title.Contains( "*advanced options*" ) )
+                            {
+                                expandPanel = false;
+                                title = title.Replace( "*advanced options*", string.Empty );
+                            }
                         }
 
                         if ( showInEditor )
@@ -420,9 +480,19 @@ $('.js-panel-toggle').on('click', function (e) {
 
                             content.Append( "<div class='panel panel-widget'>" );
                             content.Append( "<div class='panel-heading'>" );
-                            content.Append( string.Format( "<h1 class='panel-title'>{0} <div class='pull-right'><a class='btn btn-link btn-xs js-panel-toggle'><i class='fa fa-chevron-up'></i></a></div></h1>", title ) );
-                            content.Append( "</div>" );
-                            content.Append( "<div class='panel-body'>" );
+
+                            if ( expandPanel )
+                            {
+                                content.Append( string.Format( "<h1 class='panel-title'>{0}<div class='pull-right'><a class='btn btn-link btn-xs js-panel-toggle'><i class='fa fa-chevron-up'></i></a></div></h1>", title ) );
+                                content.Append( "</div>" );
+                                content.Append( "<div class='panel-body'>" );
+                            }
+                            else
+                            {
+                                content.Append( string.Format( "<h1 class='panel-title'>{0}<div class='pull-right'><a class='btn btn-link btn-xs js-panel-toggle'><i class='fa fa-chevron-down'></i></a></div></h1>", title ) );
+                                content.Append( "</div>" );
+                                content.Append( "<div class='panel-body' style='display:none;'>" );
+                            }
 
                             Literal header = new Literal();
                             header.Text = content.ToString();
@@ -445,27 +515,34 @@ $('.js-panel-toggle').on('click', function (e) {
                             //     - if the comments tell us it's a color (#color)
                             //     - it's not a less variable (starts with a @)
                             //     - it's not a less color function
-                            List<string> lessColorFunctions = new List<string>() { "lighten", "darken", "saturate", "desaturate", "fadein", "fadeout", "fade", "spin", "mix" };
 
                             // todo check for less color functions
                             if ( variableParts[2].Contains( "#color" ) && !variableParts[1].StartsWith( "@" ) && !lessColorFunctions.Any( x => variableParts[1].StartsWith( x ) ) )
                             {
                                 variableType = VariableType.Color;
                             }
+                            else if ( variableParts[2].Contains( "#image" ) && !variableParts[1].StartsWith( "@" ) )
+                            {
+                                variableType = VariableType.Image;
+                            }
 
                             // get help
-                            helpText = variableParts[2].Replace( "#color", string.Empty ).Replace( "//", string.Empty ).Trim();
+                            helpText = variableParts[2]
+                                            .Replace( "#color", string.Empty )
+                                            .Replace("#image", string.Empty)
+                                            .Replace( "//", string.Empty )
+                                            .Trim();
                         }
 
                         // get variable name
-                        string variableName = variableParts[0].Replace( "@", string.Empty ).Replace( "-", " " ).Titleize();
+                        string variableName = variableParts[0].Replace( "@", string.Empty ).Replace( "-", " " ).Titleize().Replace( "Url", "URL" );
                         string variableKey = variableParts[0].Replace( "@", string.Empty );
 
                         // get variable value
                         string variableValue = string.Empty;
                         if ( variableParts.Length > 1 )
                         {
-                            variableValue = variableParts[1].Trim();
+                            variableValue = variableParts[1].Replace( "\"\"", string.Empty ).Replace( "''", string.Empty ).Trim();
                         }
 
                         Literal overrideControl = new Literal();
@@ -486,7 +563,7 @@ $('.js-panel-toggle').on('click', function (e) {
                                             colorPicker.Text = overrides[variableKey];
 
                                             // add restore logic
-                                            overrideControl.Text = string.Format( "<i class='fa fa-times margin-l-sm js-color-override variable-override pull-left' style='margin-top: 34px; cursor: pointer;' data-control='{0}' data-original-value='{1}'></i>", variableKey, variableValue );
+                                            overrideControl.Text = string.Format( "<i class='fa fa-times js-color-override variable-override' style='opacity: 1;' data-control='{0}' data-original-value='{1}'></i>", variableKey, variableValue );
                                         }
                                         else
                                         {
@@ -499,7 +576,7 @@ $('.js-panel-toggle').on('click', function (e) {
                                         }
 
                                         colorPicker.RequiredFieldValidator = null;
-                                        colorPicker.FormGroupCssClass = "pull-left";
+                                        colorPicker.FormGroupCssClass = "clearable-input";
 
                                         Literal beginWrapper = new Literal();
                                         beginWrapper.Text = "<div class='clearfix'>";
@@ -516,6 +593,69 @@ $('.js-panel-toggle').on('click', function (e) {
                                     break;
                                 }
 
+                            case VariableType.Image:
+                                {
+                                    var imgUploader = new Rock.Web.UI.Controls.ImageUploader();
+                                    imgUploader.ID = variableKey;
+                                    imgUploader.IsBinaryFile = false;
+                                    imgUploader.NoPictureUrl = "";
+                                    imgUploader.Label = variableName;
+                                    imgUploader.RootFolder = "~/Content/Themes/" + _themeName;
+                                    //imgUploader.ImageRemoved += ImgUploader_ImageRemoved;
+                                    imgUploader.FormGroupCssClass = "clearable-input";
+
+                                    /*if ( variableValue.IsNotNullOrWhiteSpace() )
+                                    {
+                                        imgUploader.NoPictureUrl = "~" + variableValue.Replace( "'", "" ).Replace( "\"", "" );
+                                    }
+                                    else
+                                    {
+                                        imgUploader.NoPictureUrl = "";
+                                    }*/
+
+                                    // check if override of the variable exists
+                                    if ( overrides.ContainsKey( variableKey ) )
+                                    {
+                                        imgUploader.NonBinaryFileSrc = "~" + overrides[variableKey].Replace( "'", "" );
+
+                                        // add restore logic
+                                        var overrideImagePath = variableValue.Replace( "~", "" ).Replace( "'", "" ).Replace( "\"","" ).Replace( "../", string.Format( "{0}Themes/{1}/", Request.ApplicationPath, _themeName ) );
+                                        overrideControl.Text = string.Format( "<i class='fa fa-times js-image-override variable-override' style='opacity: 1;' data-control='{0}' data-original-value='~{1}'></i>", variableKey, overrideImagePath );
+                                    }
+                                    else
+                                    {
+                                        var originalFile = variableValue.Replace( "'", "" ).Replace("\"", "").Trim();
+
+                                        // Adjust "../Assets/Themes/header.png" to "~/Assets/Themes/header.png"
+                                        if ( originalFile.StartsWith( "../" ) )
+                                        {
+                                            originalFile = originalFile.Replace( "../", string.Format( "/Themes/{0}/", _themeName ) );
+                                        }
+
+                                        imgUploader.NonBinaryFileSrc = "~" + originalFile;
+                                    }
+
+                                    if ( !string.IsNullOrWhiteSpace( helpText ) )
+                                    {
+                                        imgUploader.Help = helpText;
+                                    }
+
+                                    // Strip quotes from file path of the no image url
+                                    imgUploader.NoPictureUrl = imgUploader.NoPictureUrl.Replace( "'", string.Empty ).Replace( "\"", string.Empty );
+
+                                    Literal beginWrapper = new Literal();
+                                    beginWrapper.Text = "<div class='clearfix'>";
+
+                                    AddControl( beginWrapper, inPanel );
+                                    AddControl( imgUploader, inPanel );
+                                    AddControl( overrideControl, inPanel );
+
+                                    Literal endWrapper = new Literal();
+                                    endWrapper.Text = "</div>";
+                                    AddControl( endWrapper, inPanel );
+
+                                    break;
+                                }
                             default:
                                 {
                                     if ( phThemeControls.FindControl( variableName ) == null )
@@ -524,6 +664,7 @@ $('.js-panel-toggle').on('click', function (e) {
                                         textbox.Label = variableName;
                                         textbox.ID = variableKey;
                                         textbox.CssClass = "input-width-xl";
+                                        textbox.Help = helpText;
 
                                         // check if override of the variable exists
                                         if ( overrides.ContainsKey( variableKey ) )
@@ -566,13 +707,22 @@ $('.js-panel-toggle').on('click', function (e) {
                     AddControl( panelClose, true );
                 }
 
-                if ( phThemeControls.Controls.Count == 0 )
+                if ( phThemeControls.Controls.Count == 0 && !pnlFontAwesomeSettings.Visible )
                 {
                     btnSave.Visible = false;
+                    nbMessages.NotificationBoxType = NotificationBoxType.Warning;
                     nbMessages.Text = "This theme does not define any variables for editing.";
                 }
             }
         }
+
+        /*private void ImgUploader_ImageRemoved( object sender, ImageUploaderEventArgs e )
+        {
+            // Clear out the image from the control
+            var imgUploader = (Rock.Web.UI.Controls.ImageUploader) sender;
+
+            imgUploader.NonBinaryFileSrc = string.Empty;
+        }*/
 
         /// <summary>
         /// Adds the control.
@@ -623,7 +773,7 @@ $('.js-panel-toggle').on('click', function (e) {
         /// </summary>
         private void LoadCssOverrides()
         {
-            // load the CSS overrides                
+            // load the CSS overrides
             string overrideFile = string.Format( @"{0}Themes/{1}/Styles/_css-overrides.less", Request.PhysicalApplicationPath, _themeName );
             if ( File.Exists( overrideFile ) )
             {
@@ -638,7 +788,7 @@ $('.js-panel-toggle').on('click', function (e) {
         #endregion
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public enum VariableType
         {
@@ -655,7 +805,12 @@ $('.js-panel-toggle').on('click', function (e) {
             /// <summary>
             /// The number
             /// </summary>
-            Number
+            Number,
+
+            /// <summary>
+            /// The image
+            /// </summary>
+            Image
         }
     }
 }

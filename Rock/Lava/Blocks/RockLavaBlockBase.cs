@@ -14,12 +14,9 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+
 using DotLiquid;
 
 using Rock.Utility;
@@ -53,17 +50,7 @@ namespace Rock.Lava.Blocks
         /// <returns></returns>
         protected bool IsAuthorized( Context context )
         {
-            if ( context.Registers.ContainsKey( "EnabledCommands" ) )
-            {
-                var enabledCommands = context.Registers["EnabledCommands"].ToString().Split( ',' ).ToList();
-
-                if ( enabledCommands.Contains( "All" ) || enabledCommands.Contains( this.GetType().Name ) )
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return LavaHelper.IsAuthorized( context, this.GetType().Name );
         }
 
         /// <summary>

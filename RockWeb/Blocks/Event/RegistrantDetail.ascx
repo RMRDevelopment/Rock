@@ -59,8 +59,8 @@
 
             <div class="panel panel-block">
 
-                <div class="panel-heading clearfix">
-                    <h1 class="panel-title pull-left"><asp:Literal ID="lTitle" runat="server"></asp:Literal></h1>
+                <div class="panel-heading">
+                    <h1 class="panel-title pull-left"><i class="fa fa-user"></i> <asp:Literal ID="lTitle" runat="server"></asp:Literal></h1>
                     <div class="panel-labels">
                         <Rock:HighlightLabel ID="hlCost" runat="server" LabelType="Info" ToolTip="Cost" />
                     </div>
@@ -68,7 +68,7 @@
 
                 <div class="panel-body">
 
-                    <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                    <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                     <div class="row">
                         <div class="col-md-6">
@@ -94,7 +94,7 @@
                     </div>
 
                     <div class="actions">
-                        <asp:LinkButton ID="btnSave" runat="server" AccessKey="s" ToolTip="Alt+s" Text="Save" CssClass="btn btn-primary" OnClick="btnSave_Click" />
+                        <asp:LinkButton ID="btnSave" runat="server" AccessKey="s" ToolTip="Alt+s" Text="Save" CssClass="btn btn-primary js-edit-registrant" OnClick="btnSave_Click" />
                         <asp:LinkButton ID="btnCancel" runat="server" AccessKey="c" ToolTip="Alt+c" Text="Cancel" CssClass="btn btn-link" CausesValidation="false" OnClick="btnCancel_Click" />
                     </div>
 

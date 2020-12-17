@@ -25,6 +25,7 @@ using System.Web.Http.Filters;
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
+using Rock.Web.Cache;
 
 namespace Rock.Rest.Filters
 {
@@ -39,25 +40,19 @@ namespace Rock.Rest.Filters
         /// <param name="actionContext">The action context.</param>
         public override void OnActionExecuting( HttpActionContext actionContext )
         {
+            var reflectedHttpActionDescriptor = ( ReflectedHttpActionDescriptor ) actionContext.ActionDescriptor;
+
             var controller = actionContext.ActionDescriptor.ControllerDescriptor;
             string controllerClassName = controller.ControllerType.FullName;
             string actionMethod = actionContext.Request.Method.Method;
-            string actionPath = actionContext.Request.GetRouteData().Route.RouteTemplate.Replace( "{controller}", controller.ControllerName );
-            
-            //// find any additional arguments that aren't part of the RouteTemplate that qualified the action method
-            //// for example: ~/person/search?name={name}&includeHtml={includeHtml}&includeDetails={includeDetails}&includeBusinesses={includeBusinesses}
-            //// is a different action method than ~/person/search?name={name}
-            var routeQueryParams = actionContext.ActionArguments.Where(a => !actionPath.Contains("{" + a.Key + "}"));
-            if ( routeQueryParams.Any())
-            {
-                var actionPathQueryString = routeQueryParams.Select( a => string.Format( "{0}={{{0}}}", a.Key ) ).ToList().AsDelimited( "&" );
-                actionPath += "?" + actionPathQueryString;
-            }
 
-            ISecured item = Rock.Web.Cache.RestActionCache.Read( actionMethod + actionPath );
+            var apiId = RestControllerService.GetApiId( reflectedHttpActionDescriptor.MethodInfo, actionMethod, controller.ControllerName );
+            ISecured item = RestActionCache.Get( apiId );
+
             if ( item == null )
             {
-                item = Rock.Web.Cache.RestControllerCache.Read( controllerClassName );
+                // if there isn't a RestAction in the database, use the Controller as the secured item
+                item = RestControllerCache.Get( controllerClassName );
                 if ( item == null )
                 {
                     item = new RestController();
@@ -82,7 +77,7 @@ namespace Rock.Rest.Filters
                         if ( userName.StartsWith( "rckipid=" ) )
                         {
                             Rock.Model.PersonService personService = new Model.PersonService( rockContext );
-                            Rock.Model.Person impersonatedPerson = personService.GetByImpersonationToken( userName.Substring( 8 ), false, null );
+                            Rock.Model.Person impersonatedPerson = personService.GetByImpersonationToken( userName.Substring( 8 ) );
                             if ( impersonatedPerson != null )
                             {
                                 userLogin = impersonatedPerson.GetImpersonatedUser();
@@ -98,6 +93,17 @@ namespace Rock.Rest.Filters
                         {
                             person = userLogin.Person;
                             actionContext.Request.Properties.Add( "Person", person );
+
+                            /* 12/12/2019 BJW
+                             *
+                             * Setting this current person item was only done in put, post, and patch in the ApiController
+                             * class. Set it here so that it is always set for all methods, including delete. This enhances
+                             * history logging done in the pre and post save model hooks (when the pre-save event is called
+                             * we can access DbContext.GetCurrentPersonAlias and log who deleted the record).
+                             *
+                             * Task: https://app.asana.com/0/1120115219297347/1153140643799337/f
+                             */
+                            System.Web.HttpContext.Current.AddOrReplaceItem( "CurrentPerson", person );
                         }
                     }
                 }

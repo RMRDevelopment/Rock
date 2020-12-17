@@ -24,6 +24,11 @@ namespace Rock.SystemGuid
     public class DefinedType
     {
         /// <summary>
+        /// Background check package types
+        /// </summary>
+        public const string BACKGROUND_CHECK_TYPES = "BC2FDF9A-93B8-4325-8DE9-2F7B1943BFDF";
+
+        /// <summary>
         /// Guid for the types of Benevolence Request status (e.g. pending, active, answered, etc.)
         /// </summary>
         public const string BENEVOLENCE_REQUEST_STATUS = "2787B088-D607-4D69-84FF-850A6891EE34";
@@ -32,6 +37,31 @@ namespace Rock.SystemGuid
         /// The types of results for a Benevolence Request
         /// </summary>
         public const string BENEVOLENCE_RESULT_TYPE = "35FC0225-3DAC-48B4-BDF7-AFDE104FB60E";
+
+        /// <summary>
+        /// Guid for Cache Tags
+        /// </summary>
+        public const string CACHE_TAGS = "BDF73089-9154-40C1-90E4-74518E9937DC";
+
+        /// <summary>
+        /// GUID for the Campus Status
+        /// </summary>
+        public const string CAMPUS_STATUS = "840CDA6D-6E81-4EB7-B325-BE708990CCE9";
+
+        /// <summary>
+        /// GUID for the Campus Type
+        /// </summary>
+        public const string CAMPUS_TYPE = "8C2260A8-6130-414A-BD32-22743FEAB256";
+
+        /// <summary>
+        /// The types of static color swatches supported
+        /// </summary>
+        public const string COLOR_PICKER_SWATCHES = "CC1400B3-E161-45E3-BF49-49825D3D6467";
+
+        /// <summary>
+        /// The content component template
+        /// </summary>
+        public const string CONTENT_COMPONENT_TEMPLATE = "313B579F-F442-4247-ADBB-BBD25E255003";
 
         /// <summary>
         /// The types of communication supported (i.e. email, sms, twitter, app-push, etc)
@@ -70,6 +100,11 @@ namespace Rock.SystemGuid
         public const string DISC_RESULTS_TYPE = "F06DDAD8-6058-4182-AD0A-B523BB7A2D78";
 
         /// <summary>
+        /// Guid for the Conflict Profile assessment.
+        /// </summary>
+        public const string ASSESSMENT_CONFLICT_PROFILE = "EE7E089E-DF81-4407-8BFA-AD865FA5427A";
+
+        /// <summary>
         /// Guid for the Domains Sharing Logins
         /// </summary>
         public const string DOMAINS_SHARING_LOGINS = "6CE00E1B-FE09-45FE-BD9D-56C57A11BE1A";
@@ -105,6 +140,11 @@ namespace Rock.SystemGuid
         public const string FINANCIAL_FREQUENCY = "1F645CFB-5BBD-4465-B9CA-0D2104A1479B";
 
         /// <summary>
+        /// Defined Type of Non-Cash Assets (used with FinancialTransaction.NonCashAssetTypeValueId.
+        /// </summary>
+        public const string FINANCIAL_NONCASH_ASSET_TYPE = "6B19C65E-FF8F-4ADD-9DA0-48E53FC074A6";
+
+        /// <summary>
         /// Guid for Financial Source Type
         /// </summary>
         public const string FINANCIAL_SOURCE_TYPE =  "4F02B41E-AB7D-4345-8A97-3904DDD89B01";
@@ -115,7 +155,7 @@ namespace Rock.SystemGuid
         public const string FINANCIAL_TRANSACTION_REFUND_REASON = "61FE3A58-9F4F-472F-A4E0-5116EB90A323";
 
         /// <summary>
-        /// Guid for Fundraising Opportunity Type (Trip, Project, Intership, etc)
+        /// Guid for Fundraising Opportunity Type (Trip, Project, Internship, etc)
         /// </summary>
         public const string FUNDRAISING_OPPORTUNITY_TYPE = "53C8FFF6-3022-4A2D-9BAE-FD3435BEA43D";
 
@@ -135,9 +175,19 @@ namespace Rock.SystemGuid
         public const string GROUPTYPE_PURPOSE = "B23F1E45-BC26-4E82-BEB3-9B191FE5CCC3";
 
         /// <summary>
+        /// The grouptype inactive reason
+        /// </summary>
+        public const string GROUPTYPE_INACTIVE_REASONS = "EB5D9839-F770-4E22-8B56-0B09397307D9";
+
+        /// <summary>
         /// Guid for the types of interaction service.
         /// </summary>
         public const string INTERACTION_CHANNEL_MEDIUM = "9bf5777a-961f-49a8-a834-45e5c2077967";
+
+        /// <summary>
+        /// Guid for the JSON Web Token Configuration
+        /// </summary>
+        public const string JWT_CONFIGURATION = "7D848CE3-F039-4CE1-A59B-F0D923F0C1A7";
 
         /// <summary>
         /// Guid for Default link list
@@ -173,7 +223,17 @@ namespace Rock.SystemGuid
         /// Metric Source Type
         /// </summary>
         public const string METRIC_SOURCE_TYPE = "D6F323FF-6EF2-4DA7-A82C-61399AC1D798";
-        
+
+        /// <summary>
+        /// Motivator Type
+        /// </summary>
+        public const string MOTIVATOR_TYPE = "1DFF1804-0055-491E-9559-54EA3F8F89D1";
+
+        /// <summary>
+        /// Motivator Theme Type
+        /// </summary>
+        public const string MOTIVATOR_THEME_TYPE = "354715FA-564A-420A-8324-0411988AE7AB";
+
         /// <summary>
         /// Guid for the types of Person Records (such as person, business, etc.)
         /// </summary>
@@ -190,7 +250,7 @@ namespace Rock.SystemGuid
         public const string PERSON_RECORD_STATUS_REASON =  "e17d5988-0372-4792-82cf-9e37c79f7319";
 
         /// <summary>
-        /// Guid for the person'S connection status (such as member, attendee, participant, etc.)
+        /// Guid for the person's connection status (such as member, attendee, participant, etc.)
         /// </summary>
         public const string PERSON_CONNECTION_STATUS =  "2e6540ea-63f0-40fe-be50-f2a84735e600";
 
@@ -235,6 +295,11 @@ namespace Rock.SystemGuid
         public const string PERSONAL_DEVICE_PLATFORM = "A55849D7-5C7B-4B36-9024-A672169E4C9C";
 
         /// <summary>
+        /// Guid representating the person key types to search.
+        /// </summary>
+        public const string PERSON_SEARCH_KEYS = "61BDD0E3-173D-45AB-9E8C-1FBB9FA8FDF3";
+
+        /// <summary>
         /// The PowerBI Accounts Defined Type guid
         /// </summary>
         public const string POWERBI_ACCOUNTS = "497DE3E6-66BD-D4A1-4A41-78A2FED2D0DF";
@@ -247,7 +312,19 @@ namespace Rock.SystemGuid
         /// <summary>
         /// Protect My Ministry background package types
         /// </summary>
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use BACKGROUND_CHECK_TYPES instead", true )]
         public const string PROTECT_MY_MINISTRY_PACKAGES = "BC2FDF9A-93B8-4325-8DE9-2F7B1943BFDF";
+
+        /// <summary>
+        /// Template Block
+        /// </summary>
+        public const string TEMPLATE_BLOCK = "0F8E2B71-985E-44C4-BF5A-2FB1AAF3E183";
+
+        /// <summary>
+        /// Template
+        /// </summary>
+        public const string TEMPLATE = "A6E267E2-66A4-44D7-A5C9-9399666CBF95";
 
         /// <summary>
         /// Guid for the types of map styles
@@ -265,6 +342,11 @@ namespace Rock.SystemGuid
         public const string BUTTON_HTML = "407A3A73-A3EF-4970-B856-2A33F62AC72E";
 
         /// <summary>
+        /// Guid for a group's (Family's) status for GroupType of Family
+        /// </summary>
+        public const string FAMILY_GROUP_STATUS = "792C6979-0F40-47C5-BD0C-06FA7DF22837";
+
+        /// <summary>
         /// The REST allowed domains
         /// </summary>
         public const string REST_API_ALLOWED_DOMAINS = "DF7C8DF7-49F9-4858-9E5D-20842AF65AD8";
@@ -280,6 +362,16 @@ namespace Rock.SystemGuid
         public const string SMALL_GROUP_TOPIC = "D4111631-6B42-1CBD-4019-427D6BC6F475";
 
         /// <summary>
+		/// The Spiritual Gifts
+		/// </summary>
+		public const string SPIRITUAL_GIFTS = "9D9628F0-7FC5-411E-B9DF-740AA17689A0";
+
+        /// <summary>
+        /// Guid for Structured Content Editor Tools
+        /// </summary>
+        public const string STRUCTURED_CONTENT_EDITOR_TOOLS = "E43AD92C-4DD4-4D78-9852-FCFAEFDF52CA";
+
+        /// <summary>
         /// Used to manage the workflows that can be launched via webhook.
         /// </summary>
         public const string WEBHOOK_TO_WORKFLOW = "7B39BA6A-E7EF-48A6-9EC7-4A0F498D8FDB";
@@ -293,5 +385,25 @@ namespace Rock.SystemGuid
         /// Used to manage the lava code that can be launched via webhook.
         /// </summary>
         public const string WEBHOOK_TO_LAVA = "7BCF6434-8B15-49C3-8EF3-BAB9A63B545D";
+
+        /// <summary>
+        /// The group schedule decline reason
+        /// </summary>
+        public const string GROUP_SCHEDULE_DECLINE_REASON = "70C9F9C4-20CC-43DD-888D-9243853A0E52";
+
+        /// <summary>
+        /// Used to store various liquid templates for features in Rock.
+        /// </summary>
+        public const string LAVA_TEMPLATES = "C3D44004-6951-44D9-8560-8567D705A48B";
+
+        /// <summary>
+        /// The group RSVP decline reason.
+        /// </summary>
+        public const string GROUP_RSVP_DECLINE_REASON = "1E339D24-3DF3-4628-91C3-DA9300D21ACE";
+
+        /// <summary>
+        /// Logging Domain.
+        /// </summary>
+        public const string LOGGING_DOMAINS = "60487370-DE7E-4962-B58F-1865303F0414";
     }
 }

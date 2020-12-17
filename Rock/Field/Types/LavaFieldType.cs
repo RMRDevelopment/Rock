@@ -14,13 +14,11 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Collections.Generic;
 using System.Web.UI;
 
 using Rock.Data;
 using Rock.Model;
-using Rock.Web.UI.Controls;
 
 namespace Rock.Field.Types
 {
@@ -84,7 +82,7 @@ namespace Rock.Field.Types
         /// <param name="parentControl">The parent control.</param>
         /// <param name="value">The value.</param>
         /// <param name="configurationValues">The configuration values.</param>
-        /// <param name="condensed">if set to <c>true</c> [condesed].</param>
+        /// <param name="condensed">if set to <c>true</c> [condensed].</param>
         /// <returns></returns>
         public override string FormatValueAsHtml( Control parentControl, string value, Dictionary<string, ConfigurationValue> configurationValues, bool condensed = false )
         {

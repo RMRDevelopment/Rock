@@ -20,13 +20,13 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Web;
 using System.Web.Security;
 
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
+
 using RestSharp;
 using RestSharp.Authenticators;
 
@@ -53,12 +53,12 @@ namespace Rock.Security.ExternalAuthentication
         /// The _oauth token
         /// </summary>
         private string _oauthToken = null;
-        
+
         /// <summary>
         /// The _oauth token secret
         /// </summary>
         private string _oauthTokenSecret = null;
-        
+
         /// <summary>
         /// The _return URL
         /// </summary>
@@ -295,6 +295,12 @@ namespace Rock.Security.ExternalAuthentication
         /// <returns></returns>
         public static string GetTwitterUser( dynamic twitterUser, string accessToken = "" )
         {
+            // accessToken is required
+            if ( accessToken.IsNullOrWhiteSpace() )
+            {
+                return null;
+            }
+
             string username = string.Empty;
             string twitterId = twitterUser.id_str;
             string twitterLink = "https://twitter.com/" + twitterUser.screen_name;
@@ -305,7 +311,7 @@ namespace Rock.Security.ExternalAuthentication
             using ( var rockContext = new RockContext() )
             {
 
-                // Query for an existing user 
+                // Query for an existing user
                 var userLoginService = new UserLoginService( rockContext );
                 user = userLoginService.GetByUserName( userName );
 
@@ -327,15 +333,11 @@ namespace Rock.Security.ExternalAuthentication
                     // If person had an email, get the first person with the same name and email address.
                     if ( !string.IsNullOrWhiteSpace( email ) )
                     {
-                        var people = personService.GetByMatch( firstName, lastName, email );
-                        if ( people.Count() == 1 )
-                        {
-                            person = people.First();
-                        }
+                        person = personService.FindPerson( firstName, lastName, email, true );
                     }
 
-                    var personRecordTypeId = DefinedValueCache.Read( SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
-                    var personStatusPending = DefinedValueCache.Read( SystemGuid.DefinedValue.PERSON_RECORD_STATUS_PENDING.AsGuid() ).Id;
+                    var personRecordTypeId = DefinedValueCache.Get( SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
+                    var personStatusPending = DefinedValueCache.Get( SystemGuid.DefinedValue.PERSON_RECORD_STATUS_PENDING.AsGuid() ).Id;
 
                     rockContext.WrapTransaction( () =>
                     {
@@ -360,7 +362,7 @@ namespace Rock.Security.ExternalAuthentication
 
                         if ( person != null )
                         {
-                            int typeId = EntityTypeCache.Read( typeof( Facebook ) ).Id;
+                            int typeId = EntityTypeCache.Get( typeof( Facebook ) ).Id;
                             user = UserLoginService.Create( rockContext, person, AuthenticationServiceType.External, typeId, userName, "Twitter", true );
                         }
 
@@ -385,7 +387,7 @@ namespace Rock.Security.ExternalAuthentication
                             // If person does not have a photo, use their Twitter photo if it exists
                             if ( !person.PhotoId.HasValue && !twitterImageDefault && !string.IsNullOrWhiteSpace( twitterImageUrl ) )
                             {
-                                // Download the photo from the url provided
+                                // Download the photo from the URL provided
                                 var restClient = new RestClient( twitterImageUrl );
                                 var restRequest = new RestRequest( Method.GET );
                                 var restResponse = restClient.Execute( restRequest );
@@ -416,7 +418,7 @@ namespace Rock.Security.ExternalAuthentication
                             }
 
                             // Save the Twitter social media link
-                            var twitterAttribute = AttributeCache.Read( Rock.SystemGuid.Attribute.PERSON_TWITTER.AsGuid() );
+                            var twitterAttribute = AttributeCache.Get( Rock.SystemGuid.Attribute.PERSON_TWITTER.AsGuid() );
                             if ( twitterAttribute != null )
                             {
                                 person.LoadAttributes( rockContext );
@@ -439,7 +441,7 @@ namespace Rock.Security.ExternalAuthentication
         {
 
             /// <summary>
-            /// 
+            ///
             /// </summary>
             public class Coordinates
             {
@@ -460,7 +462,7 @@ namespace Rock.Security.ExternalAuthentication
             }
 
             /// <summary>
-            /// 
+            ///
             /// </summary>
             public class Geo
             {
@@ -481,14 +483,14 @@ namespace Rock.Security.ExternalAuthentication
             }
 
             /// <summary>
-            /// 
+            ///
             /// </summary>
             public class Attributes
             {
             }
 
             /// <summary>
-            /// 
+            ///
             /// </summary>
             public class BoundingBox
             {
@@ -509,7 +511,7 @@ namespace Rock.Security.ExternalAuthentication
             }
 
             /// <summary>
-            /// 
+            ///
             /// </summary>
             public class Place
             {
@@ -579,7 +581,7 @@ namespace Rock.Security.ExternalAuthentication
             }
 
             /// <summary>
-            /// 
+            ///
             /// </summary>
             public class Status
             {
@@ -712,7 +714,7 @@ namespace Rock.Security.ExternalAuthentication
             }
 
             /// <summary>
-            /// 
+            ///
             /// </summary>
             public class RootObject
             {

@@ -14,14 +14,10 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.ComponentModel;
 using System.Globalization;
 using System.Web.UI;
-using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-
-using Rock;
 
 namespace Rock.Web.UI.Controls
 {
@@ -188,7 +184,7 @@ namespace Rock.Web.UI.Controls
         {
             base.OnCommand( e );
 
-            if ( CompletedText.IsNotNullOrWhitespace() || CompletedMessage.IsNotNullOrWhitespace() )
+            if ( CompletedText.IsNotNullOrWhiteSpace() || CompletedMessage.IsNotNullOrWhiteSpace() )
             {
                 _isButtonClicked = true;
                 var script = string.Format(

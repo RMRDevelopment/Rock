@@ -15,22 +15,19 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Web;
+using System.ComponentModel;
 using Quartz;
+
 using Rock.Attribute;
-using Rock.Data;
-using Rock.Model;
-using Rock.Web.UI;
-using Rock.Web.UI.Controls;
 
 namespace Rock.Jobs
 {
     /// <summary>
-    /// Job to run quick SQL queries on a schedule
+    /// This job downloads CBR information for the specified PBX component.
     /// </summary>
+    [DisplayName( "PBX CDR Download" )]
+    [Description( "This job downloads CBR information for the specified PBX component." )]
+
     [ComponentField( "Rock.Pbx.PbxContainer, Rock", "PBX Component", "The PBX type to process.", true, key:"PbxComponent" )]
     [DisallowConcurrentExecution]
     public class PbxCdrDownload : IJob
@@ -47,7 +44,6 @@ namespace Rock.Jobs
         }
 
         /// <summary>
-        /// Job that will run quick SQL queries on a schedule.
         /// 
         /// Called by the <see cref="IScheduler" /> when a
         /// <see cref="ITrigger" /> fires that is associated with

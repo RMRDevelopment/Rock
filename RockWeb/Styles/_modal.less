@@ -1,4 +1,4 @@
-﻿
+
 
 //
 // MODAL STYLES
@@ -9,9 +9,8 @@
 // -------------------------
 
 // import as less files so they are concatenated properly
-@import (less) "./bootstrap-modal/bootstrap-modal-bs3patch.css";
+@import "./bootstrap-modal/_bootstrap-modal-bs3patch.less";
 @import (less) "./bootstrap-modal/bootstrap-modal.css";
-
 
 
 // Rock modal (page properties, etc.)
@@ -22,6 +21,7 @@
   color: @modal-body-text-color;
   background-color: @modal-body-bg;
   border: 0;
+  .box-shadow(@shadow-modal);
 
   .modal-header {
     min-height: 34px;
@@ -36,10 +36,16 @@
       margin-right: 12px;
     }
 
+    a {
+      color: @modal-header-text-color;
+      text-decoration: underline;
+    }
+
     .close {
       padding: 6px;
       margin: 0;
       color: @modal-header-text-color;
+      text-decoration: none;
       text-shadow: none;
     }
 
@@ -82,9 +88,9 @@
 
 .rock-modal {
   .modal-body {
-    padding: 8px 12px 12px 12px;
+    padding: 8px 12px 12px;
   }
-  .modal-footer:after {
+  .modal-footer::after {
     clear: both;
   }
   .modal-footer .btn {
@@ -93,8 +99,18 @@
   }
 }
 
+// Fix for overflow scrolling on iOS
 .modal.modal-overflow {
   top: @grid-gutter-width;
+  margin-bottom: @grid-gutter-width;
+}
+
+@supports (-webkit-overflow-scrolling: touch) {
+  // CSS specific to iOS devices
+  .modal.modal-overflow {
+    top: 1%;
+    height: ~"calc(100% - 1px)" !important;
+  }
 }
 
 #modal-popup_iframe {

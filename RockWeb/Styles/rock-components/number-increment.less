@@ -4,10 +4,10 @@
 
 .numberincrement {
   -webkit-user-select: none;
-     -moz-user-select: none;
-      -ms-user-select: none;
-       -o-user-select: none;
-          user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -o-user-select: none;
+  user-select: none;
 
   .numberincrement-up,
   .numberincrement-down {
@@ -33,10 +33,12 @@
 
   .numberincrement-value {
     padding: 6px 18px;
+    background-color: @input-bg;
     border-color: @input-group-addon-border-color;
     border-style: solid;
     border-width: 1px 0;
   }
+
   // adjustments for different sizes
   &.input-sm {
     .numberincrement-up,

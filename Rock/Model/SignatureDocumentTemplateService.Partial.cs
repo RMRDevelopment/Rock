@@ -18,10 +18,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+
 using Rock.Communication;
 using Rock.Data;
 using Rock.Security;
-using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -137,14 +137,13 @@ namespace Rock.Model
                                 .FirstOrDefault();
                         }
 
-                        string documentKey = string.Empty;
-                        if ( document == null  )
+                        string documentKey = document?.DocumentKey;
+                        if ( document == null || string.IsNullOrWhiteSpace( documentKey ) )
                         {
                             documentKey = provider.CreateDocument( signatureDocumentTemplate, appliesToPerson, assignedToPerson, documentName, out sendErrors, true );
                         }
                         else
                         {
-                            documentKey = document.DocumentKey;
                             provider.ResendDocument( document, out sendErrors );
                         }
 
@@ -236,14 +235,14 @@ namespace Rock.Model
             errors = new List<string>();
             if ( document != null &&
                 document.SignatureDocumentTemplate != null && 
-                document.SignatureDocumentTemplate.InviteSystemEmailId.HasValue &&
+                document.SignatureDocumentTemplate.InviteSystemCommunicationId.HasValue &&
                 person != null &&
                 !string.IsNullOrWhiteSpace( person.Email ) )
             {
                 string inviteLink = component.GetInviteLink( document, person, out errors );
                 if ( !errors.Any() )
                 {
-                    var systemEmail = new SystemEmailService( rockContext ).Get( document.SignatureDocumentTemplate.InviteSystemEmailId.Value );
+                    var systemEmail = new SystemCommunicationService( rockContext ).Get( document.SignatureDocumentTemplate.InviteSystemCommunicationId.Value );
                     if ( systemEmail != null )
                     {
                         var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( null, person );
@@ -251,7 +250,7 @@ namespace Rock.Model
                         mergeFields.Add( "InviteLink", inviteLink );
 
                         var emailMessage = new RockEmailMessage( systemEmail );
-                        emailMessage.AddRecipient( new RecipientData( person.Email, mergeFields ) );
+                        emailMessage.AddRecipient( new RockEmailMessageRecipient( person, mergeFields ) );
                         emailMessage.Send();
                     }
                 }

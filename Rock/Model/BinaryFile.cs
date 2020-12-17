@@ -18,9 +18,14 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
+using System.Data.Entity.Infrastructure;
 using System.Data.Entity.ModelConfiguration;
+using System.Drawing;
 using System.IO;
 using System.Runtime.Serialization;
+
+using ImageResizer;
 
 using Rock.Data;
 using Rock.Storage;
@@ -128,7 +133,7 @@ namespace Rock.Model
                 StorageProvider = null;
                 if ( value.HasValue )
                 {
-                    var entityType = EntityTypeCache.Read( value.Value );
+                    var entityType = EntityTypeCache.Get( value.Value );
                     if ( entityType != null )
                     {
                         StorageProvider = ProviderContainer.GetComponent( entityType.Name );
@@ -166,6 +171,24 @@ namespace Rock.Model
         [MaxLength( 2083 )]
         [DataMember]
         public string Path { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating the width of a file type.
+        /// </summary>
+        /// <value>
+        /// A <see cref="System.Int32"/> representing the width in pixels of a file type.
+        /// </value>
+        [DataMember]
+        public int? Width { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating the height of a file type.
+        /// </summary>
+        /// <value>
+        /// A <see cref="System.Int32"/> representing the height in pixels of a file type.
+        /// </value>
+        [DataMember]
+        public int? Height { get; set; }
 
         /// <summary>
         /// Gets or sets the content last modified.
@@ -213,6 +236,15 @@ namespace Rock.Model
         [NotMapped]
         [LavaInclude]
         public virtual Storage.ProviderComponent StorageProvider { get; private set; }
+
+        /// <summary>
+        /// Gets or sets the document.
+        /// </summary>
+        /// <value>
+        /// The document.
+        /// </value>
+        [DataMember]
+        public virtual Document Document { get; set; }
 
         /// <summary>
         /// Gets the URL.
@@ -317,14 +349,24 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext">The database context.</param>
         /// <param name="entry">The entry.</param>
-        public override void PreSaveChanges( DbContext dbContext, System.Data.Entity.Infrastructure.DbEntityEntry entry )
+        public override void PreSaveChanges( Data.DbContext dbContext, DbEntityEntry entry )
         {
-            if ( entry.State == System.Data.Entity.EntityState.Deleted )
+            if ( entry.State == EntityState.Deleted )
             {
                 if ( StorageProvider != null )
                 {
                     this.BinaryFileTypeId = entry.OriginalValues["BinaryFileTypeId"].ToString().AsInteger();
-                    StorageProvider.DeleteContent( this );
+
+                    try
+                    {
+                        StorageProvider.DeleteContent( this );
+                    }
+                    catch ( Exception ex )
+                    {
+                        // If an exception occurred while trying to delete provider's file, log the exception, but continue with the delete.
+                        ExceptionLogService.LogException( ex );
+                    }
+
                     this.BinaryFileTypeId = null;
                 }
             }
@@ -332,10 +374,75 @@ namespace Rock.Model
             {
                 if ( BinaryFileType == null && BinaryFileTypeId.HasValue )
                 {
-                    BinaryFileType = new BinaryFileTypeService( (RockContext)dbContext ).Get( BinaryFileTypeId.Value );
+                    BinaryFileType = new BinaryFileTypeService( ( RockContext ) dbContext ).Get( BinaryFileTypeId.Value );
                 }
 
-                if ( entry.State == System.Data.Entity.EntityState.Added )
+                if ( this.MimeType.StartsWith( "image/" ) )
+                {
+                    try
+                    {
+                        using ( Bitmap bm = new Bitmap( this.ContentStream ) )
+                        {
+                            if ( bm != null )
+                            {
+                                this.Width = bm.Width;
+                                this.Height = bm.Height;
+                            }
+                        }
+                        ContentStream.Seek( 0, SeekOrigin.Begin );
+
+                        if ( !IsTemporary )
+                        {
+                            if ( BinaryFileType.MaxHeight.HasValue &&
+                                BinaryFileType.MaxHeight != 0 &&
+                                BinaryFileType.MaxWidth.HasValue && 
+                                BinaryFileType.MaxWidth != 0 )
+                            {
+                                ResizeSettings settings = new ResizeSettings();
+                                MemoryStream resizedStream = new MemoryStream();
+                                if ( BinaryFileType.MaxWidth.Value < Width || BinaryFileType.MaxHeight < Height )
+                                {
+                                    settings.Add( "mode", "max" );
+                                    if ( BinaryFileType.MaxHeight < Height && BinaryFileType.MaxWidth < Width )
+                                    {
+                                        if ( BinaryFileType.MaxHeight >= BinaryFileType.MaxWidth )
+                                        {
+                                            settings.Add( "height", BinaryFileType.MaxHeight.Value.ToString() );
+                                        }
+                                        if ( BinaryFileType.MaxHeight <= BinaryFileType.MaxWidth )
+                                        {
+                                            settings.Add( "width", BinaryFileType.MaxWidth.Value.ToString() );
+                                        }
+                                    }
+                                    else if ( BinaryFileType.MaxHeight < Height )
+                                    {
+
+                                        settings.Add( "height", BinaryFileType.MaxHeight.Value.ToString() );
+                                    }
+                                    else
+                                    {
+                                        settings.Add( "width", BinaryFileType.MaxWidth.Value.ToString() );
+
+                                    }
+                                    ImageBuilder.Current.Build( this.ContentStream, resizedStream, settings );
+                                    ContentStream = resizedStream;
+
+                                    using ( Bitmap bm = new Bitmap( this.ContentStream ) )
+                                    {
+                                        if ( bm != null )
+                                        {
+                                            this.Width = bm.Width;
+                                            this.Height = bm.Height;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch ( Exception ) { } // if the file is an invalid photo keep moving
+                }
+
+                if ( entry.State == EntityState.Added )
                 {
                     // when a file is saved (unless it is getting Deleted/Saved), it should use the StoredEntityType that is associated with the BinaryFileType
                     if ( BinaryFileType != null )
@@ -370,7 +477,8 @@ namespace Rock.Model
                     }
                 }
 
-                else if ( entry.State == System.Data.Entity.EntityState.Modified )
+
+                else if ( entry.State == EntityState.Modified )
                 {
                     // when a file is saved (unless it is getting Deleted/Added), 
                     // it should use the StorageEntityType that is associated with the BinaryFileType

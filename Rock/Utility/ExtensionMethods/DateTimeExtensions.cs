@@ -48,7 +48,10 @@ namespace Rock
         {
             var now = RockDateTime.Today;
             int age = now.Year - start.Year;
-            if ( start > now.AddYears( -age ) ) age--;
+            if ( start > now.AddYears( -age ) )
+            {
+                age--;
+            }
 
             return age;
         }
@@ -172,6 +175,50 @@ namespace Rock
         }
 
         /// <summary>
+        /// Returns the value for <see cref="DateTime.ToShortDateString"/> or empty string if the date is null
+        /// </summary>
+        /// <param name="dateTime">The date time.</param>
+        /// <returns></returns>
+        public static string ToShortDateString( this DateTime? dateTime )
+        {
+            if ( dateTime.HasValue )
+            {
+                return dateTime.Value.ToShortDateString();
+            }
+            else
+            {
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Returns the dateTime in ISO-8601 ( https://en.wikipedia.org/wiki/ISO_8601 ) format. Use this when serializing a date/time as an AttributeValue, UserPreference, etc
+        /// </summary>
+        /// <param name="dateTime">The date time.</param>
+        /// <returns></returns>
+        public static string ToISO8601DateString( this DateTime? dateTime )
+        {
+            if ( dateTime.HasValue )
+            {
+                return dateTime.Value.ToISO8601DateString();
+            }
+            else
+            {
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Returns the dateTime in ISO-8601 ( https://en.wikipedia.org/wiki/ISO_8601 ) format. Use this when serializing a date/time as an AttributeValue, UserPreference, etc
+        /// </summary>
+        /// <param name="dateTime">The date time.</param>
+        /// <returns></returns>
+        public static string ToISO8601DateString( this DateTime dateTime )
+        {
+            return dateTime.ToString( "o" ) ?? string.Empty;
+        }
+
+        /// <summary>
         /// Returns a string in relative format (x seconds ago, x minutes ago, about an hour ago, in x seconds,
         /// in x minutes, in about an hour, etc.) or if time difference is greater than max days in long format (February
         /// 13 at 11:28am or November 5, 2011 at 1:57pm).
@@ -186,7 +233,7 @@ namespace Rock
                 DateTime now = RockDateTime.Now;
 
                 string nowText = "just now";
-                string format = "{0} ago"; ;
+                string format = "{0} ago";
                 TimeSpan timeSpan = now - dateTime;
                 if ( dateTime > now )
                 {
@@ -282,7 +329,7 @@ namespace Rock
         /// <returns></returns>
         public static long ToJavascriptMilliseconds( this DateTime dateTime )
         {
-            return (long)( dateTime.ToUniversalTime() - new DateTime( 1970, 1, 1 ) ).TotalMilliseconds;
+            return ( long ) ( dateTime.ToUniversalTime() - new DateTime( 1970, 1, 1 ) ).TotalMilliseconds;
         }
 
         /// <summary>
@@ -299,9 +346,8 @@ namespace Rock
         }
 
         /// <summary>
-        /// Returns the date of the start of the week for the specified date/time
-        /// For example, if Monday is considered the start of the week: "2015-05-13" would return "2015-05-11"
-        /// from http://stackoverflow.com/a/38064/1755417
+        /// Returns the date of the start of the week for the specified date/time.
+        /// Use <see cref="RockDateTime.FirstDayOfWeek"/> for startOfWeek if you want to have this based on the configured FirstDateOfWeek setting
         /// </summary>
         /// <param name="dt">The dt.</param>
         /// <param name="startOfWeek">The start of week.</param>
@@ -318,8 +364,8 @@ namespace Rock
         }
 
         /// <summary>
-        /// Returns the date of the last day of the week for the specified date/time
-        /// For example, if Monday is considered the start of the week: "2015-05-13" would return "2015-05-17"
+        /// Returns the date of the last day of the week for the specified date/time.
+        /// Use <see cref="RockDateTime.FirstDayOfWeek"/> for startOfWeek if you want to have this based on the configured FirstDateOfWeek setting.
         /// from http://stackoverflow.com/a/38064/1755417
         /// </summary>
         /// <param name="dt">The dt.</param>
@@ -330,33 +376,40 @@ namespace Rock
             return dt.StartOfWeek( startOfWeek ).AddDays( 6 );
         }
 
+
         /// <summary>
-        /// Sundays the date.
+        /// Gets the Date of which Sunday is associated with the specified Date/Time, based on <see cref="RockDateTime.FirstDayOfWeek" />
+        /// </summary>
+        /// <param name="dt">The dt.</param>
+        /// <returns></returns>
+        public static DateTime SundayDate( this DateTime dt )
+        {
+            return RockDateTime.GetSundayDate( dt );
+        }
+
+        /// <summary>
+        /// Gets the Date of which Sunday is associated with the specified Date/Time, based on <see cref="RockDateTime.FirstDayOfWeek"/>
         /// </summary>
         /// <param name="dt">The date to check.</param>
         /// <param name="startOfWeek">The start of week.</param>
         /// <returns></returns>
+        [Obsolete( "Use GetSundayDate without the firstDayOfWeek parameter" )]
+        [RockObsolete("1.10")]
         public static DateTime SundayDate( this DateTime dt, DayOfWeek startOfWeek = DayOfWeek.Monday )
         {
-            if ( dt.DayOfWeek == DayOfWeek.Sunday )
-            {
-                return dt.Date;
-            }
-            else
-            {
-                int intDayofWeek = (int)dt.DayOfWeek;
-                int diff = 7 - (int)dt.DayOfWeek;
-                return dt.AddDays( diff ).Date;
-            }
+            return RockDateTime.GetSundayDate( dt );
         }
 
         /// <summary>
         /// Gets the week of month.
-        /// from http://stackoverflow.com/a/2136549/1755417 but with an option to specify the FirstDayOfWeek
+        /// Use <see cref="RockDateTime.FirstDayOfWeek"/> for firstDayOfWeek if you want to have this based on the configured FirstDateOfWeek setting.
         /// </summary>
         /// <param name="dateTime">The date time.</param>
         /// <param name="firstDayOfWeek">The first day of week. For example" RockDateTime.FirstDayOfWeek</param>
         /// <returns></returns>
+        /// <remarks>
+        /// from http://stackoverflow.com/a/2136549/1755417 but with an option to specify the FirstDayOfWeek
+        /// </remarks>
         public static int GetWeekOfMonth( this DateTime dateTime, DayOfWeek firstDayOfWeek )
         {
             DateTime first = new DateTime( dateTime.Year, dateTime.Month, 1 );
@@ -373,12 +426,15 @@ namespace Rock
 
         /// <summary>
         /// Gets the week of year.
-        /// from http://stackoverflow.com/a/2136549/1755417, but with an option to specify the FirstDayOfWeek (for example RockDateTime.FirstDayOfWeek)
+        /// Use <see cref="RockDateTime.FirstDayOfWeek"/> for firstDayOfWeek if you want to have this based on the configured FirstDateOfWeek setting.
         /// </summary>
         /// <param name="dateTime">The date time.</param>
         /// <param name="calendarWeekRule">The calendar week rule.</param>
         /// <param name="firstDayOfWeek">The first day of week.</param>
         /// <returns></returns>
+        /// <remarks>
+        /// from http://stackoverflow.com/a/2136549/1755417, but with an option to specify the FirstDayOfWeek (for example RockDateTime.FirstDayOfWeek)
+        /// </remarks>
         public static int GetWeekOfYear( this DateTime dateTime, CalendarWeekRule calendarWeekRule, DayOfWeek firstDayOfWeek )
         {
             return _gregorianCalendar.GetWeekOfYear( dateTime, calendarWeekRule, firstDayOfWeek );
@@ -392,6 +448,74 @@ namespace Rock
         public static string ToShortDateTimeString( this DateTime dt )
         {
             return dt.ToShortDateString() + " " + dt.ToShortTimeString();
+        }
+
+        /// <summary>
+        /// To the RFC822 date time.
+        /// From https://madskristensen.net/blog/convert-a-date-to-the-rfc822-standard-for-use-in-rss-feeds/
+        /// </summary>
+        /// <param name="dateTime">The date time.</param>
+        /// <returns></returns>
+        public static string ToRfc822DateTime( this DateTime dateTime )
+        {
+            int offset = TimeZone.CurrentTimeZone.GetUtcOffset( DateTime.Now ).Hours;
+            string timeZone = "+" + offset.ToString().PadLeft( 2, '0' );
+
+            if ( offset < 0 )
+            {
+                int i = offset * -1;
+                timeZone = "-" + i.ToString().PadLeft( 2, '0' );
+            }
+
+            return dateTime.ToString( "ddd, dd MMM yyyy HH:mm:ss " + timeZone.PadRight( 5, '0' ) );
+        }
+
+        /// <summary>
+        /// Gets the age.
+        /// </summary>
+        /// <param name="dateTime">The date time.</param>
+        /// <returns></returns>
+        public static string GetFormattedAge( this DateTime dateTime )
+        {
+            DateTime today = RockDateTime.Today;
+            int age = today.Year - dateTime.Year;
+            if ( dateTime > today.AddYears( -age ) )
+            {
+                // their birthdate is after today's date, so they aren't a year older yet
+                age--;
+            }
+
+            if ( age > 0 )
+            {
+                return age + ( age == 1 ? " yr" : " yrs" );
+            }
+            else if ( age < -1 )
+            {
+                return string.Empty;
+            }
+
+            int months = today.Month - dateTime.Month;
+            if ( dateTime.Year < today.Year )
+            {
+                months = months + 12;
+            }
+            if ( dateTime.Day > today.Day )
+            {
+                months--;
+            }
+            if ( months > 0 )
+            {
+                return months + ( months == 1 ? " mo" : " mos" );
+            }
+
+            int days = today.Day - dateTime.Day;
+            if ( days < 0 )
+            {
+                // Add the number of days in the birth month
+                var birthMonth = new DateTime( dateTime.Year, dateTime.Month, 1 );
+                days = days + birthMonth.AddMonths( 1 ).AddDays( -1 ).Day;
+            }
+            return days + ( days == 1 ? " day" : " days" );
         }
 
         #endregion DateTime Extensions

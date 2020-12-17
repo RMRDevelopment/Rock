@@ -37,7 +37,7 @@ namespace Rock.Attribute
         /// <param name="keyPrompt">The text to display as a prompt in the key textbox.</param>
         /// <param name="valuePrompt">The text to display as a prompt in the label textbox.</param>
         /// <param name="definedTypeGuid">An Optional Defined Type Guid to select values from, otherwise values will be free-form text fields..</param>
-        /// <param name="customValues">Optional list of options to use for the values.  Format is either 'value1,value2,value3,...', or 'value1:text1,value2:text2,value3:text3,...'.</param>
+        /// <param name="customValues">Optional list of options to use for the values.  Format is either 'value1,value2,value3,...', or 'value1^text1,value2^text2,value3^text3,...'.</param>
         /// <param name="category">The category.</param>
         /// <param name="order">The order.</param>
         /// <param name="key">The key.</param>
@@ -57,6 +57,25 @@ namespace Rock.Attribute
 
             var displayValueFirstConfigValue = new Field.ConfigurationValue( displayValueFirst.ToString() );
             FieldConfigurationValues.Add( DISPLAY_VALUE_FIRST, displayValueFirstConfigValue );
+        }
+
+        /// <summary>
+        /// Gets or sets the key prompt.
+        /// </summary>
+        /// <value>
+        /// The key prompt.
+        /// </value>
+        public string KeyPrompt
+        {
+            get
+            {
+                return FieldConfigurationValues.GetValueOrNull( KEY_PROMPT_KEY );
+            }
+
+            set
+            {
+                FieldConfigurationValues.AddOrReplace( KEY_PROMPT_KEY, new Field.ConfigurationValue( value ) );
+            }
         }
     }
 }

@@ -55,7 +55,7 @@ namespace RockWeb.Blocks.Cms
                 gLayoutBlocks.Actions.ShowAdd = false;
                 gLayoutBlocks.GridRebind += gLayoutBlocks_GridRebind;
                 //SecurityField securityField = gLayoutBlocks.Columns[4] as SecurityField;
-                //securityField.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.Block ) ).Id;
+                //securityField.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.Block ) ).Id;
             }
         }
 
@@ -98,8 +98,6 @@ namespace RockWeb.Blocks.Cms
 
                 blockService.Delete( block );
                 rockContext.SaveChanges();
-
-                BlockCache.Flush( e.RowKeyId );
             }
 
             BindLayoutBlocksGrid();
@@ -123,7 +121,7 @@ namespace RockWeb.Blocks.Cms
         {
             pnlBlocks.Visible = false;
 
-            int layoutId = PageParameter( "layoutId" ).AsInteger();
+            int layoutId = PageParameter( "LayoutId" ).AsInteger();
             if ( layoutId == 0 )
             {
                 pnlContent.Visible = false;
@@ -131,7 +129,7 @@ namespace RockWeb.Blocks.Cms
             }
 
             var rockContext = new RockContext();
-            var layout = LayoutCache.Read( layoutId, rockContext );
+            var layout = LayoutCache.Get( layoutId, rockContext );
             if (layout == null)
             {
                 pnlContent.Visible = false;

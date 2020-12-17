@@ -25,6 +25,7 @@ using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
+using Rock.Utility;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
@@ -35,10 +36,40 @@ namespace RockWeb.Blocks.Communication
     [Category( "Communication" )]
     [Description( "Lists communications sent to an individual" )]
 
+    #region Block Attributes
+
     [ContextAware]
-    [LinkedPage( "Detail Page" )]
+    [LinkedPage(
+        "Detail Page",
+        Key = AttributeKey.DetailPage )]
+
+    #endregion Block Attributes
     public partial class CommunicationRecipientList : RockBlock, ICustomGridColumns
     {
+        #region Attribute Keys
+
+        /// <summary>
+        /// Keys to use for Block Attributes
+        /// </summary>
+        private static class AttributeKey
+        {
+            public const string DetailPage = "DetailPage";
+        }
+
+        #endregion Attribute Keys
+
+        #region Page Parameter Keys
+
+        /// <summary>
+        /// Keys to use for Page Parameters
+        /// </summary>
+        private static class PageParameterKey
+        {
+            public const string CommunicationId = "CommunicationId";
+        }
+
+        #endregion
+
         #region Fields
 
         private Person _person = null;
@@ -84,7 +115,7 @@ namespace RockWeb.Blocks.Communication
                     _person = contextEntity as Person;
                 }
             }
-            
+
             if ( !Page.IsPostBack )
             {
                 SetFilter();
@@ -185,7 +216,7 @@ namespace RockWeb.Blocks.Communication
         /// <param name="e">The <see cref="Rock.Web.UI.Controls.RowEventArgs" /> instance containing the event data.</param>
         protected void gCommunication_RowSelected( object sender, Rock.Web.UI.Controls.RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "CommunicationId", e.RowKeyId );
+            NavigateToLinkedPage( AttributeKey.DetailPage, PageParameterKey.CommunicationId, e.RowKeyId );
         }
 
         /// <summary>
@@ -198,10 +229,10 @@ namespace RockWeb.Blocks.Communication
         {
             if ( !UserCanEdit && e.Row.RowType == DataControlRowType.DataRow )
             {
-                Rock.Model.Communication communication = e.Row.DataItem as Rock.Model.Communication;
+                CommunicationItem communication = e.Row.DataItem as CommunicationItem;
                 if (
                     !CurrentPersonAliasId.HasValue ||
-                    communication == null || 
+                    communication == null ||
                     !communication.CreatedByPersonAliasId.HasValue ||
                     communication.CreatedByPersonAliasId.Value != CurrentPersonAliasId.Value )
                 {
@@ -264,7 +295,7 @@ namespace RockWeb.Blocks.Communication
         private void BindGrid()
         {
             // If configured for a person and person is null, return
-            int personEntityTypeId = EntityTypeCache.Read<Person>().Id;
+            int personEntityTypeId = EntityTypeCache.Get<Person>().Id;
             if ( ContextTypesRequired.Any( e => e.Id == personEntityTypeId ) && _person == null )
             {
                 return;
@@ -277,7 +308,7 @@ namespace RockWeb.Blocks.Communication
             string subject = tbSubject.Text;
             if ( !string.IsNullOrWhiteSpace( subject ) )
             {
-                qryCommunications = qryCommunications.Where( c => c.Subject.Contains( subject ) );
+                qryCommunications = qryCommunications.Where( c => ( string.IsNullOrEmpty( c.Subject ) && c.Name.Contains( subject ) ) || c.Subject.Contains( subject ) );
             }
 
             var communicationType = ddlType.SelectedValueAsEnumOrNull<CommunicationType>();
@@ -322,21 +353,45 @@ namespace RockWeb.Blocks.Communication
                     c.PushMessage.Contains( content ) );
             }
 
+            var queryable = qryCommunications
+            .Select( c => new CommunicationItem
+            {
+                Id = c.Id,
+                CommunicationType = c.CommunicationType,
+                Subject = string.IsNullOrEmpty( c.Subject ) ? ( string.IsNullOrEmpty( c.PushTitle ) ? c.Name : c.PushTitle ) : c.Subject,
+                CreatedDateTime = c.CreatedDateTime,
+                Sender = c.SenderPersonAlias != null ? c.SenderPersonAlias.Person : null,
+                Status = c.Status,
+                CreatedByPersonAliasId = c.CreatedByPersonAliasId
+            } );
+
+
             var sortProperty = gCommunication.SortProperty;
             if ( sortProperty != null )
             {
-                qryCommunications = qryCommunications.Sort( sortProperty );
+                queryable = queryable.Sort( sortProperty );
             }
             else
             {
-                qryCommunications = qryCommunications.OrderByDescending( c => c.CreatedDateTime );
+                queryable = queryable.OrderByDescending( c => c.CreatedDateTime );
             }
 
-            gCommunication.EntityTypeId = EntityTypeCache.Read<Rock.Model.Communication>().Id;
-            gCommunication.SetLinqDataSource( qryCommunications.AsNoTracking() );
+            gCommunication.EntityTypeId = EntityTypeCache.Get<Rock.Model.Communication>().Id;
+            gCommunication.SetLinqDataSource( queryable.AsNoTracking() );
             gCommunication.DataBind();
         }
 
         #endregion
-}
+
+        protected class CommunicationItem : RockDynamic
+        {
+            public int Id { get; set; }
+            public CommunicationType CommunicationType { get; set; }
+            public DateTime? CreatedDateTime { get; set; }
+            public string Subject { get; set; }
+            public Person Sender { get; set; }
+            public CommunicationStatus Status { get; set; }
+            public int? CreatedByPersonAliasId { get; set; }
+        }
+    }
 }

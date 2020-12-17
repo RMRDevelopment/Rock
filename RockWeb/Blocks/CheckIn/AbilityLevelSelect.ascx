@@ -2,7 +2,7 @@
 
 <script type="text/javascript">
     Sys.Application.add_load(function () {
-        $('a.btn-checkin-select').click(function () {
+        $('a.btn-checkin-select').on('click', function () {
             $(this).siblings().attr('onclick', 'return false;');
         });
     });
@@ -11,35 +11,13 @@
 <asp:UpdatePanel ID="upContent" runat="server">
 <ContentTemplate>
 
-    <script>
-
-        /**
-        * Technique to prevent clicking multiple times on a submit button.
-        * Attempting to prevent multiple postbacks.
-        * @param {DOM Object} el The DOM element that fired the event.
-        * @returns {bool}
-        */
-        function disableButton(el) {
-            el.className += " disabled";
-            if (el.getAttribute('requestSent') !== 'true') {
-                el.setAttribute('requestSent', 'true');
-                $(el).append(' <i class="fa fa-refresh fa-spin"></i> ');
-                return true;
-            } else {
-                el.disabled = true;
-                return false;
-            }
-        }
-
-    </script>
-
     <Rock:ModalAlert ID="maWarning" runat="server" />
 
 
     <div class="checkin-header">
         <h1><asp:Literal ID="lTitle" runat="server"></asp:Literal></h1>
     </div>
-                
+
     <div class="checkin-body">
 
         <div class="checkin-scroll-panel">
@@ -58,7 +36,13 @@
                     <div class="controls">
                         <asp:Repeater ID="rSelection" runat="server" OnItemCommand="rSelection_ItemCommand" OnItemDataBound="rSelection_ItemDataBound">
                             <ItemTemplate>
-                                <asp:LinkButton ID="lbSelect" runat="server" Text='<%# Container.DataItem.ToString() %>' CommandArgument='<%# Eval("Guid").ToString().ToUpper() %>' OnClientClick="disableButton(this);" CssClass="btn btn-primary btn-large btn-block btn-checkin-select" />
+                                <Rock:BootstrapButton
+                                    ID="lbSelect"
+                                    runat="server"
+                                    Text='<%# Container.DataItem.ToString() %>'
+                                    CommandArgument='<%# Eval("Guid").ToString().ToUpper() %>'
+                                    CssClass="btn btn-primary btn-large btn-block btn-checkin-select"
+                                    DataLoadingText="Loading..." />
                             </ItemTemplate>
                         </asp:Repeater>
                     </div>
@@ -68,13 +52,13 @@
         </div>
 
     </div>
-        
-   
 
-    <div class="checkin-footer">   
+
+
+    <div class="checkin-footer">
         <div class="checkin-actions">
-            <asp:LinkButton CssClass="btn btn-default" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
-            <asp:LinkButton CssClass="btn btn-default" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
+            <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
+            <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
         </div>
     </div>
 

@@ -15,9 +15,6 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
 
 namespace Rock.Attribute
 {
@@ -57,6 +54,25 @@ namespace Rock.Attribute
         {
             var configValue = new Field.ConfigurationValue( includeGlobalAttributeOption.ToString() );
             FieldConfigurationValues.Add( "includeglobal", configValue );
+        }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether [include global attribute option].
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [include global attribute option]; otherwise, <c>false</c>.
+        /// </value>
+        public bool IncludeGlobalAttributeOption
+        {
+            get
+            {
+                if ( FieldConfigurationValues.ContainsKey( "includeglobal" ) )
+                {
+                    return FieldConfigurationValues["includeglobal"].Value.AsBoolean();
+                }
+                return false;
+            }
+            set => FieldConfigurationValues["includeglobal"] = new Field.ConfigurationValue( value.ToString() );
         }
     }
 }

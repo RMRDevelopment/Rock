@@ -88,22 +88,31 @@ namespace Rock.Model
         public static void CopyPropertiesFrom( this Attendance target, Attendance source )
         {
             target.Id = source.Id;
+            target.AttendanceCheckInSessionId = source.AttendanceCheckInSessionId;
             target.AttendanceCodeId = source.AttendanceCodeId;
             target.CampusId = source.CampusId;
+            target.CheckedInByPersonAliasId = source.CheckedInByPersonAliasId;
+            target.CheckedOutByPersonAliasId = source.CheckedOutByPersonAliasId;
+            target.DeclineReasonValueId = source.DeclineReasonValueId;
             target.DeviceId = source.DeviceId;
             target.DidAttend = source.DidAttend;
-            target.DidNotOccur = source.DidNotOccur;
             target.EndDateTime = source.EndDateTime;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
-            target.GroupId = source.GroupId;
-            target.LocationId = source.LocationId;
             target.Note = source.Note;
+            target.OccurrenceId = source.OccurrenceId;
             target.PersonAliasId = source.PersonAliasId;
+            target.PresentByPersonAliasId = source.PresentByPersonAliasId;
+            target.PresentDateTime = source.PresentDateTime;
             target.Processed = source.Processed;
             target.QualifierValueId = source.QualifierValueId;
+            target.RequestedToAttend = source.RequestedToAttend;
             target.RSVP = source.RSVP;
-            target.ScheduleId = source.ScheduleId;
+            target.RSVPDateTime = source.RSVPDateTime;
+            target.ScheduleConfirmationSent = source.ScheduleConfirmationSent;
+            target.ScheduledByPersonAliasId = source.ScheduledByPersonAliasId;
+            target.ScheduledToAttend = source.ScheduledToAttend;
+            target.ScheduleReminderSent = source.ScheduleReminderSent;
             target.SearchResultGroupId = source.SearchResultGroupId;
             target.SearchTypeValueId = source.SearchTypeValueId;
             target.SearchValue = source.SearchValue;

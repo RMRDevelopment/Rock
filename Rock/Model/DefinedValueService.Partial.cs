@@ -15,10 +15,8 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
-using Rock.Data;
 using Rock.Web.Cache;
 
 namespace Rock.Model
@@ -51,7 +49,7 @@ namespace Rock.Model
         /// is not found, an empty collection will be returned.</returns>
         public IOrderedQueryable<DefinedValue> GetByDefinedTypeGuid( Guid definedTypeGuid )
         {
-            var definedTypeCache = DefinedTypeCache.Read( definedTypeGuid );
+            var definedTypeCache = DefinedTypeCache.Get( definedTypeGuid );
             if ( definedTypeCache != null )
             {
                 return GetByDefinedTypeId( definedTypeCache.Id );
@@ -93,7 +91,7 @@ namespace Rock.Model
         /// <returns></returns>
         public override Guid? GetGuid( int id )
         {
-            var cacheItem = Rock.Web.Cache.DefinedValueCache.Read( id );
+            var cacheItem = DefinedValueCache.Get( id );
             if ( cacheItem != null )
             {
                 return cacheItem.Guid;

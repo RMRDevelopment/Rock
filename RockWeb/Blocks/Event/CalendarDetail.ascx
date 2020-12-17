@@ -15,13 +15,21 @@
             <div class="panel-heading">
                 <h1 class="panel-title"><asp:Literal ID="lCalendarIcon" runat="server" />
                     <asp:Literal ID="lReadOnlyTitle" runat="server" /></h1>
+                <div class="pull-right">
+                    <button id="btnCopyToClipboard" runat="server" disabled="disabled"
+                        data-toggle="tooltip" data-placement="top" data-trigger="hover" data-delay="250" title="Copy Feed URL to Clipboard"
+                        class="btn btn-info btn-xs btn-copy-to-clipboard"
+                        onclick="$(this).attr('data-original-title', 'Copied').tooltip('show').attr('data-original-title', 'Copy Link to Clipboard');return false;">
+                        <i class="fa fa-calendar-alt"></i> Export Calendar Feed
+                    </button>
+                </div>
             </div>
             <Rock:PanelDrawer ID="pdAuditDetails" runat="server"></Rock:PanelDrawer>
             <div class="panel-body">
 
                 <Rock:NotificationBox ID="nbEditModeMessage" runat="server" NotificationBoxType="Info" />
 
-                <asp:ValidationSummary ID="valEventCalendarDetail" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                <asp:ValidationSummary ID="valEventCalendarDetail" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                 <div id="pnlViewDetails" runat="server">
                     <p class="description">
@@ -69,12 +77,12 @@
 
                     <Rock:PanelWidget ID="wpEventAttributes" runat="server" Title="Event Attributes">
                         <div class="grid">
-                            <Rock:Grid ID="gEventAttributes" runat="server" AllowPaging="false" DisplayType="Light" RowItemText="Event Attribute" ShowConfirmDeleteDialog="false">
+                            <Rock:Grid ID="gEventAttributes" runat="server" AllowPaging="false" DisplayType="Light" RowItemText="Event Attribute" ShowConfirmDeleteDialog="false" HideDeleteButtonForIsSystem="false">
                                 <Columns>
                                     <Rock:ReorderField />
                                     <Rock:RockBoundField DataField="Name" HeaderText="Attribute" />
                                     <Rock:RockBoundField DataField="Description" HeaderText="Description" />
-                                    <Rock:RockBoundField DataField="FieldType" HeaderText="Field Type" />
+                                    <Rock:RockLiteralField ID="lFieldType" HeaderText="Field Type" />
                                     <Rock:BoolField DataField="IsRequired" HeaderText="Required" />
                                     <Rock:BoolField DataField="IsGridColumn" HeaderText="Show in Grid" />
                                     <Rock:BoolField DataField="AllowSearch" HeaderText="Allow Search" />

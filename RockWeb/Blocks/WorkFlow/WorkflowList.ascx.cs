@@ -163,7 +163,7 @@ namespace RockWeb.Blocks.WorkFlow
                 workflowTypeId = PageParameter( "WorkflowTypeId" ).AsInteger();
                 _workflowType = new WorkflowTypeService( new RockContext() ).Get( workflowTypeId );
             }
-            
+
             if ( _workflowType != null )
             {
                 breadCrumbs.Add( new BreadCrumb( _workflowType.Name, pageReference ) );
@@ -302,7 +302,7 @@ namespace RockWeb.Blocks.WorkFlow
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gWorkflows_Manage( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "workflowId", e.RowKeyId );
+            NavigateToLinkedPage( "DetailPage", "WorkflowId", e.RowKeyId );
         }
 
         /// <summary>
@@ -355,12 +355,12 @@ namespace RockWeb.Blocks.WorkFlow
                 {
                     var qryParam = new Dictionary<string, string>();
                     qryParam.Add( "WorkflowTypeId", workflow.WorkflowTypeId.ToString() );
-                    qryParam.Add( "WorkflowId", workflow.Id.ToString() );
+                    qryParam.Add( "WorkflowGuid", workflow.Guid.ToString() );
                     NavigateToLinkedPage( "EntryPage", qryParam );
                 }
                 else
                 {
-                    NavigateToLinkedPage( "DetailPage", "workflowId", e.RowKeyId );
+                    NavigateToLinkedPage( "DetailPage", "WorkflowId", e.RowKeyId );
                 }
             }
         }
@@ -375,7 +375,7 @@ namespace RockWeb.Blocks.WorkFlow
         /// <returns></returns>
         private string GetState()
         {
-            // Get the check box list values by evaluating the posted form values for each input item in the rendered checkbox list.  
+            // Get the check box list values by evaluating the posted form values for each input item in the rendered checkbox list.
             // This is required because of a bug in ASP.NET that results in the Selected property for CheckBoxList items to not be
             // set correctly on a postback.
             var selectedItems = new List<string>();
@@ -441,7 +441,7 @@ namespace RockWeb.Blocks.WorkFlow
 
         private void BindAttributes()
         {
-            // Parse the attribute filters 
+            // Parse the attribute filters
             AvailableAttributes = new List<AttributeCache>();
             if ( _workflowType != null )
             {
@@ -451,13 +451,13 @@ namespace RockWeb.Blocks.WorkFlow
                     .Where( a =>
                         a.EntityTypeId == entityTypeId &&
                         a.IsGridColumn &&
-                        a.EntityTypeQualifierColumn.Equals( "WorkflowTypeId", StringComparison.OrdinalIgnoreCase ) && 
+                        a.EntityTypeQualifierColumn.Equals( "WorkflowTypeId", StringComparison.OrdinalIgnoreCase ) &&
                         a.EntityTypeQualifierValue.Equals( workflowQualifier ) )
                     .OrderByDescending( a => a.EntityTypeQualifierColumn )
                     .ThenBy( a => a.Order )
                     .ThenBy( a => a.Name ) )
                 {
-                    AvailableAttributes.Add( AttributeCache.Read( attributeModel ) );
+                    AvailableAttributes.Add( AttributeCache.Get( attributeModel ) );
                 }
             }
         }
@@ -521,7 +521,7 @@ namespace RockWeb.Blocks.WorkFlow
                         boundField.HeaderText = attribute.Name;
                         boundField.Condensed = false;
 
-                        var attributeCache = Rock.Web.Cache.AttributeCache.Read( attribute.Id );
+                        var attributeCache = Rock.Web.Cache.AttributeCache.Get( attribute.Id );
                         if ( attributeCache != null )
                         {
                             boundField.ItemStyle.HorizontalAlign = attributeCache.FieldType.Field.AlignValue;
@@ -569,7 +569,8 @@ namespace RockWeb.Blocks.WorkFlow
             {
                 var manageField = new LinkButtonField();
                 gWorkflows.Columns.Add( manageField );
-                manageField.CssClass = "btn btn-default btn-sm fa fa-file-text-o";
+                manageField.CssClass = "btn btn-default btn-sm";
+                manageField.Text = "<i class='fa fa-file-text-o'></i>";
                 manageField.Click += gWorkflows_Manage;
             }
 
@@ -666,30 +667,7 @@ namespace RockWeb.Blocks.WorkFlow
                     foreach ( var attribute in AvailableAttributes )
                     {
                         var filterControl = phAttributeFilters.FindControl( "filter_" + attribute.Id.ToString() );
-                        if ( filterControl == null ) continue;
-
-                        var filterValues = attribute.FieldType.Field.GetFilterValues( filterControl, attribute.QualifierValues, Rock.Reporting.FilterMode.SimpleFilter );
-                        var filterIsDefault = attribute.FieldType.Field.IsEqualToValue( filterValues, attribute.DefaultValue );
-                        var expression = attribute.FieldType.Field.AttributeFilterExpression( attribute.QualifierValues, filterValues, parameterExpression );
-                        if ( expression == null ) continue;
-
-                        var attributeValues = attributeValueService
-                                    .Queryable()
-                                    .Where( v => v.Attribute.Id == attribute.Id );
-
-                        var filteredAttributeValues = attributeValues.Where( parameterExpression, expression, null );
-
-                        if ( filterIsDefault )
-                        {
-                            qry = qry.Where( w =>
-                                 !attributeValues.Any( v => v.EntityId == w.Id ) ||
-                                 filteredAttributeValues.Select( v => v.EntityId ).Contains( w.Id ) );
-                        }
-                        else
-                        {
-                            qry = qry.Where( w =>
-                                filteredAttributeValues.Select( v => v.EntityId ).Contains( w.Id ) );
-                        }
+                        qry = attribute.FieldType.Field.ApplyAttributeQueryFilter( qry, filterControl, attribute, workflowService, Rock.Reporting.FilterMode.SimpleFilter );
                     }
                 }
 
@@ -733,7 +711,7 @@ namespace RockWeb.Blocks.WorkFlow
 
                 gWorkflows.ObjectList = workflowObjectQry.ToList().ToDictionary( k => k.Id.ToString(), v => v as object );
 
-                gWorkflows.EntityTypeId = EntityTypeCache.Read<Workflow>().Id;
+                gWorkflows.EntityTypeId = EntityTypeCache.Get<Workflow>().Id;
                 var qryGrid = workflows.Select( w => new
                 {
                     w.Id,

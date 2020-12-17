@@ -9,7 +9,7 @@
 
                 <div class="panel panel-block">
 
-                    <div class="panel-heading clearfix">
+                    <div class="panel-heading">
                         <h1 class="panel-title pull-left">
                             <i class="fa fa-list"></i>
                             Connection Opportunities
@@ -31,11 +31,7 @@
                                 <Columns>
                                     <Rock:RockBoundField DataField="Name" HeaderText="Name" SortExpression="Name" />
                                     <Rock:HtmlField DataField="Summary" HeaderText="Summary" TruncateLength="300" DisplayMode="PlainText" />
-                                    <Rock:RockTemplateField HeaderText="Status" SortExpression="IsActive">
-                                        <ItemTemplate>
-                                            <Rock:RockLiteral ID="lStatus" runat="server" />
-                                        </ItemTemplate>
-                                    </Rock:RockTemplateField>
+                                    <Rock:RockLiteralField ID="lStatus" HeaderText="Status" SortExpression="IsActive" />
                                 </Columns>
                             </Rock:Grid>
                         </div>

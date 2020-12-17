@@ -7,10 +7,10 @@
         <asp:Panel ID="pnlDetails" CssClass="panel panel-block" runat="server" Visible="false">
 
             <div class="panel-heading">
-                <h1 class="panel-title"><i class="fa fa-file-text-o"></i>
+                <h1 class="panel-title"><i class="fa fa-file-signature"></i>
                     <asp:Literal ID="lTitle" runat="server" /></h1>
 
-                <div class="panel-labels"> 
+                <div class="panel-labels">
                     <Rock:HighlightLabel ID="hlStatusLastUpdated" runat="server" LabelType="Info" />
                 </div>
             </div>
@@ -18,7 +18,7 @@
 
                 <div id="pnlEditDetails" runat="server">
 
-                    <asp:ValidationSummary ID="vsDetails" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                    <asp:ValidationSummary ID="vsDetails" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
                     <Rock:NotificationBox ID="nbErrorMessage" runat="server" Visible="false" />
 
                     <div class="row">
@@ -40,9 +40,9 @@
                         <div class="col-md-6">
                             <Rock:PersonPicker ID="ppAppliesTo" runat="server" Label="Applies To" Required="true"
                                 Help="The person that this document applies to." />
-                            <Rock:PersonPicker ID="ppAssignedTo" runat="server" Label="Assigned To" Required="true" 
+                            <Rock:PersonPicker ID="ppAssignedTo" runat="server" Label="Assigned To" Required="true"
                                 Help="The person that this document was assigned to for getting a signature." />
-                            <Rock:PersonPicker ID="ppSignedBy" runat="server" Label="Signed By" 
+                            <Rock:PersonPicker ID="ppSignedBy" runat="server" Label="Signed By"
                                 Help="The person that signed this." />
                         </div>
                     </div>

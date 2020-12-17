@@ -16,6 +16,8 @@
 //
 using System;
 
+using Rock.Web.Cache;
+
 namespace Rock.Model
 {
     public partial class RestActionService
@@ -27,7 +29,7 @@ namespace Rock.Model
         /// <returns></returns>
         public override Guid? GetGuid( int id )
         {
-            var campus = Rock.Web.Cache.RestActionCache.Read( id );
+            var campus = RestActionCache.Get( id );
             if ( campus != null )
             {
                 return campus.Guid;

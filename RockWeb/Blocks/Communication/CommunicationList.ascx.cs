@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
+using System.Text;
 using System.Web.UI;
 using System.Web.UI.WebControls;
 
@@ -27,7 +28,9 @@ using Rock.Attribute;
 using Rock.Constants;
 using Rock.Data;
 using Rock.Model;
+using Rock.Reporting;
 using Rock.Security;
+using Rock.Utility;
 using Rock.Web;
 using Rock.Web.Cache;
 using Rock.Web.UI;
@@ -39,13 +42,46 @@ namespace RockWeb.Blocks.Communication
     [Category( "Communication" )]
     [Description( "Lists the status of all previously created communications." )]
 
+    #region Block Attributes
     [SecurityAction( Authorization.APPROVE, "The roles and/or users that have access to approve new communications." )]
 
-    [LinkedPage( "Detail Page", order: 1 )]
-    [LinkedPage( "Email Analytics", defaultValue:Rock.SystemGuid.Page.EMAIL_ANALYTICS, order: 2 )]
+    [LinkedPage(
+        "Detail Page",
+        Key = AttributeKey.DetailPage,
+        Order = 1 )]
+
+    #endregion Block Attributes
     public partial class CommunicationList : Rock.Web.UI.RockBlock, ICustomGridColumns
     {
+        #region Attribute Keys
+
+        /// <summary>
+        /// Keys to use for Block Attributes
+        /// </summary>
+        private static class AttributeKey
+        {
+            public const string DetailPage = "DetailPage";
+        }
+
+        #endregion Attribute Keys
+
+        #region Page Parameter Keys
+
+        /// <summary>
+        /// Keys to use for Page Parameters
+        /// </summary>
+        private static class PageParameterKey
+        {
+            public const string CommunicationId = "CommunicationId";
+        }
+
+        #endregion
+
+        #region Fields
+
         private bool canApprove = false;
+
+        #endregion Fields
 
         #region Control Methods
 
@@ -64,14 +100,14 @@ namespace RockWeb.Blocks.Communication
             gCommunication.Actions.ShowAdd = false;
             gCommunication.GridRebind += gCommunication_GridRebind;
 
-            // The created by column/filter should only be displayed if user is allowed to approve
+            // The created by filter and details column should only be displayed if user is allowed to approve
             canApprove = this.IsUserAuthorized( "Approve" );
             ppSender.Visible = canApprove;
 
-            var createdByBoundField = gCommunication.ColumnsOfType<RockBoundField>().FirstOrDefault(a=>a.HeaderText == "Created By" );
-            if ( createdByBoundField != null )
+            var detailsField = gCommunication.ColumnsOfType<RockLiteralField>().FirstOrDefault( a => a.HeaderText == "Details" );
+            if ( detailsField != null )
             {
-                createdByBoundField.Visible = canApprove;
+                detailsField.Visible = canApprove;
             }
         }
 
@@ -107,13 +143,14 @@ namespace RockWeb.Blocks.Communication
             int personId = ppSender.PersonId ?? 0;
             rFilter.SaveUserPreference( "Created By", canApprove ? personId.ToString() : "" );
 
-            if ( !drpDates.LowerValue.HasValue && !drpDates.UpperValue.HasValue )
+            if ( !drpCreatedDates.LowerValue.HasValue && !drpCreatedDates.UpperValue.HasValue )
             {
                 // If a date range has not been selected, default to last 7 days
-                drpDates.LowerValue = RockDateTime.Today.AddDays( -7 );
+                drpCreatedDates.LowerValue = RockDateTime.Today.AddDays( -7 );
             }
-            rFilter.SaveUserPreference( "Date Range", drpDates.DelimitedValues );
+            rFilter.SaveUserPreference( "Created Date Range", drpCreatedDates.DelimitedValues );
 
+            rFilter.SaveUserPreference( "Sent Date Range", drpSentDates.DelimitedValues );
             rFilter.SaveUserPreference( "Content", tbContent.Text );
 
             BindGrid();
@@ -129,11 +166,16 @@ namespace RockWeb.Blocks.Communication
         {
             switch ( e.Key )
             {
+                case "Subject":
+                case "Content":
+                    {
+                        break;
+                    }
                 case "Communication Type":
                     {
                         if ( !string.IsNullOrWhiteSpace( e.Value ) )
                         {
-                            e.Value = ( (CommunicationType)System.Enum.Parse( typeof( CommunicationType ), e.Value ) ).ConvertToString();
+                            e.Value = ( ( CommunicationType ) System.Enum.Parse( typeof( CommunicationType ), e.Value ) ).ConvertToString();
                         }
 
                         break;
@@ -142,7 +184,7 @@ namespace RockWeb.Blocks.Communication
                     {
                         if ( !string.IsNullOrWhiteSpace( e.Value ) )
                         {
-                            e.Value = ( (CommunicationStatus)System.Enum.Parse( typeof( CommunicationStatus ), e.Value ) ).ConvertToString();
+                            e.Value = ( ( CommunicationStatus ) System.Enum.Parse( typeof( CommunicationStatus ), e.Value ) ).ConvertToString();
                         }
 
                         break;
@@ -169,9 +211,15 @@ namespace RockWeb.Blocks.Communication
 
                         break;
                     }
-                case "Date Range":
+                case "Created Date Range":
+                case "Sent Date Range":
                     {
                         e.Value = DateRangePicker.FormatDelimitedValues( e.Value );
+                        break;
+                    }
+                default:
+                    {
+                        e.Value = string.Empty;
                         break;
                     }
             }
@@ -190,18 +238,24 @@ namespace RockWeb.Blocks.Communication
                 if ( communicationItem != null )
                 {
                     // Hide delete button if there are any successful recipients
-                    e.Row.Cells[9].Controls[0].Visible = communicationItem.DeliveredRecipients <= 0;
+                    e.Row.Cells.OfType<DataControlFieldCell>().First( a => a.ContainingField is DeleteField ).Controls[0].Visible = communicationItem.DeliveredRecipients <= 0;
 
-                    Literal lEmailAnalyticsLink = e.Row.FindControl( "lEmailAnalyticsLink" ) as Literal;
-                    if ( lEmailAnalyticsLink != null )
+                    Literal lDetails = e.Row.FindControl( "lDetails" ) as Literal;
+                    if ( lDetails != null )
                     {
-                        var qryParams = new Dictionary<string, string>();
-                        qryParams.Add( "CommunicationId", communicationItem.Id.ToString() );
-                        var emailAnalyticsUrl = new PageReference( this.GetAttributeValue( "EmailAnalytics" ), qryParams ).BuildUrl();
-                        if ( !string.IsNullOrEmpty( emailAnalyticsUrl ) )
+                        string rockUrlRoot = ResolveRockUrl( "/" );
+                        var details = new StringBuilder();
+                        if ( communicationItem.CreatedDateTime.HasValue && communicationItem.Sender != null )
                         {
-                            lEmailAnalyticsLink.Text = string.Format( "<div class='text-center'><a href='{0}' class='btn btn-default btn-sm' title='Email Analytics'><i class='fa fa-line-chart'></i></a></div>", emailAnalyticsUrl );
+                            details.AppendFormat( "Created on {1} by {0}<br/>", communicationItem.Sender.GetAnchorTag( rockUrlRoot ),
+                                communicationItem.CreatedDateTime.Value.ToShortDateString() );
                         }
+                        if ( communicationItem.ReviewedDateTime.HasValue && communicationItem.Reviewer != null )
+                        {
+                            details.AppendFormat( "Reviewed on {1} by {0}", communicationItem.Reviewer.GetAnchorTag( rockUrlRoot ),
+                                communicationItem.ReviewedDateTime.Value.ToShortDateString() );
+                        }
+                        lDetails.Text = details.ToString();
                     }
                 }
             }
@@ -214,7 +268,7 @@ namespace RockWeb.Blocks.Communication
         /// <param name="e">The <see cref="Rock.Web.UI.Controls.RowEventArgs" /> instance containing the event data.</param>
         protected void gCommunication_RowSelected( object sender, Rock.Web.UI.Controls.RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "CommunicationId", e.RowKeyId );
+            NavigateToLinkedPage( AttributeKey.DetailPage, PageParameterKey.CommunicationId, e.RowKeyId );
         }
 
         /// <summary>
@@ -291,13 +345,15 @@ namespace RockWeb.Blocks.Communication
                 }
             }
 
-            drpDates.DelimitedValues = rFilter.GetUserPreference( "Date Range" );
-            if ( !drpDates.LowerValue.HasValue && !drpDates.UpperValue.HasValue )
+            drpCreatedDates.DelimitedValues = rFilter.GetUserPreference( "Created Date Range" );
+            if ( !drpCreatedDates.LowerValue.HasValue && !drpCreatedDates.UpperValue.HasValue )
             {
                 // If a date range has not been selected, default to last 7 days
-                drpDates.LowerValue = RockDateTime.Today.AddDays( -7 );
-                rFilter.SaveUserPreference( "Date Range", drpDates.DelimitedValues );
+                drpCreatedDates.LowerValue = RockDateTime.Today.AddDays( -7 );
+                rFilter.SaveUserPreference( "Created Date Range", drpCreatedDates.DelimitedValues );
             }
+
+            drpSentDates.DelimitedValues = rFilter.GetUserPreference( "Sent Date Range" );
 
             tbContent.Text = rFilter.GetUserPreference( "Content" );
         }
@@ -328,7 +384,7 @@ namespace RockWeb.Blocks.Communication
             string status = ddlStatus.SelectedValue;
             if ( !string.IsNullOrWhiteSpace( status ) )
             {
-                var communicationStatus = (CommunicationStatus)System.Enum.Parse( typeof( CommunicationStatus ), status );
+                var communicationStatus = ( CommunicationStatus ) System.Enum.Parse( typeof( CommunicationStatus ), status );
                 communications = communications.Where( c => c.Status == communicationStatus );
             }
 
@@ -351,15 +407,26 @@ namespace RockWeb.Blocks.Communication
                         c.SenderPersonAlias.PersonId == CurrentPersonId );
             }
 
-            if ( drpDates.LowerValue.HasValue )
+            if ( drpCreatedDates.LowerValue.HasValue )
             {
-                communications = communications.Where( a => a.CreatedDateTime >= drpDates.LowerValue.Value );
+                communications = communications.Where( a => a.CreatedDateTime.HasValue && a.CreatedDateTime.Value >= drpCreatedDates.LowerValue.Value );
             }
 
-            if ( drpDates.UpperValue.HasValue )
+            if ( drpCreatedDates.UpperValue.HasValue )
             {
-                DateTime upperDate = drpDates.UpperValue.Value.Date.AddDays( 1 );
-                communications = communications.Where( a => a.CreatedDateTime < upperDate );
+                DateTime upperDate = drpCreatedDates.UpperValue.Value.Date.AddDays( 1 );
+                communications = communications.Where( a => a.CreatedDateTime.HasValue && a.CreatedDateTime.Value < upperDate );
+            }
+
+            if ( drpSentDates.LowerValue.HasValue )
+            {
+                communications = communications.Where( a => ( a.SendDateTime ?? a.FutureSendDateTime ) >= drpSentDates.LowerValue.Value );
+            }
+
+            if ( drpSentDates.UpperValue.HasValue )
+            {
+                DateTime upperDate = drpSentDates.UpperValue.Value.Date.AddDays( 1 );
+                communications = communications.Where( a => ( a.SendDateTime ?? a.FutureSendDateTime ) < upperDate );
             }
 
             string content = tbContent.Text;
@@ -373,19 +440,21 @@ namespace RockWeb.Blocks.Communication
 
             var recipients = new CommunicationRecipientService( rockContext ).Queryable();
 
-            // We want to limit to only communications that they are authorized to view, but if there are a large number of communications, that could be very slow. 
+            // We want to limit to only communications that they are authorized to view, but if there are a large number of communications, that could be very slow.
             // So, since communication security is based on CommunicationTemplate, take a shortcut and just limit based on authorized communication templates
             var authorizedCommunicationTemplateIds = new CommunicationTemplateService( rockContext ).Queryable()
                 .Where( a => communications.Where( x => x.CommunicationTemplateId.HasValue ).Select( x => x.CommunicationTemplateId.Value ).Distinct().Contains( a.Id ) )
                 .ToList().Where( a => a.IsAuthorized( Rock.Security.Authorization.VIEW, this.CurrentPerson ) ).Select( a => a.Id ).ToList();
 
-            var queryable = communications.Where(a => a.CommunicationTemplateId == null || authorizedCommunicationTemplateIds.Contains(a.CommunicationTemplateId.Value) )
+            var queryable = communications.Where( a => a.CommunicationTemplateId == null || authorizedCommunicationTemplateIds.Contains( a.CommunicationTemplateId.Value ) )
                 .Select( c => new CommunicationItem
                 {
                     Id = c.Id,
                     CommunicationType = c.CommunicationType,
-                    Subject = string.IsNullOrEmpty( c.Subject ) ? c.Name : c.Subject,
+                    Subject = string.IsNullOrEmpty( c.Subject ) ? ( string.IsNullOrEmpty( c.PushTitle ) ? c.Name : c.PushTitle ) : c.Subject,
                     CreatedDateTime = c.CreatedDateTime,
+                    SendDateTime = c.SendDateTime ?? c.FutureSendDateTime,
+                    SendDateTimePrefix = c.SendDateTime == null && c.FutureSendDateTime != null ? "<span class='label label-info'>Future</span>&nbsp;" : "",
                     Sender = c.SenderPersonAlias != null ? c.SenderPersonAlias.Person : null,
                     ReviewedDateTime = c.ReviewedDateTime,
                     Reviewer = c.ReviewerPersonAlias != null ? c.ReviewerPersonAlias.Person : null,
@@ -396,7 +465,7 @@ namespace RockWeb.Blocks.Communication
                     FailedRecipients = recipients.Where( r => r.CommunicationId == c.Id && r.Status == CommunicationRecipientStatus.Failed ).Count(),
                     DeliveredRecipients = recipients.Where( r => r.CommunicationId == c.Id && ( r.Status == CommunicationRecipientStatus.Delivered || r.Status == CommunicationRecipientStatus.Opened ) ).Count(),
                     OpenedRecipients = recipients.Where( r => r.CommunicationId == c.Id && r.Status == CommunicationRecipientStatus.Opened ).Count()
-                });
+                } );
 
             var sortProperty = gCommunication.SortProperty;
             if ( sortProperty != null )
@@ -405,10 +474,10 @@ namespace RockWeb.Blocks.Communication
             }
             else
             {
-                queryable = queryable.OrderByDescending( c => c.CreatedDateTime );
+                queryable = queryable.OrderByDescending( c => c.SendDateTime );
             }
 
-            gCommunication.EntityTypeId = EntityTypeCache.Read<Rock.Model.Communication>().Id;
+            gCommunication.EntityTypeId = EntityTypeCache.Get<Rock.Model.Communication>().Id;
             nbBindError.Text = string.Empty;
 
             try
@@ -416,19 +485,16 @@ namespace RockWeb.Blocks.Communication
                 gCommunication.SetLinqDataSource( queryable );
                 gCommunication.DataBind();
             }
-            catch ( Exception e )
+            catch ( Exception exception )
             {
-                ExceptionLogService.LogException( e );
+                ExceptionLogService.LogException( exception );
 
-                Exception sqlException = e;
-                while ( sqlException != null && !( sqlException is System.Data.SqlClient.SqlException ) )
-                {
-                    sqlException = sqlException.InnerException;
-                }
+                var sqlTimeoutException = ReportingHelper.FindSqlTimeoutException( exception );
 
                 nbBindError.Text = string.Format( "<p>An error occurred trying to retrieve the communication history. Please try adjusting your filter settings and try again.</p><p>Error: {0}</p>",
-                    sqlException != null ? sqlException.Message : e.Message );
+                    sqlTimeoutException != null ? sqlTimeoutException.Message : exception.Message );
 
+                // if an error occurred, bind the grid with an empty object list
                 gCommunication.DataSource = new List<object>();
                 gCommunication.DataBind();
             }
@@ -436,12 +502,14 @@ namespace RockWeb.Blocks.Communication
 
         #endregion
 
-        protected class CommunicationItem
+        protected class CommunicationItem : RockDynamic
         {
             public int Id { get; set; }
             public CommunicationType CommunicationType { get; set; }
-            public string Subject { get; set; }
             public DateTime? CreatedDateTime { get; set; }
+            public string Subject { get; set; }
+            public string SendDateTimePrefix { get; set; }
+            public DateTime? SendDateTime { get; set; }
             public Person Sender { get; set; }
             public DateTime? ReviewedDateTime { get; set; }
             public Person Reviewer { get; set; }
@@ -452,6 +520,39 @@ namespace RockWeb.Blocks.Communication
             public int FailedRecipients { get; set; }
             public int DeliveredRecipients { get; set; }
             public int OpenedRecipients { get; set; }
+            public string SendDateTimeFormat
+            {
+                get
+                {
+                    return SendDateTime.HasValue ? SendDateTimePrefix + SendDateTime.Value.ToShortDateTimeString() : string.Empty;
+                }
+            }
+
+            public string TypeIconCssClass
+            {
+                get
+                {
+                    var iconCssClass = string.Empty;
+                    switch ( this.CommunicationType )
+                    {
+                        case CommunicationType.RecipientPreference:
+                            iconCssClass = "fa fa-user fa-lg";
+                            break;
+                        case CommunicationType.Email:
+                            iconCssClass = "fa fa-envelope fa-lg";
+                            break;
+                        case CommunicationType.SMS:
+                            iconCssClass = "fa fa-comment fa-lg";
+                            break;
+                        case CommunicationType.PushNotification:
+                            iconCssClass = "fa fa-bell fa-lg";
+                            break;
+                        default:
+                            break;
+                    }
+                    return iconCssClass;
+                }
+            }
         }
 
     }

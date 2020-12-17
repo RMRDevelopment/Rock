@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Model;
 using Rock.Web.Cache;
 
@@ -116,7 +117,7 @@ namespace Rock.Web.UI.Controls
         /// </value>
         public Guid ActivityTypeGuid
         {
-            get 
+            get
             {
                 EnsureChildControls();
                 return _hfActivityTypeGuid.Value.AsGuid();
@@ -149,7 +150,7 @@ namespace Rock.Web.UI.Controls
 
             string script = @"
 // activity animation
-$('.workflow-activity > header').click(function () {
+$('.workflow-activity > header').on('click', function () {
     $(this).siblings('.panel-body').slideToggle();
 
     $expanded = $(this).children('input.filter-expanded');
@@ -159,14 +160,14 @@ $('.workflow-activity > header').click(function () {
     $('i.workflow-activity-state', this).toggleClass('fa-chevron-up');
 });
 
-// fix so that the Remove button will fire its event, but not the parent event 
-$('.workflow-activity a.js-activity-delete').click(function (event) {
+// fix so that the Remove button will fire its event, but not the parent event
+$('.workflow-activity a.js-activity-delete').on('click', function (event) {
     event.stopImmediatePropagation();
     return Rock.dialogs.confirmDelete(event, 'Activity Type', 'This will also delete all the activities of this type from any existing persisted workflows!');
 });
 
-// fix so that the Reorder button will fire its event, but not the parent event 
-$('.workflow-activity a.workflow-activity-reorder').click(function (event) {
+// fix so that the Reorder button will fire its event, but not the parent event
+$('.workflow-activity a.workflow-activity-reorder').on('click', function (event) {
     event.stopImmediatePropagation();
 });
 
@@ -298,8 +299,8 @@ $('.workflow-activity > .panel-body').on('validation-error', function() {
             else
             {
                 _pwAttributes.Title = "Attributes";
-            } 
-            
+            }
+
             _gAttributes.DataSource = attributes
                 .OrderBy( a => a.Order )
                 .ThenBy( a => a.Name )
@@ -337,7 +338,7 @@ $('.workflow-activity > .panel-body').on('validation-error', function() {
             Controls.Add( _lblActivityTypeName );
             _lblActivityTypeName.ClientIDMode = ClientIDMode.Static;
             _lblActivityTypeName.ID = this.ID + "_lblActivityTypeName";
-            
+
             _lblActivityTypeDescription = new Label();
             Controls.Add( _lblActivityTypeDescription );
             _lblActivityTypeDescription.ClientIDMode = ClientIDMode.Static;
@@ -354,7 +355,7 @@ $('.workflow-activity > .panel-body').on('validation-error', function() {
             Controls.Add( _lbDeleteActivityType );
             _lbDeleteActivityType.CausesValidation = false;
             _lbDeleteActivityType.ID = this.ID + "_lbDeleteActivityType";
-            _lbDeleteActivityType.CssClass = "btn btn-xs btn-danger js-activity-delete";
+            _lbDeleteActivityType.CssClass = "btn btn-xs btn-square btn-danger js-activity-delete";
             _lbDeleteActivityType.Click += lbDeleteActivityType_Click;
             _lbDeleteActivityType.Controls.Add( new LiteralControl { Text = "<i class='fa fa-times'></i>" } );
 
@@ -362,20 +363,20 @@ $('.workflow-activity > .panel-body').on('validation-error', function() {
             Controls.Add( _sbSecurity );
             _sbSecurity.ID = this.ID + "_sbSecurity";
             _sbSecurity.Attributes["class"] = "btn btn-security btn-xs security pull-right";
-            _sbSecurity.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.WorkflowActivityType ) ).Id;
+            _sbSecurity.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.WorkflowActivityType ) ).Id;
 
             _cbActivityTypeIsActive = new RockCheckBox { Text = "Active" };
             Controls.Add( _cbActivityTypeIsActive );
             _cbActivityTypeIsActive.ID = this.ID + "_cbActivityTypeIsActive";
             string checkboxScriptFormat = @"
-javascript: 
-    if ($(this).is(':checked')) {{ 
-        $('#{0}').hide(); 
-        $('#{1}').removeClass('workflow-activity-inactive'); 
-    }} 
-    else {{ 
-        $('#{0}').show(); 
-        $('#{1}').addClass('workflow-activity-inactive'); 
+javascript:
+    if ($(this).is(':checked')) {{
+        $('#{0}').hide();
+        $('#{1}').removeClass('workflow-activity-inactive');
+    }}
+    else {{
+        $('#{0}').show();
+        $('#{1}').addClass('workflow-activity-inactive');
     }}
 ";
 
@@ -400,12 +401,12 @@ javascript:
             Controls.Add( _cbActivityTypeIsActivatedWithWorkflow );
             _cbActivityTypeIsActivatedWithWorkflow.ID = this.ID + "_cbActivityTypeIsActivatedWithWorkflow";
             checkboxScriptFormat = @"
-javascript: 
-    if ($(this).is(':checked')) {{ 
-        $('#{0}').addClass('activated-with-workflow'); 
-    }} 
-    else {{ 
-        $('#{0}').removeClass('activated-with-workflow'); 
+javascript:
+    if ($(this).is(':checked')) {{
+        $('#{0}').addClass('activated-with-workflow');
+    }}
+    else {{
+        $('#{0}').removeClass('activated-with-workflow');
     }}
 ";
             _cbActivityTypeIsActivatedWithWorkflow.InputAttributes.Add( "onclick", string.Format( checkboxScriptFormat, this.ID + "_section" ) );
@@ -414,7 +415,7 @@ javascript:
             _lbAddActionType = new LinkButton();
             Controls.Add( _lbAddActionType );
             _lbAddActionType.ID = this.ID + "_lbAddAction";
-            _lbAddActionType.CssClass = "btn btn-xs btn-action";
+            _lbAddActionType.CssClass = "btn btn-xs btn-action add-action";
             _lbAddActionType.Click += lbAddActionType_Click;
             _lbAddActionType.CausesValidation = false;
             _lbAddActionType.Controls.Add( new LiteralControl { Text = "<i class='fa fa-plus'></i> Add Action" } );
@@ -437,6 +438,7 @@ javascript:
             _gAttributes.Actions.AddClick += gAttributes_Add;
             _gAttributes.GridRebind += gAttributes_Rebind;
             _gAttributes.GridReorder += gAttributes_Reorder;
+            _gAttributes.ShowActionsInHeader = false;
 
             var reorderField = new ReorderField();
             _gAttributes.Columns.Add( reorderField );
@@ -580,7 +582,7 @@ javascript:
                 _sbSecurity.Title = _tbActivityTypeName.Text;
                 _sbSecurity.RenderControl( writer );
             }
-            
+
             _cbActivityTypeIsActivatedWithWorkflow.ValidationGroup = ValidationGroup;
             _cbActivityTypeIsActivatedWithWorkflow.RenderControl( writer );
             writer.RenderEndTag();
@@ -759,7 +761,7 @@ javascript:
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class WorkflowActivityTypeAttributeEventArg : EventArgs
     {

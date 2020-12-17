@@ -63,6 +63,18 @@ namespace Rock.Model
                 errorMessage = string.Format( "This {0} is assigned to a {1}.", GroupType.FriendlyTypeName, Group.FriendlyTypeName );
                 return false;
             }  
+ 
+            if ( new Service<GroupHistorical>( Context ).Queryable().Any( a => a.GroupTypeId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", GroupType.FriendlyTypeName, GroupHistorical.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<GroupMemberScheduleTemplate>( Context ).Queryable().Any( a => a.GroupTypeId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", GroupType.FriendlyTypeName, GroupMemberScheduleTemplate.FriendlyTypeName );
+                return false;
+            }  
             
             // ignoring GroupRequirement,GroupTypeId 
  
@@ -71,14 +83,16 @@ namespace Rock.Model
                 errorMessage = string.Format( "This {0} is assigned to a {1}.", GroupType.FriendlyTypeName, GroupType.FriendlyTypeName );
                 return false;
             }  
-            
-            // ignoring GroupTypeAssociation,ChildGroupTypeId 
-            
-            // ignoring GroupTypeAssociation,GroupTypeId 
  
             if ( new Service<RegistrationTemplate>( Context ).Queryable().Any( a => a.GroupTypeId == item.Id ) )
             {
                 errorMessage = string.Format( "This {0} is assigned to a {1}.", GroupType.FriendlyTypeName, RegistrationTemplate.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<RegistrationTemplatePlacement>( Context ).Queryable().Any( a => a.GroupTypeId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", GroupType.FriendlyTypeName, RegistrationTemplatePlacement.FriendlyTypeName );
                 return false;
             }  
             return true;
@@ -118,14 +132,24 @@ namespace Rock.Model
         public static void CopyPropertiesFrom( this GroupType target, GroupType source )
         {
             target.Id = source.Id;
+            target.AdministratorTerm = source.AdministratorTerm;
+            target.AllowAnyChildGroupType = source.AllowAnyChildGroupType;
             target.AllowedScheduleTypes = source.AllowedScheduleTypes;
+            target.AllowGroupSync = source.AllowGroupSync;
             target.AllowMultipleLocations = source.AllowMultipleLocations;
+            target.AllowSpecificGroupMemberAttributes = source.AllowSpecificGroupMemberAttributes;
+            target.AllowSpecificGroupMemberWorkflows = source.AllowSpecificGroupMemberWorkflows;
             target.AttendanceCountsAsWeekendService = source.AttendanceCountsAsWeekendService;
             target.AttendancePrintTo = source.AttendancePrintTo;
             target.AttendanceRule = source.AttendanceRule;
             target.DefaultGroupRoleId = source.DefaultGroupRoleId;
             target.Description = source.Description;
+            target.EnableGroupHistory = source.EnableGroupHistory;
+            target.EnableGroupTag = source.EnableGroupTag;
+            target.EnableInactiveReason = source.EnableInactiveReason;
             target.EnableLocationSchedules = source.EnableLocationSchedules;
+            target.EnableRSVP = source.EnableRSVP;
+            target.EnableSpecificGroupRequirements = source.EnableSpecificGroupRequirements;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
             target.GroupAttendanceRequiresLocation = source.GroupAttendanceRequiresLocation;
@@ -133,17 +157,38 @@ namespace Rock.Model
             target.GroupCapacityRule = source.GroupCapacityRule;
             target.GroupMemberTerm = source.GroupMemberTerm;
             target.GroupsRequireCampus = source.GroupsRequireCampus;
+            target.GroupStatusDefinedType = source.GroupStatusDefinedType;
+            target.GroupStatusDefinedTypeId = source.GroupStatusDefinedTypeId;
             target.GroupTerm = source.GroupTerm;
+            target.GroupTypeColor = source.GroupTypeColor;
             target.GroupTypePurposeValueId = source.GroupTypePurposeValueId;
+            target.GroupViewLavaTemplate = source.GroupViewLavaTemplate;
             target.IconCssClass = source.IconCssClass;
             target.IgnorePersonInactivated = source.IgnorePersonInactivated;
             target.InheritedGroupTypeId = source.InheritedGroupTypeId;
             target.IsIndexEnabled = source.IsIndexEnabled;
+            target.IsSchedulingEnabled = source.IsSchedulingEnabled;
             target.IsSystem = source.IsSystem;
             target.LocationSelectionMode = source.LocationSelectionMode;
             target.Name = source.Name;
             target.Order = source.Order;
+            target.RequiresInactiveReason = source.RequiresInactiveReason;
+            target.RequiresReasonIfDeclineSchedule = source.RequiresReasonIfDeclineSchedule;
+            target.RSVPReminderOffsetDays = source.RSVPReminderOffsetDays;
+            target.RSVPReminderSystemCommunicationId = source.RSVPReminderSystemCommunicationId;
+            target.ScheduleCancellationWorkflowTypeId = source.ScheduleCancellationWorkflowTypeId;
+            target.ScheduleConfirmationEmailOffsetDays = source.ScheduleConfirmationEmailOffsetDays;
+            target.ScheduleConfirmationSystemCommunicationId = source.ScheduleConfirmationSystemCommunicationId;
+            #pragma warning disable 612, 618
+            target.ScheduleConfirmationSystemEmailId = source.ScheduleConfirmationSystemEmailId;
+            #pragma warning restore 612, 618
+            target.ScheduleReminderEmailOffsetDays = source.ScheduleReminderEmailOffsetDays;
+            target.ScheduleReminderSystemCommunicationId = source.ScheduleReminderSystemCommunicationId;
+            #pragma warning disable 612, 618
+            target.ScheduleReminderSystemEmailId = source.ScheduleReminderSystemEmailId;
+            #pragma warning restore 612, 618
             target.SendAttendanceReminder = source.SendAttendanceReminder;
+            target.ShowAdministrator = source.ShowAdministrator;
             target.ShowConnectionStatus = source.ShowConnectionStatus;
             target.ShowInGroupList = source.ShowInGroupList;
             target.ShowInNavigation = source.ShowInNavigation;

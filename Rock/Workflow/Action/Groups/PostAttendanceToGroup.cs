@@ -18,8 +18,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
-using System.Linq;
 using System.Data.Entity;
+using System.Linq;
 
 using Rock;
 using Rock.Attribute;
@@ -77,7 +77,7 @@ namespace Rock.Workflow.Action
 
             if ( !groupAttributeGuid.IsEmpty() )
             {
-                groupGuid = action.GetWorklowAttributeValue(groupAttributeGuid).AsGuidOrNull();
+                groupGuid = action.GetWorkflowAttributeValue(groupAttributeGuid).AsGuidOrNull();
 
                 if ( !groupGuid.HasValue )
                 {
@@ -92,10 +92,10 @@ namespace Rock.Workflow.Action
             Guid guid = personAttribute.AsGuid();
             if (!guid.IsEmpty())
             {
-                var attribute = AttributeCache.Read( guid, rockContext );
+                var attribute = AttributeCache.Get( guid, rockContext );
                 if ( attribute != null )
                 {
-                    string value = action.GetWorklowAttributeValue(guid);
+                    string value = action.GetWorkflowAttributeValue(guid);
                     personAliasGuid = value.AsGuid();
                 }
 
@@ -115,7 +115,7 @@ namespace Rock.Workflow.Action
             Guid dateTimeAttributeGuid = GetAttributeValue(action, "AttendanceDatetime").AsGuid();
             if ( !dateTimeAttributeGuid.IsEmpty() )
             {
-                string attributeDatetime = action.GetWorklowAttributeValue(dateTimeAttributeGuid);
+                string attributeDatetime = action.GetWorkflowAttributeValue(dateTimeAttributeGuid);
 
                 if ( !string.IsNullOrWhiteSpace(attributeDatetime) )
                 {
@@ -134,11 +134,11 @@ namespace Rock.Workflow.Action
             Guid locationAttributeGuid = GetAttributeValue(action, "Location").AsGuid();
             if ( !locationAttributeGuid.IsEmpty() )
             {
-                var locationAttribute = AttributeCache.Read(locationAttributeGuid, rockContext);
+                var locationAttribute = AttributeCache.Get(locationAttributeGuid, rockContext);
 
                 if ( locationAttribute != null )
                 {
-                    locationGuid = action.GetWorklowAttributeValue(locationAttributeGuid).AsGuid();
+                    locationGuid = action.GetWorkflowAttributeValue(locationAttributeGuid).AsGuid();
                 }
             }
 
@@ -147,10 +147,10 @@ namespace Rock.Workflow.Action
             Guid scheduleAttributeGuid = GetAttributeValue( action, "Schedule" ).AsGuid();
             if ( !scheduleAttributeGuid.IsEmpty() )
             {
-                var scheduleAttribute = AttributeCache.Read( scheduleAttributeGuid, rockContext );
+                var scheduleAttribute = AttributeCache.Get( scheduleAttributeGuid, rockContext );
                 if ( scheduleAttribute != null )
                 {
-                    scheduleGuid = action.GetWorklowAttributeValue( scheduleAttributeGuid ).AsGuid();
+                    scheduleGuid = action.GetWorkflowAttributeValue( scheduleAttributeGuid ).AsGuid();
                 }
             }
 
@@ -192,27 +192,20 @@ namespace Rock.Workflow.Action
                         }
                     }
 
-                    AttendanceService attendanceService = new AttendanceService(rockContext);
-
-                    Attendance attendance = new Attendance();
-                    attendance.GroupId = group.Id;
-                    attendance.PersonAliasId = person.PrimaryAliasId;
-                    attendance.StartDateTime = attendanceDateTime;
-                    attendance.CampusId = group.CampusId;
-                    attendance.DidAttend = true;
-
+                    int? locationId = null;
                     if ( locationGuid != Guid.Empty )
                     {
-                        var location = new LocationService(rockContext).Queryable().AsNoTracking()
-                                            .Where(l => l.Guid == locationGuid)
+                        var location = new LocationService( rockContext ).Queryable().AsNoTracking()
+                                            .Where( l => l.Guid == locationGuid )
                                             .FirstOrDefault();
 
                         if ( location != null )
                         {
-                            attendance.LocationId = location.Id;
+                            locationId = location.Id;
                         }
                     }
 
+                    int? scheduleId = null;
                     if ( scheduleGuid != Guid.Empty )
                     {
                         var schedule = new ScheduleService( rockContext ).Queryable().AsNoTracking()
@@ -221,16 +214,25 @@ namespace Rock.Workflow.Action
 
                         if ( schedule != null )
                         {
-                            attendance.ScheduleId = schedule.Id;
+                            scheduleId = schedule.Id;
                         }
                     }
 
-                    attendanceService.Add(attendance);
-                    rockContext.SaveChanges();
-
-                    if ( attendance.LocationId.HasValue )
+                    int? personAliasId = person.PrimaryAliasId;
+                    if ( personAliasId.HasValue )
                     {
-                        Rock.CheckIn.KioskLocationAttendance.Flush( attendance.LocationId.Value );
+                        /*
+                           3/31/2020 - SK 
+                           Updated code to consider time with attendance date to fix the issue raised in #4159
+                           https://github.com/SparkDevNetwork/Rock/issues/4159
+                        */
+                        new AttendanceService( rockContext ).AddOrUpdate( personAliasId.Value, attendanceDateTime, group.Id, locationId, scheduleId, group.CampusId );
+                        rockContext.SaveChanges();
+
+                        if ( locationId.HasValue )
+                        {
+                            Rock.CheckIn.KioskLocationAttendance.Remove( locationId.Value );
+                        }
                     }
                 }
                 else

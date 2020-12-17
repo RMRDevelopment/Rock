@@ -15,11 +15,8 @@
 // </copyright>
 //
 using System;
-using System.ComponentModel;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-
-using Rock.Constants;
 
 namespace Rock.Web.UI.Controls
 {
@@ -325,8 +322,8 @@ namespace Rock.Web.UI.Controls
             _hfDisableVrm = new HiddenField();
             _hfDisableVrm.ID = this.ID + "_hiddenField_dvrm";
             _hfDisableVrm.Value = "True";
-            Controls.Add( _hfDisableVrm ); 
-            
+            Controls.Add( _hfDisableVrm );
+
             _textBox = new RockTextBox();
             _textBox.ID = this.ID + "_textBox";
             Controls.Add( _textBox );
@@ -349,7 +346,7 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
-        /// This is where you implment the simple aspects of rendering your control.  The rest
+        /// This is where you implement the simple aspects of rendering your control.  The rest
         /// will be handled by calling RenderControlHelper's RenderControl() method.
         /// </summary>
         /// <param name="writer">The writer.</param>
@@ -424,18 +421,18 @@ namespace Rock.Web.UI.Controls
             string script = @"
     function updateTextOrDdlValue( e ) {
         var $row = e.closest('div.js-text-or-ddl-row');
-        var newValue = $row.find('input.js-text-or-ddl-input:first').val();
+        var newValue = $row.find('input.js-text-or-ddl-input').first().val();
         if (!newValue || newValue == '' ) {
-            newValue = $row.find('textarea.js-text-or-ddl-input:first').val();
+            newValue = $row.find('textarea.js-text-or-ddl-input').first().val();
         }
         if (!newValue || newValue == '' ) {
-            newValue = $row.find('select.js-text-or-ddl-input:first').val();
-        } 
-        $row.find('input:first').val(newValue);
+            newValue = $row.find('select.js-text-or-ddl-input').first().val();
+        }
+        $row.find('input').first().val(newValue);
     }
 
     $(document).on('focusout', '.js-text-or-ddl-input', function (e) {
-        updateTextOrDdlValue($(this));            
+        updateTextOrDdlValue($(this));
     });
 ";
             ScriptManager.RegisterStartupScript( this, this.GetType(), "text-or-ddl", script, true );

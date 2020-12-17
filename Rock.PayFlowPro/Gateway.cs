@@ -59,17 +59,17 @@ namespace Rock.PayFlowPro
             get
             {
                 var values = new List<DefinedValueCache>();
-                values.Add( DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_ONE_TIME ) );
-                values.Add( DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_WEEKLY ) );
-                values.Add( DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_BIWEEKLY ) );
-                values.Add( DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_TWICEMONTHLY ) );
-                values.Add( DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_MONTHLY ) );
+                values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_ONE_TIME ) );
+                values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_WEEKLY ) );
+                values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_BIWEEKLY ) );
+                values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_TWICEMONTHLY ) );
+                values.Add( DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_MONTHLY ) );
                 return values;
             }
         }
 
         /// <summary>
-        /// Returnes a boolean value indicating if 'Saved Account' functionality is supported for the given currency type.
+        /// Returns a boolean value indicating if 'Saved Account' functionality is supported for the given currency type.
         /// </summary>
         /// <param name="currencyType">Type of the currency.</param>
         /// <returns></returns>
@@ -77,6 +77,21 @@ namespace Rock.PayFlowPro
         {
             // PayflowPro only supports saved account functionality for credit card transactions
             return currencyType.Guid.Equals( Rock.SystemGuid.DefinedValue.CURRENCY_TYPE_CREDIT_CARD.AsGuid() );
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether gateway provider needs first and last name on credit card as two distinct fields.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if [split name on card]; otherwise, <c>false</c>.
+        /// </value>
+        public override bool SplitNameOnCard
+        {
+            get
+            {
+                // we want First and Last name as distinct fields so that Billing FirstName and Billing LastName get populated correctly (without guessing how to parse a full name string)
+                return true;
+            }
         }
 
         /// <summary>
@@ -165,7 +180,7 @@ namespace Rock.PayFlowPro
             BrowserInfo browser = new BrowserInfo();
             browser.ButtonSource = "SparkDevelopmentNetwork_SP";
             invoice.BrowserInfo = browser;
-            
+
             var tender = GetTender( paymentInfo );
 
             if ( tender != null )
@@ -207,7 +222,7 @@ namespace Rock.PayFlowPro
                             var rockContext = new RockContext();
                             var savedAccount = new FinancialPersonSavedAccountService( rockContext )
                                 .Queryable()
-                                .Where( s => 
+                                .Where( s =>
                                     s.TransactionCode == reference.TransactionCode &&
                                     s.FinancialGatewayId.HasValue &&
                                     s.FinancialGatewayId.Value == financialGateway.Id )
@@ -490,7 +505,7 @@ namespace Rock.PayFlowPro
             errorMessage = string.Empty;
 
             var financialGateway = GetFinancialGateway( transaction );
-            
+
             var ppTransaction = new RecurringCancelTransaction( GetUserInfo( financialGateway ), GetConnection( financialGateway ), GetRecurring( transaction ), PayflowUtility.RequestId );
             var ppResponse = ppTransaction.SubmitTransaction();
 
@@ -666,7 +681,7 @@ namespace Rock.PayFlowPro
                 var transactionIdParams = new Dictionary<string, string>();
                 transactionIdParams.Add( "transaction_id", string.Empty );
 
-                var creditCardTypes = DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.FINANCIAL_CREDIT_CARD_TYPE.AsGuid() ).DefinedValues;
+                var creditCardTypes = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.FINANCIAL_CREDIT_CARD_TYPE.AsGuid() ).DefinedValues;
 
                 foreach ( DataRow recurringBillingRow in recurringBillingTable.Rows )
                 {
@@ -675,7 +690,7 @@ namespace Rock.PayFlowPro
                     decimal amount = decimal.MinValue;
                     string tenderType = string.Empty;
 
-                    if ( transactionCodes.ContainsKey(transactionId) )
+                    if ( transactionCodes.ContainsKey( transactionId ) )
                     {
                         int rowNumber = transactionCodes[transactionId];
                         amount = decimal.TryParse( customTable.Rows[rowNumber]["Amount"].ToString(), out amount ) ? ( amount / 100 ) : 0.0M;
@@ -695,8 +710,8 @@ namespace Rock.PayFlowPro
                         }
                     }
 
-                    if (foundTxn)
-                    { 
+                    if ( foundTxn )
+                    {
                         var payment = new Payment();
                         payment.Amount = amount;
                         payment.TransactionDateTime = recurringBillingRow["Time"].ToString().AsDateTime() ?? DateTime.MinValue;
@@ -758,7 +773,7 @@ namespace Rock.PayFlowPro
             return scheduledTransaction != null ? GetFinancialGateway( scheduledTransaction.FinancialGateway, scheduledTransaction.FinancialGatewayId ) : null;
         }
 
-        private FinancialGateway GetFinancialGateway( FinancialGateway financialGateway, int? financialGatewayId)
+        private FinancialGateway GetFinancialGateway( FinancialGateway financialGateway, int? financialGatewayId )
         {
             if ( financialGateway != null )
             {
@@ -821,6 +836,13 @@ namespace Rock.PayFlowPro
         {
             var ppBillingInfo = new BillTo();
 
+            // If giving from a Business, FirstName will be blank
+            // The Gateway might require a FirstName, so just put '-' if no FirstName was provided
+            if ( paymentInfo.FirstName.IsNullOrWhiteSpace() )
+            {
+                paymentInfo.FirstName = "-";
+            }
+
             ppBillingInfo.FirstName = paymentInfo.FirstName;
             ppBillingInfo.LastName = paymentInfo.LastName;
             ppBillingInfo.Email = paymentInfo.Email;
@@ -835,6 +857,8 @@ namespace Rock.PayFlowPro
             if ( paymentInfo is CreditCardPaymentInfo )
             {
                 var cc = paymentInfo as CreditCardPaymentInfo;
+                ppBillingInfo.FirstName = cc.NameOnCard;
+                ppBillingInfo.LastName = cc.LastNameOnCard;
                 ppBillingInfo.Street = cc.BillingStreet1;
                 ppBillingInfo.BillToStreet2 = cc.BillingStreet2;
                 ppBillingInfo.City = cc.BillingCity;
@@ -882,15 +906,16 @@ namespace Rock.PayFlowPro
             if ( paymentInfo is ReferencePaymentInfo )
             {
                 var reference = paymentInfo as ReferencePaymentInfo;
-                if ( reference.CurrencyTypeValue.Guid.Equals( new Guid( Rock.SystemGuid.DefinedValue.CURRENCY_TYPE_ACH ) ) )
+                if ( reference.CurrencyTypeValue != null && reference.CurrencyTypeValue.Guid.Equals( new Guid( Rock.SystemGuid.DefinedValue.CURRENCY_TYPE_ACH ) ) )
                 {
-                    return new ACHTender( (BankAcct)null );
+                    return new ACHTender( ( BankAcct ) null );
                 }
                 else
                 {
-                    return new CardTender( (CreditCard)null );
+                    return new CardTender( ( CreditCard ) null );
                 }
             }
+
             return null;
         }
 
@@ -913,7 +938,7 @@ namespace Rock.PayFlowPro
             ppRecurringInfo.Start = schedule.StartDate.ToString( "MMddyyyy" );
             if ( schedule.TransactionFrequencyValueId > 0 )
             {
-                SetPayPeriod( ppRecurringInfo, DefinedValueCache.Read( schedule.TransactionFrequencyValueId ) );
+                SetPayPeriod( ppRecurringInfo, DefinedValueCache.Get( schedule.TransactionFrequencyValueId ) );
             }
 
             return ppRecurringInfo;
@@ -924,6 +949,8 @@ namespace Rock.PayFlowPro
             recurringInfo.MaxFailPayments = 0;
             recurringInfo.Term = 0;
             var selectedFrequencyGuid = transactionFrequencyValue.Guid.ToString().ToUpper();
+
+            // see https://www.paypalobjects.com/webstatic/en_US/developer/docs/pdf/wpppe_rp_guide.pdf for how these are implemented
             switch ( selectedFrequencyGuid )
             {
                 case Rock.SystemGuid.DefinedValue.TRANSACTION_FREQUENCY_ONE_TIME:

@@ -51,6 +51,12 @@ namespace Rock.Model
         public bool CanDelete( RegistrationTemplate item, out string errorMessage )
         {
             errorMessage = string.Empty;
+ 
+            if ( new Service<RegistrationTemplatePlacement>( Context ).Queryable().Any( a => a.RegistrationTemplateId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", RegistrationTemplate.FriendlyTypeName, RegistrationTemplatePlacement.FriendlyTypeName );
+                return false;
+            }  
             return true;
         }
     }
@@ -90,7 +96,9 @@ namespace Rock.Model
             target.Id = source.Id;
             target.AddPersonNote = source.AddPersonNote;
             target.AllowExternalRegistrationUpdates = source.AllowExternalRegistrationUpdates;
+            #pragma warning disable 612, 618
             target.AllowGroupPlacement = source.AllowGroupPlacement;
+            #pragma warning restore 612, 618
             target.AllowMultipleRegistrants = source.AllowMultipleRegistrants;
             target.BatchNamePrefix = source.BatchNamePrefix;
             target.CategoryId = source.CategoryId;
@@ -99,6 +107,8 @@ namespace Rock.Model
             target.ConfirmationFromName = source.ConfirmationFromName;
             target.ConfirmationSubject = source.ConfirmationSubject;
             target.Cost = source.Cost;
+            target.DefaultPayment = source.DefaultPayment;
+            target.Description = source.Description;
             target.DiscountCodeTerm = source.DiscountCodeTerm;
             target.FeeTerm = source.FeeTerm;
             target.FinancialGatewayId = source.FinancialGatewayId;
@@ -120,6 +130,10 @@ namespace Rock.Model
             target.PaymentReminderTimeSpan = source.PaymentReminderTimeSpan;
             target.RegistrantsSameFamily = source.RegistrantsSameFamily;
             target.RegistrantTerm = source.RegistrantTerm;
+            target.RegistrarOption = source.RegistrarOption;
+            target.RegistrationAttributeTitleEnd = source.RegistrationAttributeTitleEnd;
+            target.RegistrationAttributeTitleStart = source.RegistrationAttributeTitleStart;
+            target.RegistrationInstructions = source.RegistrationInstructions;
             target.RegistrationTerm = source.RegistrationTerm;
             target.RegistrationWorkflowTypeId = source.RegistrationWorkflowTypeId;
             target.ReminderEmailTemplate = source.ReminderEmailTemplate;

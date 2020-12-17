@@ -12,13 +12,12 @@
                     <asp:Literal ID="lActionTitle" runat="server" /></h1>
 
                 <div class="panel-labels">
-                    
                 </div>
             </div>
             <Rock:PanelDrawer ID="pdAuditDetails" runat="server"></Rock:PanelDrawer>
             <div class="panel-body">
 
-                <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
                 <Rock:NotificationBox ID="nbWarningMessage" runat="server" NotificationBoxType="Warning" />
 
                 <fieldset>
@@ -37,7 +36,7 @@
 
                     <div class="row">
                         <div class="col-md-6">
-                            <Rock:DataTextBox ID="tbPositiveLabel" runat="server" SourceTypeName="Rock.Model.GroupRequirementType, Rock" PropertyName="PositiveLabel" Help="The text that is displayed when the requirement is met."/>
+                            <Rock:DataTextBox ID="tbPositiveLabel" runat="server" SourceTypeName="Rock.Model.GroupRequirementType, Rock" PropertyName="PositiveLabel" Help="The text that is displayed when the requirement is met." />
                             <Rock:DataTextBox ID="tbNegativeLabel" runat="server" SourceTypeName="Rock.Model.GroupRequirementType, Rock" PropertyName="NegativeLabel" Help="The text that is displayed when the requirement is not met." />
                             <Rock:DataTextBox ID="tbWarningLabel" runat="server" SourceTypeName="Rock.Model.GroupRequirementType, Rock" PropertyName="WarningLabel" Help="The text that is displayed when the requirement in a warning state." />
                         </div>
@@ -65,10 +64,13 @@
                     <div class="row">
                         <div class="col-md-12">
                             <div class="js-dataview-mode-div">
-                                <Rock:DataViewPicker ID="dpDataView" runat="server" Label="Meets Dataview" Help="The dataview that will return a list of people that meet the criteria." />
-                                <Rock:DataViewPicker ID="dpWarningDataView" runat="server" Label="Warning Dataview" Help="Optional dataview that will return a list of people that should be marked as in a warning status." />
+                                <Rock:DataViewItemPicker ID="dpDataView" runat="server" Label="Meets Dataview" Help="Although the field is optional, if it is not set then this 'Requirement Type' will not prevent a person from being added to the group." />
+                                <Rock:DataViewItemPicker ID="dpWarningDataView" runat="server" Label="Warning Dataview" Help="Optional dataview that will return a list of people that should be marked as in a warning status." />
                             </div>
                             <div class="js-sql-mode-div">
+                                <label>SQL Syntax</label><a class="help" href="javascript: $('.js-sourcesql-help').toggle;"><i class="fa fa-question-circle"></i></a>
+                                <div class="alert alert-info js-sourcesql-help" id="nbSQLHelp" runat="server" style="display: none;"></div>
+
                                 <Rock:CodeEditor ID="ceSqlExpression" runat="server" Label="Meets SQL Expression" Help="A SQL expression that returns a list of Person Ids that meet the criteria." EditorMode="Sql" />
                                 <Rock:CodeEditor ID="ceWarningSqlExpression" runat="server" Label="Warning SQL Expression" Help="Optional SQL expression that returns a list of Person Ids that should be marked as in a warning status." EditorMode="Sql" />
                             </div>

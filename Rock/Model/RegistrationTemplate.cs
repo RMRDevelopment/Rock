@@ -19,9 +19,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
+using System.Data.Entity.Infrastructure;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
+
 using Newtonsoft.Json;
+
 using Rock.Data;
 using Rock.Security;
 
@@ -33,9 +37,8 @@ namespace Rock.Model
     [RockDomain( "Event" )]
     [Table( "RegistrationTemplate" )]
     [DataContract]
-    public partial class RegistrationTemplate : Model<RegistrationTemplate>, IHasActiveFlag, ICategorized
+    public partial class RegistrationTemplate : Model<RegistrationTemplate>, IHasActiveFlag, ICategorized, ICampusFilterable
     {
-
         #region Entity Properties
 
         /// <summary>
@@ -49,6 +52,15 @@ namespace Rock.Model
         [DataMember( IsRequired = true )]
         [IncludeForReporting]
         public string Name { get; set; }
+
+        /// <summary>
+        /// Gets or sets the description of the Attribute.
+        /// </summary>
+        /// <value>
+        /// A <see cref="System.String"/> that represents the description of the registration template.
+        /// </value>
+        [DataMember]
+        public string Description { get; set; }
 
         /// <summary>
         /// Gets or sets the category identifier.
@@ -135,6 +147,26 @@ namespace Rock.Model
         [DataMember]
         [MaxLength( 100 )]
         public string DiscountCodeTerm { get; set; }
+
+        /// <summary>
+        /// Gets or sets the section title for attributes that are collected at the start of the registration entry process.
+        /// </summary>
+        /// <value>
+        /// The registration attribute title start.
+        /// </value>
+        [DataMember]
+        [MaxLength( 200 )]
+        public string RegistrationAttributeTitleStart { get; set; }
+
+        /// <summary>
+        /// Gets or sets the section title for attributes that are collected at the end of the registration entry process.
+        /// </summary>
+        /// <value>
+        /// The registration attribute title end.
+        /// </value>
+        [DataMember]
+        [MaxLength( 200 )]
+        public string RegistrationAttributeTitleEnd { get; set; }
 
         /// <summary>
         /// Gets or sets the name of the confirmation from.
@@ -263,7 +295,7 @@ namespace Rock.Model
         public bool? SetCostOnInstance { get; set; }
 
         /// <summary>
-        /// Gets or sets the cost.
+        /// Gets or sets the cost (if <see cref="SetCostOnInstance"/> == false).
         /// </summary>
         /// <value>
         /// The cost.
@@ -272,13 +304,23 @@ namespace Rock.Model
         public decimal Cost { get; set; }
 
         /// <summary>
-        /// Gets or sets the minimum initial payment.
+        /// Gets or sets the minimum initial payment (if <see cref="SetCostOnInstance"/> == false).
         /// </summary>
         /// <value>
         /// The minimum initial payment.
         /// </value>
         [DataMember]
         public decimal? MinimumInitialPayment { get; set; }
+
+        /// <summary>
+        /// Gets or sets the default amount to pay per registrant (if <see cref="SetCostOnInstance"/> == false).
+        /// If this is null, the default payment will be the <see cref="Cost"/>
+        /// </summary>
+        /// <value>
+        /// The default payment.
+        /// </value>
+        [DataMember]
+        public decimal? DefaultPayment { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether [login required].
@@ -317,6 +359,15 @@ namespace Rock.Model
         public string RequestEntryName { get; set; }
 
         /// <summary>
+        /// Gets or sets the registration instructions.
+        /// </summary>
+        /// <value>
+        /// The registration instructions.
+        /// </value>
+        [DataMember]
+        public string RegistrationInstructions { get; set; }
+
+        /// <summary>
         /// Gets or sets the success title.
         /// </summary>
         /// <value>
@@ -350,7 +401,7 @@ namespace Rock.Model
         /// The maximum registrants.
         /// </value>
         [DataMember]
-        public int MaxRegistrants { get; set; }
+        public int? MaxRegistrants { get; set; }
 
         /// <summary>
         /// Gets or sets the financial gateway identifier.
@@ -373,6 +424,7 @@ namespace Rock.Model
             get { return _isActive; }
             set { _isActive = value; }
         }
+
         private bool _isActive = true;
 
         /// <summary>
@@ -387,6 +439,7 @@ namespace Rock.Model
             get { return _addPersonNote; }
             set { _addPersonNote = value; }
         }
+
         private bool _addPersonNote = true;
 
         /// <summary>
@@ -396,7 +449,9 @@ namespace Rock.Model
         ///   <c>true</c> if [allow group placement]; otherwise, <c>false</c>.
         /// </value>
         [DataMember]
-        public bool AllowGroupPlacement { get;set; }
+        [RockObsolete( "1.10" )]
+        [Obsolete( "No longer used. Replaced by Group Placement feature (RegistrationTemplatePlacement, etc)" )]
+        public bool AllowGroupPlacement { get; set; }
 
         /// <summary>
         /// Gets or sets the name of the payment reminder from.
@@ -456,7 +511,7 @@ namespace Rock.Model
         public string BatchNamePrefix { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether to allow external registration updates (should a person be able to update their regisitration on-line after submitting it).
+        /// Gets or sets a value indicating whether to allow external registration updates (should a person be able to update their registration on-line after submitting it).
         /// </summary>
         /// <value>
         /// <c>true</c> if [allow external registration updates]; otherwise, <c>false</c>.
@@ -467,6 +522,7 @@ namespace Rock.Model
             get { return _allowExternalRegistrationUpdates; }
             set { _allowExternalRegistrationUpdates = value; }
         }
+
         private bool _allowExternalRegistrationUpdates = true;
 
         /// <summary>
@@ -488,10 +544,10 @@ namespace Rock.Model
         public int? RequiredSignatureDocumentTemplateId { get; set; }
 
         /// <summary>
-        /// Gets or sets the signature documentaction.
+        /// Gets or sets the signature documentation.
         /// </summary>
         /// <value>
-        /// The signature documentaction.
+        /// The signature documentation.
         /// </value>
         [DataMember]
         public SignatureDocumentAction SignatureDocumentAction { get; set; }
@@ -504,6 +560,15 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public bool WaitListEnabled { get; set; }
+
+        /// <summary>
+        /// Gets or sets the registrar option.
+        /// </summary>
+        /// <value>
+        /// The registrar option.
+        /// </value>
+        [DataMember]
+        public RegistrarOption RegistrarOption { get; set; }
 
         #endregion
 
@@ -566,7 +631,23 @@ namespace Rock.Model
             get { return _discounts ?? ( _discounts = new Collection<RegistrationTemplateDiscount>() ); }
             set { _discounts = value; }
         }
+
         private ICollection<RegistrationTemplateDiscount> _discounts;
+
+        /// <summary>
+        /// Gets or sets the placements.
+        /// </summary>
+        /// <value>
+        /// The placements.
+        /// </value>
+        [DataMember]
+        public virtual ICollection<RegistrationTemplatePlacement> Placements
+        {
+            get { return _placements ?? ( _placements = new Collection<RegistrationTemplatePlacement>() ); }
+            set { _placements = value; }
+        }
+
+        private ICollection<RegistrationTemplatePlacement> _placements;
 
         /// <summary>
         /// Gets or sets the fees.
@@ -580,6 +661,7 @@ namespace Rock.Model
             get { return _fees ?? ( _fees = new Collection<RegistrationTemplateFee>() ); }
             set { _fees = value; }
         }
+
         private ICollection<RegistrationTemplateFee> _fees;
 
         /// <summary>
@@ -594,6 +676,7 @@ namespace Rock.Model
             get { return _registrationInstances ?? ( _registrationInstances = new Collection<RegistrationInstance>() ); }
             set { _registrationInstances = value; }
         }
+
         private ICollection<RegistrationInstance> _registrationInstances;
 
         /// <summary>
@@ -608,6 +691,7 @@ namespace Rock.Model
             get { return _registrationTemplateForms ?? ( _registrationTemplateForms = new Collection<RegistrationTemplateForm>() ); }
             set { _registrationTemplateForms = value; }
         }
+
         private ICollection<RegistrationTemplateForm> _registrationTemplateForms;
 
         /// <summary>
@@ -625,6 +709,7 @@ namespace Rock.Model
                     _supportedActions.Add( Authorization.EDIT, "The roles and/or users that have access to edit." );
                     _supportedActions.Add( Authorization.ADMINISTRATE, "The roles and/or users that have access to administrate." );
                 }
+
                 return _supportedActions;
             }
         }
@@ -634,6 +719,22 @@ namespace Rock.Model
         #endregion
 
         #region Methods
+
+        /// <summary>
+        /// Method that will be called on an entity immediately before the item is saved by context
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        /// <param name="entry">The entry.</param>
+        /// <param name="state">The state.</param>
+        public override void PreSaveChanges( Data.DbContext dbContext, DbEntityEntry entry, EntityState state )
+        {
+            if ( state == EntityState.Deleted )
+            {
+                new RegistrationTemplateService( dbContext as RockContext ).RelatedEntities.DeleteRelatedEntities( this );
+            }
+
+            base.PreSaveChanges( dbContext, entry, state );
+        }
 
         /// <summary>
         /// Returns a <see cref="string"/> that represents this instance.
@@ -647,7 +748,6 @@ namespace Rock.Model
         }
 
         #endregion
-
     }
 
     #region Entity Configuration
@@ -727,7 +827,6 @@ namespace Rock.Model
         All = RegistrationContact | GroupFollowers | GroupLeaders
     }
 
-
     /// <summary>
     /// How signature document should be presented to registrant
     /// </summary>
@@ -742,7 +841,33 @@ namespace Rock.Model
         /// Embed document in registration
         /// </summary>
         Embed = 1,
+    }
 
+    /// <summary>
+    /// How registrar information should be collected.
+    /// </summary>
+    public enum RegistrarOption
+    {
+        /// <summary>
+        /// Prompt for registrar
+        /// </summary>
+        PromptForRegistrar = 0,
+
+        /// <summary>
+        /// Prefill first registrant
+        /// </summary>
+        PrefillFirstRegistrant = 1,
+
+        /// <summary>
+        /// Use first registrant
+        /// </summary>
+        UseFirstRegistrant = 2,
+
+        /// <summary>
+        /// Use the LoggedIn person and keep fields readonly, except for fields that haven't been collected yet
+        /// For example, if EmailAddress wasn't known, Email would be prompted vs readonly.
+        /// </summary>
+        UseLoggedInPerson = 3
     }
 
     #endregion

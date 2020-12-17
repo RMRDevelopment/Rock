@@ -17,17 +17,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Web.UI;
 using System.Web.UI.WebControls;
-using Rock.Data;
-using Rock.Model;
+
 using Rock.Web.Cache;
 using Rock.Workflow;
 
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select a workflow action type
     /// </summary>
     public class WorkflowActionTypePicker : ItemPicker
     {
@@ -128,7 +126,7 @@ namespace Rock.Web.UI.Controls
             int? entityTypeId = ItemId.AsIntegerOrNull();
             if ( entityTypeId.HasValue )
             {
-                var entityType = EntityTypeCache.Read( entityTypeId.Value );
+                var entityType = EntityTypeCache.Get( entityTypeId.Value );
                 SetValue( entityType );
             }
         }
@@ -144,7 +142,7 @@ namespace Rock.Web.UI.Controls
                 int? entityTypeId = itemId.AsIntegerOrNull();
                 if ( entityTypeId.HasValue )
                 {
-                    entityTypes.Add( EntityTypeCache.Read( entityTypeId.Value ) );
+                    entityTypes.Add( EntityTypeCache.Get( entityTypeId.Value ) );
                 }
             }
 

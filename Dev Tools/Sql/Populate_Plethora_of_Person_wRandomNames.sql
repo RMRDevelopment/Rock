@@ -1,8 +1,9 @@
 SET NOCOUNT ON
 
 -- NOTE: Set @maxPerson to the number of people you want to add. Setting it as high as 99999 might take a minute or so
-DECLARE @maxPerson INT = 999
+DECLARE @maxPerson INT = 99999
     ,@genderInt INT
+    ,@countryCode nvarchar(3) = null
     ,@personRecordType INT = (
         SELECT id
         FROM DefinedValue
@@ -18,6 +19,9 @@ DECLARE @maxPerson INT = 999
         FROM DefinedValue
         WHERE guid = 'AA8732FB-2CEA-4C76-8D6D-6AAA2C6A4303'
         )
+    ,@mobilePhone int = (SELECT id
+        FROM DefinedValue
+        WHERE guid = '407E7E45-7B2E-4FCD-9605-ECB1339F2453')
     ,@maritalStatusMarried INT = (
         SELECT id
         FROM DefinedValue
@@ -42,7 +46,8 @@ DECLARE @maxPerson INT = 999
     ,@email NVARCHAR(75)
     ,@phoneNumber NVARCHAR(20)
     ,@phoneNumberFormatted NVARCHAR(50)
-    ,@year INT
+    ,@adultBirthYear INT
+	,@childBirthYear INT
     ,@month INT
     ,@day INT
     ,@personCounter INT = 0
@@ -12002,6 +12007,8 @@ BEGIN
 
     DECLARE @connectionStatusValueId INT;
     DECLARE @recordStatusValueId INT;
+    DECLARE @ageClassificationAdult INT = 1;
+    DECLARE @ageClassificationChild INT = 2;
 
     WHILE @personCounter < @maxPerson
     BEGIN
@@ -12018,12 +12025,14 @@ BEGIN
 
         -- add first member of family
         SET @email = @firstName + '.' + @lastName + '@nowhere.com';
-        SET @year = CONVERT(NVARCHAR(100), ROUND(rand() * 80, 0) + 1932);
+        SET @adultBirthYear = datepart(year, sysdatetime()) - 19 - ROUND(rand(CHECKSUM(newid())) * 70, 0);
         SET @month = CONVERT(NVARCHAR(100), ROUND(rand() * 11, 0) + 1);
         SET @day = CONVERT(NVARCHAR(100), ROUND(rand() * 26, 0) + 1);
-        SET @phoneNumber = cast(convert(BIGINT, ROUND(rand() * 0095551212, 0) + 6230000000) AS NVARCHAR(20));
-        SET @phoneNumberFormatted = '(' + substring(@phoneNumber, 1, 3) + ') ' + substring(@phoneNumber, 4, 3) + '-' + substring(@phoneNumber, 7, 4);
+        
         SET @personGuid = NEWID();
+
+		SET @connectionStatusValueId = (select top 1 id from DefinedValue where DefinedTypeId = @connectionStatusDefinedTypeId order by NEWID())
+        SET @recordStatusValueId = (select top 1 id from DefinedValue where DefinedTypeId = @recordStatusDefinedTypeId order by NEWID())
 
         INSERT INTO [Person] (
             [IsSystem]
@@ -12035,12 +12044,14 @@ BEGIN
             ,[BirthYear]
 			,[MaritalStatusValueId]
             ,[Gender]
+            ,[AgeClassification]
             ,[Email]
             ,[IsEmailActive]
             ,[EmailPreference]
             ,[Guid]
             ,[RecordTypeValueId]
             ,[RecordStatusValueId]
+			,[ConnectionStatusValueId]
 			,[IsDeceased]
             ,[CreatedDateTime]
             )
@@ -12051,15 +12062,17 @@ BEGIN
             ,@lastName
             ,@day
             ,@month
-            ,@year
+            ,@adultBirthYear
 			,@maritalStatusMarried
             ,@genderInt
+            ,@ageClassificationAdult
             ,@email
             ,1
             ,0
             ,@personGuid
             ,@personRecordType
             ,@recordStatusValueId
+			,@connectionStatusValueId
 			,0
             ,SYSDATETIME()
             )
@@ -12079,10 +12092,23 @@ BEGIN
             ,NEWID()
             );
 
+         IF (@personId%10 = 0) BEGIN
+            DECLARE @userName NVARCHAR(255) = concat(@lastName, substring(@firstName, 1, 2));
+            IF NOT EXISTS (SELECT * FROM UserLogin WHERE UserName = @userName) BEGIN
+                INSERT INTO [UserLogin] (UserName, [Password], [EntityTypeId], [PersonId], [Guid]) 
+                    VALUES (@userName, NEWID(),27, @personId, NEWID())
+            END
+         END
+
+        SET @phoneNumber = cast(convert(BIGINT, ROUND(rand() * 0095551212, 0) + 6230000000) AS NVARCHAR(20));
+        SET @phoneNumberFormatted = '(' + substring(@phoneNumber, 1, 3) + ') ' + substring(@phoneNumber, 4, 3) + '-' + substring(@phoneNumber, 7, 4);
+
         INSERT INTO [PhoneNumber] (
             IsSystem
             ,PersonId
+            ,CountryCode
             ,Number
+            ,FullNumber
             ,NumberFormatted
             ,IsMessagingEnabled
             ,IsUnlisted
@@ -12092,12 +12118,42 @@ BEGIN
         VALUES (
             0
             ,@personId
+            ,@countryCode
             ,@phoneNumber
+            ,concat(@countryCode, @phoneNumber)
+            ,@phoneNumberFormatted
+            ,0
+            ,0
+            ,newid()
+            ,@homePhone
+            );
+
+        SET @phoneNumber = cast(convert(BIGINT, ROUND(rand() * 0095551212, 0) + 6230000000) AS NVARCHAR(20));
+        SET @phoneNumberFormatted = '(' + substring(@phoneNumber, 1, 3) + ') ' + substring(@phoneNumber, 4, 3) + '-' + substring(@phoneNumber, 7, 4);
+
+        INSERT INTO [PhoneNumber] (
+            IsSystem
+            ,PersonId
+            ,CountryCode
+            ,Number
+            ,FullNumber
+            ,NumberFormatted
+            ,IsMessagingEnabled
+            ,IsUnlisted
+            ,[Guid]
+            ,NumberTypeValueId
+            )
+        VALUES (
+            0
+            ,@personId
+            ,@countryCode
+            ,@phoneNumber
+            ,concat(@countryCode, @phoneNumber)
             ,@phoneNumberFormatted
             ,1
             ,0
             ,newid()
-            ,@homePhone
+            ,@mobilePhone
             );
 
         -- add spouse as member of family 
@@ -12132,6 +12188,7 @@ BEGIN
             ,[BirthYear]
             ,[Gender]
             ,[MaritalStatusValueId]
+            ,[AgeClassification]
             ,[Email]
             ,[IsEmailActive]
             ,[EmailPreference]
@@ -12149,9 +12206,10 @@ BEGIN
             ,@lastName
             ,@day
             ,@month
-            ,@year
+            ,@adultBirthYear
             ,@genderInt
             ,@maritalStatusMarried
+            ,@ageClassificationAdult
             ,@email
             ,1
             ,0
@@ -12181,7 +12239,9 @@ BEGIN
         INSERT INTO [PhoneNumber] (
             IsSystem
             ,PersonId
+            ,CountryCode
             ,Number
+            ,FullNumber
             ,NumberFormatted
             ,IsMessagingEnabled
             ,IsUnlisted
@@ -12191,13 +12251,47 @@ BEGIN
         VALUES (
             0
             ,@spousePersonId
+            ,@countryCode
             ,@phoneNumber
+            ,concat(@countryCode, @phoneNumber)
             ,@phoneNumberFormatted
-            ,1
+            ,0
             ,0
             ,newid()
             ,@homePhone
             );
+
+
+        SET @phoneNumber = cast(convert(BIGINT, ROUND(rand() * 0095551212, 0) + 6230000000) AS NVARCHAR(20));
+        SET @phoneNumberFormatted = '(' + substring(@phoneNumber, 1, 3) + ') ' + substring(@phoneNumber, 4, 3) + '-' + substring(@phoneNumber, 7, 4);
+
+        INSERT INTO [PhoneNumber] (
+            IsSystem
+            ,PersonId
+            ,CountryCode
+            ,Number
+            ,FullNumber
+            ,NumberFormatted
+            ,IsMessagingEnabled
+            ,IsUnlisted
+            ,[Guid]
+            ,NumberTypeValueId
+            )
+        VALUES (
+            0
+            ,@spousePersonId
+            ,@countryCode
+            ,@phoneNumber
+            ,concat(@countryCode, @phoneNumber)
+            ,@phoneNumberFormatted
+            ,1
+            ,0
+            ,newid()
+            ,@mobilePhone
+            );
+
+        declare @randomCampusId int = (select top 1 Id from Campus order by newid())
+
 
 		-- create family
 		INSERT INTO [Group] (
@@ -12206,6 +12300,7 @@ BEGIN
             ,NAME
             ,IsSecurityRole
             ,IsActive
+            ,CampusId
             ,[Guid]
             ,[Order]
             )
@@ -12215,6 +12310,7 @@ BEGIN
             ,@lastName + ' Family'
             ,0
             ,1
+            ,@randomCampusId
             ,NEWID()
             ,0
             )
@@ -12228,6 +12324,7 @@ BEGIN
             ,GroupRoleId
             ,[Guid]
             ,GroupMemberStatus
+			,DateTimeAdded
             )
         VALUES (
             0
@@ -12236,6 +12333,7 @@ BEGIN
             ,@adultRole
             ,newid()
             ,0
+			,SYSDATETIME()
             )
 
         INSERT INTO [GroupMember] (
@@ -12245,6 +12343,7 @@ BEGIN
             ,GroupRoleId
             ,[Guid]
             ,GroupMemberStatus
+			,DateTimeAdded
             )
         VALUES (
             0
@@ -12253,6 +12352,7 @@ BEGIN
             ,@adultRole
             ,newid()
             ,0
+			,SYSDATETIME()
             )
 
 		-- Kids loop
@@ -12264,9 +12364,14 @@ BEGIN
 			SET @kidPersonGuid = NEWID();
 			SET @month = CONVERT(NVARCHAR(100), ROUND(rand() * 11, 0) + 1);
 			SET @day = CONVERT(NVARCHAR(100), ROUND(rand() * 26, 0) + 1);
-			SET @year = datepart(year, sysdatetime()) - ROUND(rand() * 16, 0);
+			SET @childBirthYear = datepart(year, sysdatetime()) - ROUND(rand() * 16, 0);
 
 			SELECT @genderInt = floor(rand() * 2) + 1
+
+            SELECT TOP 1 @firstName = #firstNames.FirstName
+                FROM #firstNames WITH (NOLOCK)
+                WHERE #firstNames.number >= ROUND(rand() * @firstNameCount, 0)
+                AND gender = @genderInt
 
 			INSERT INTO [Person] (
 				[IsSystem]
@@ -12278,6 +12383,7 @@ BEGIN
 				,[BirthYear]
 				,[Gender]
 				,[MaritalStatusValueId]
+                ,[AgeClassification]
 				,[Email]
 				,[IsEmailActive]
 				,[EmailPreference]
@@ -12291,14 +12397,15 @@ BEGIN
 				)
 			VALUES (
 				0
-				,concat('Kid',@kidCounter)
-				,concat('Kid',@kidCounter)
+				,@firstName
+				,@firstName
 				,@lastName
 				,@day
 				,@month
-				,@year
+				,@childBirthYear
 				,@genderInt
 				,@maritalStatusSingle
+                ,@ageClassificationChild
 				,null
 				,1
 				,0
@@ -12333,6 +12440,7 @@ BEGIN
 				,GroupRoleId
 				,[Guid]
 				,GroupMemberStatus
+				,DateTimeAdded
 				)
 			VALUES (
 				0
@@ -12341,6 +12449,7 @@ BEGIN
 				,@childRole
 				,newid()
 				,0
+				,SYSDATETIME()
 				)
 
 			set @kidCounter += 1
@@ -12366,6 +12475,7 @@ BEGIN
             ,PostalCode
             ,IsActive
 			,GeoPoint
+			,Country
             ,[Guid]
             )
         VALUES (
@@ -12376,6 +12486,7 @@ BEGIN
             ,@zipCode
             ,1
 			,@geoPoint
+			,'US'
             ,NEWID()
             )
 
@@ -12395,9 +12506,15 @@ BEGIN
             ,@locationTypeValueHome
             ,NEWID()
             ,1
-            ,0
+            ,1
             )
         
+		if (@personCounter % 500 = 0)
+		begin
+		  COMMIT TRANSACTION
+		  BEGIN TRANSACTION
+  		  print concat(@personCounter, '/', @maxPerson);
+        end
 
         SET @personCounter += 2;
     END
@@ -12405,7 +12522,106 @@ BEGIN
 	-- fix up any birthdates that got set to a future date
 	UPDATE Person set BirthYear = DATEPART(year, SysDateTime()) - 1 where BirthDate > SysDateTime();
 
+    UPDATE Person
+                    SET [BirthDate] = (
+		                    CASE 
+			                    WHEN (
+					                    [BirthYear] IS NOT NULL
+					                    AND [BirthYear] > 1800
+					                    )
+				                    THEN TRY_CONVERT([date], (((CONVERT([varchar], [BirthYear]) + '-') + CONVERT([varchar], [BirthMonth])) + '-') + CONVERT([varchar], [BirthDay]), (126))
+			                    ELSE NULL
+			                    END
+		                    )
+                    FROM Person
+                    where [BirthDate] != (
+		                    CASE 
+			                    WHEN (
+					                    [BirthYear] IS NOT NULL
+					                    AND [BirthYear] > 1800
+					                    )
+				                    THEN TRY_CONVERT([date], (((CONVERT([varchar], [BirthYear]) + '-') + CONVERT([varchar], [BirthMonth])) + '-') + CONVERT([varchar], [BirthDay]), (126))
+			                    ELSE NULL
+			                    END
+		                    )
+
+
+        UPDATE Person
+        SET GivingId = (
+		        CASE 
+			        WHEN [GivingGroupId] IS NOT NULL
+				        THEN 'G' + CONVERT([varchar], [GivingGroupId])
+			        ELSE 'P' + CONVERT([varchar], [Id])
+			        END
+		        )
+        WHERE GivingId IS NULL OR GivingId != (
+		        CASE 
+			        WHEN [GivingGroupId] IS NOT NULL
+				        THEN 'G' + CONVERT([varchar], [GivingGroupId])
+			        ELSE 'P' + CONVERT([varchar], [Id])
+			        END
+		        )
+
+        UPDATE x
+        SET x.PrimaryFamilyId = x.CalculatedPrimaryFamilyId
+            ,x.PrimaryCampusId = x.CalculatedPrimaryCampusId
+        FROM (
+            SELECT p.Id
+                ,p.NickName
+                ,p.LastName
+                ,p.PrimaryFamilyId
+                ,p.PrimaryCampusId
+                ,pf.CalculatedPrimaryFamilyId
+                ,pf.CalculatedPrimaryCampusId
+            FROM Person p
+            OUTER APPLY (
+                SELECT TOP 1
+                    g.Id [CalculatedPrimaryFamilyId]
+                    ,g.CampusId [CalculatedPrimaryCampusId]
+                FROM GroupMember gm
+                JOIN [Group] g ON g.Id = gm.GroupId
+                WHERE g.GroupTypeId = @familyGroupType
+                    AND gm.PersonId = p.Id
+                ORDER BY gm.GroupOrder
+                    ,gm.GroupId
+                ) pf
+            WHERE (
+                    (ISNULL(p.PrimaryFamilyId, 0) != ISNULL(pf.CalculatedPrimaryFamilyId, 0))
+                    OR (ISNULL(p.PrimaryCampusId, 0) != ISNULL(pf.CalculatedPrimaryCampusId, 0))
+                    ) ) x
+
+            UPDATE x
+            SET x.GivingLeaderId = x.CalculatedGivingLeaderId
+            FROM (
+	            SELECT p.Id
+		            ,p.NickName
+		            ,p.LastName
+		            ,p.GivingLeaderId
+		            ,isnull(pf.CalculatedGivingLeaderId, p.Id) CalculatedGivingLeaderId
+	            FROM Person p
+	            OUTER APPLY (
+		            SELECT TOP 1 p2.[Id] CalculatedGivingLeaderId
+		            FROM [GroupMember] gm
+		            INNER JOIN [GroupTypeRole] r ON r.[Id] = gm.[GroupRoleId]
+		            INNER JOIN [Person] p2 ON p2.[Id] = gm.[PersonId]
+		            WHERE gm.[GroupId] = p.GivingGroupId
+			            AND p2.[IsDeceased] = 0
+			            AND p2.[GivingGroupId] = p.GivingGroupId
+		            ORDER BY r.[Order]
+			            ,p2.[Gender]
+			            ,p2.[BirthYear]
+			            ,p2.[BirthMonth]
+			            ,p2.[BirthDay]
+		            ) pf
+	            WHERE (
+			            p.GivingLeaderId IS NULL
+			            OR (p.GivingLeaderId != pf.CalculatedGivingLeaderId)
+			            )) x
+
     COMMIT TRANSACTION
+
+
+    
 
     IF OBJECT_ID('tempdb..#lastNames') IS NOT NULL
         DROP TABLE #lastNames
@@ -12414,5 +12630,8 @@ BEGIN
         DROP TABLE #firstNames
 
     SELECT COUNT(*) [Total Person Count]
-    FROM PERSON
+    FROM [Person]
+
+    SELECT COUNT(*) [Total PhoneNumber Count]
+    FROM PhoneNumber
 END

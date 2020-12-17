@@ -15,16 +15,13 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Web.UI;
-using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
+
 using Rock;
 using Rock.Data;
 using Rock.Model;
-using Rock.Web.Cache;
-using Rock.Workflow;
 
 namespace Rock.Web.UI.Controls
 {
@@ -46,12 +43,14 @@ namespace Rock.Web.UI.Controls
         WorkflowTypePicker _wtpRegistrationWorkflow;
         CurrencyBox _cbCost;
         CurrencyBox _cbMinimumInitialPayment;
+        CurrencyBox _cbDefaultPaymentAmount;
         AccountPicker _apAccount;
         PersonPicker _ppContact;
         PhoneNumberBox _pnContactPhone;
         EmailBox _ebContactEmail;
         DateTimePicker _dtpSendReminder;
         RockCheckBox _cbReminderSent;
+        HtmlEditor _htmlRegistrationInstructions;
         HtmlEditor _htmlAdditionalReminderDetails;
         HtmlEditor _htmlAdditionalConfirmationDetails;
 
@@ -221,12 +220,12 @@ namespace Rock.Web.UI.Controls
         /// <value>
         /// The maximum attendees.
         /// </value>
-        public int MaxAttendees
+        public int? MaxAttendees
         {
             get
             {
                 EnsureChildControls();
-                return _nbMaxAttendees.Text.AsInteger();
+                return _nbMaxAttendees.Text.AsIntegerOrNull();
             }
             set
             {
@@ -296,6 +295,26 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
+        /// Gets or sets the default payment amount.
+        /// </summary>
+        /// <value>
+        /// The default payment amount.
+        /// </value>
+        public decimal? DefaultPaymentAmount
+        {
+            get
+            {
+                EnsureChildControls();
+                return _cbDefaultPaymentAmount.Text.AsDecimalOrNull();
+            }
+            set
+            {
+                EnsureChildControls();
+                _cbDefaultPaymentAmount.Text = value.HasValue ? value.ToString() : string.Empty;
+            }
+        }
+
+        /// <summary>
         /// Gets or sets a value indicating whether [show cost].
         /// </summary>
         /// <value>
@@ -313,6 +332,7 @@ namespace Rock.Web.UI.Controls
                 EnsureChildControls();
                 _cbCost.Visible = value;
                 _cbMinimumInitialPayment.Visible = value;
+                _cbDefaultPaymentAmount.Visible = value;
             }
         }
 
@@ -466,6 +486,23 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
+        /// Gets or sets the registration instructions.
+        /// </summary>
+        /// <value>
+        /// The registration instructions.
+        /// </value>
+        public string RegistrationInstructions {
+            get {
+                EnsureChildControls();
+                return _htmlRegistrationInstructions.Text;
+            }
+            set {
+                EnsureChildControls();
+                _htmlRegistrationInstructions.Text = value;
+            }
+        }
+
+        /// <summary>
         /// Gets or sets the additional reminder details.
         /// </summary>
         /// <value>
@@ -535,10 +572,12 @@ namespace Rock.Web.UI.Controls
                 _ebContactEmail.ValidationGroup = value;
                 _cbCost.ValidationGroup = value;
                 _cbMinimumInitialPayment.ValidationGroup = value;
+                _cbDefaultPaymentAmount.ValidationGroup = value;
                 _apAccount.ValidationGroup = value;
                 _dtpSendReminder.ValidationGroup = value;
                 _cbReminderSent.ValidationGroup = value;
                 _htmlAdditionalConfirmationDetails.ValidationGroup = value;
+                _htmlRegistrationInstructions.ValidationGroup = value;
                 _htmlAdditionalReminderDetails.ValidationGroup = value;
             }
         }
@@ -588,10 +627,13 @@ namespace Rock.Web.UI.Controls
                 _cbCost.Visible = instance.RegistrationTemplate != null && ( instance.RegistrationTemplate.SetCostOnInstance ?? false );
                 _cbMinimumInitialPayment.Text = instance.MinimumInitialPayment.HasValue ? instance.MinimumInitialPayment.Value.ToString() : string.Empty;
                 _cbMinimumInitialPayment.Visible = instance.RegistrationTemplate != null && ( instance.RegistrationTemplate.SetCostOnInstance ?? false );
+                _cbDefaultPaymentAmount.Text = instance.DefaultPayment.HasValue ? instance.DefaultPayment.Value.ToString() : string.Empty;
+                _cbDefaultPaymentAmount.Visible = instance.RegistrationTemplate != null && ( instance.RegistrationTemplate.SetCostOnInstance ?? false );
                 _apAccount.SetValue( instance.AccountId );
                 _apAccount.Visible = instance.RegistrationTemplate != null && instance.RegistrationTemplate.FinancialGatewayId.HasValue;
                 _dtpSendReminder.SelectedDateTime = instance.SendReminderDateTime;
                 _cbReminderSent.Checked = instance.ReminderSent;
+                _htmlRegistrationInstructions.Text = instance.RegistrationInstructions;
                 _htmlAdditionalReminderDetails.Text = instance.AdditionalReminderDetails;
                 _htmlAdditionalConfirmationDetails.Text = instance.AdditionalConfirmationDetails;
             }
@@ -609,9 +651,11 @@ namespace Rock.Web.UI.Controls
                 _ebContactEmail.Text = string.Empty;
                 _cbCost.Text = string.Empty;
                 _cbMinimumInitialPayment.Text = string.Empty;
+                _cbDefaultPaymentAmount.Text = string.Empty;
                 _apAccount.SetValue( null );
                 _dtpSendReminder.SelectedDateTime = null;
                 _cbReminderSent.Checked = false;
+                _htmlRegistrationInstructions.Text = string.Empty;
                 _htmlAdditionalReminderDetails.Text = string.Empty;
                 _htmlAdditionalConfirmationDetails.Text = string.Empty;
             }
@@ -635,17 +679,19 @@ namespace Rock.Web.UI.Controls
                 instance.Details = _ceDetails.Text;
                 instance.StartDateTime = _dtpStart.SelectedDateTime;
                 instance.EndDateTime = _dtpEnd.SelectedDateTime;
-                instance.MaxAttendees = _nbMaxAttendees.Text.AsInteger();
+                instance.MaxAttendees = _nbMaxAttendees.Text.AsIntegerOrNull();
                 instance.RegistrationWorkflowTypeId = _wtpRegistrationWorkflow.SelectedValueAsInt();
                 instance.ContactPersonAliasId = _ppContact.PersonAliasId;
                 instance.ContactPhone = _pnContactPhone.Text;
                 instance.ContactEmail = _ebContactEmail.Text;
                 instance.Cost = _cbCost.Text.AsDecimalOrNull();
                 instance.MinimumInitialPayment = _cbMinimumInitialPayment.Text.AsDecimalOrNull();
+                instance.DefaultPayment = _cbDefaultPaymentAmount.Text.AsDecimalOrNull();
                 int accountId = _apAccount.SelectedValue.AsInteger();
                 instance.AccountId = accountId > 0 ? accountId : (int?)null;
                 instance.SendReminderDateTime = _dtpSendReminder.SelectedDateTime;
                 instance.ReminderSent = _cbReminderSent.Checked;
+                instance.RegistrationInstructions = _htmlRegistrationInstructions.Text;
                 instance.AdditionalReminderDetails = _htmlAdditionalReminderDetails.Text; 
                 instance.AdditionalConfirmationDetails = _htmlAdditionalConfirmationDetails.Text; 
             }
@@ -703,6 +749,7 @@ namespace Rock.Web.UI.Controls
                 _nbMaxAttendees = new NumberBox();
                 _nbMaxAttendees.ID = this.ID + "_nbMaxAttendees";
                 _nbMaxAttendees.Label = "Maximum Attendees";
+                _nbMaxAttendees.Help = "Total number of people who can register for the event. Leave blank for unlimited.";
                 _nbMaxAttendees.NumberType = ValidationDataType.Integer;
                 Controls.Add( _nbMaxAttendees );
 
@@ -723,6 +770,12 @@ namespace Rock.Web.UI.Controls
                 _cbMinimumInitialPayment.Label = "Minimum Initial Payment";
                 _cbMinimumInitialPayment.Help = "The minimum amount required per registrant. Leave value blank if full amount is required.";
                 Controls.Add( _cbMinimumInitialPayment );
+
+                _cbDefaultPaymentAmount = new CurrencyBox();
+                _cbDefaultPaymentAmount.ID = this.ID + "_cbDefaultPaymentAmount";
+                _cbDefaultPaymentAmount.Label = "Default Payment Amount";
+                _cbDefaultPaymentAmount.Help = "The default payment amount per registrant. Leave value blank to default to the full amount. NOTE: This requires that a Minimum Initial Payment is greater than 0.";
+                Controls.Add( _cbDefaultPaymentAmount );
 
                 _apAccount = new AccountPicker();
                 _apAccount.ID = this.ID + "_apAccount";
@@ -758,11 +811,19 @@ namespace Rock.Web.UI.Controls
                 _cbReminderSent.Text = "Yes";
                 Controls.Add( _cbReminderSent );
 
+                _htmlRegistrationInstructions = new HtmlEditor();
+                _htmlRegistrationInstructions.ID = this.ID + "_htmlRegistrationInstructions";
+                _htmlRegistrationInstructions.Toolbar = HtmlEditor.ToolbarConfig.Light;
+                _htmlRegistrationInstructions.Label = "Registration Instructions";
+                _htmlRegistrationInstructions.Help = "These instructions will appear at the beginning of the registration process. Instructions can be provided on the registration template also. Any instructions here will override the instructions on the template.";
+                _htmlRegistrationInstructions.Height = 200;
+                Controls.Add(_htmlRegistrationInstructions);
+
                 _htmlAdditionalReminderDetails = new HtmlEditor();
                 _htmlAdditionalReminderDetails.ID = this.ID + "_htmlAdditionalReminderDetails";
                 _htmlAdditionalReminderDetails.Toolbar = HtmlEditor.ToolbarConfig.Light;
                 _htmlAdditionalReminderDetails.Label = "Additional Reminder Details";
-                _htmlAdditionalReminderDetails.Help = "These confirmation details will be appended to those from the registration template when displayed at the end of the registration process.";
+                _htmlAdditionalReminderDetails.Help = "These reminder details will be included in the reminder notification.";
                 _htmlAdditionalReminderDetails.Height = 200;
                 Controls.Add( _htmlAdditionalReminderDetails );
 
@@ -876,10 +937,13 @@ namespace Rock.Web.UI.Controls
 
                     _cbCost.RenderControl( writer );
                     _cbMinimumInitialPayment.RenderControl( writer );
+                    _cbDefaultPaymentAmount.RenderControl( writer );
                     _apAccount.RenderControl( writer );
 
                 writer.RenderEndTag();  // col-md-6
             writer.RenderEndTag();  // row
+
+            _htmlRegistrationInstructions.RenderControl(writer);
 
             _htmlAdditionalReminderDetails.RenderControl( writer );
 

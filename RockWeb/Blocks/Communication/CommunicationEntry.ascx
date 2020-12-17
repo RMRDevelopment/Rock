@@ -3,21 +3,21 @@
 <script>
     //Sys.WebForms.PageRequestManager.getInstance().add_endRequest(scrollToGrid);
     function scrollToResults() {
-        
+
             $('html, body').animate({
                 scrollTop: $('.js-pnl-result')
             }, 'fast');
-        
+
     }
 </script>
 
 <asp:UpdatePanel ID="upPanel" runat="server">
     <ContentTemplate>
- 
+
         <div class="panel panel-block">
             <div class="panel-heading">
                 <h1 class="panel-title"><i class="fa fa-comment-o"></i> <asp:Literal ID="lTitle" runat="server" /></h1>
-                
+
                 <div class="panel-labels">
                     <Rock:HighlightLabel ID="hlStatus" runat="server" />
                 </div>
@@ -29,7 +29,7 @@
                     <asp:HiddenField ID="hfCommunicationId" runat="server" />
                     <asp:HiddenField ID="hfMediumId" runat="server" />
 
-                    <asp:ValidationSummary ID="ValidationSummary" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                    <asp:ValidationSummary ID="ValidationSummary" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
                     <asp:CustomValidator ID="cvDelayDateTime" runat="server" />
 
                     <div class="well well-pillwrap">
@@ -62,16 +62,16 @@
                         <div class="panel-heading clearfix">
                             <div class="control-label pull-left">
                                 To: <asp:Literal ID="lNumRecipients" runat="server" />
-                            </div> 
-                    
+                            </div>
+
                             <div class="pull-right">
                                 <Rock:PersonPicker ID="ppAddPerson" runat="server" CssClass="picker-menu-right" PersonName="Add Person" OnSelectPerson="ppAddPerson_SelectPerson" />
                             </div>
 
                             <asp:CustomValidator ID="valRecipients" runat="server" OnServerValidate="valRecipients_ServerValidate" Display="None" ErrorMessage="At least one recipient is required." />
-                
-                         </div>   
-                
+
+                         </div>
+
                          <div class="panel-body">
 
                                 <ul class="recipients list-unstyled">
@@ -90,7 +90,7 @@
                         </div>
                     </div>
 
-                    <Rock:RockDropDownList ID="ddlTemplate" runat="server" Label="Template" AutoPostBack="true" OnSelectedIndexChanged="ddlTemplate_SelectedIndexChanged" />
+                    <Rock:RockDropDownList ID="ddlTemplate" runat="server" Label="Template" AutoPostBack="true" OnSelectedIndexChanged="ddlTemplate_SelectedIndexChanged" EnhanceForLongLists="true" />
 
                     <asp:PlaceHolder ID="phContent" runat="server" />
 
@@ -116,7 +116,7 @@
             </div>
         </div>
 
-        
+
 
         <script type="text/javascript">
             Sys.Application.add_load(function () {
@@ -125,7 +125,7 @@
                 $('.recipient span').tooltip();
 
                 // Set the display of any recipients that have preference of NoBulkEmail based on if this is a bulk communication
-                $('.js-bulk-option').click(function () {
+                $('.js-bulk-option').on('click', function () {
                     if ($(this).is(':checked')) {
                         $('.js-no-bulk-email').addClass('text-danger');
                     } else {

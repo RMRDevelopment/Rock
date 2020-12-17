@@ -49,18 +49,18 @@ namespace RockWeb.Blocks.Finance
     [TextField( "Save Button Text", "The Text to shown on the Save button", true, "Save", Order = 7 )]
     [TextField( "Note Message", "Message to show at the bottom of the create pledge block.", false, "Note: This commitment is a statement of intent and may be changed as your circumstances change.", Order = 8 )]
 
-    [CodeEditorField( "Receipt Text", "The text (or html) to display as the pledge receipt. <span class='tip tip-lava'></span> <span class='tip tip-html'>", CodeEditorMode.Lava, CodeEditorTheme.Rock, 200, Order = 9, DefaultValue =
+    [CodeEditorField( "Receipt Text", "The text (or HTML) to display as the pledge receipt. <span class='tip tip-lava'></span> <span class='tip tip-html'>", CodeEditorMode.Lava, CodeEditorTheme.Rock, 200, Order = 9, DefaultValue =
         @"
 <h1>Thank You!</h1>
 <p>
 {{Person.NickName}}, thank you for your commitment of ${{FinancialPledge.TotalAmount}} to {{Account.Name}}.  To make your commitment even easier, you might consider making a scheduled giving profile.
 </p>
 <p>
-    <a href='~/page/186?PledgeId={{ FinancialPledge.Id  }}' class='btn btn-default' >Setup a Giving Profile</a>
+    <a href='~/page/186?PledgeId={{ FinancialPledge.Id }}' class='btn btn-default' >Setup a Giving Profile</a>
 </p>
 " )]
 
-    [SystemEmailField( "Confirmation Email Template", "Email template to use after submitting a new pledge. Leave blank to not send an email.", false, "", Order = 10 )]
+    [SystemCommunicationField( "Confirmation Email Template", "Email template to use after submitting a new pledge. Leave blank to not send an email.", false, "", Order = 10 )]
     [GroupTypeField( "Select Group Type", "Optional Group Type that if selected will display a selection of groups that current user belongs to that can then be associated with the pledge", false, "", "", 12 )]
     public partial class PledgeEntry : RockBlock
     {
@@ -76,7 +76,7 @@ namespace RockWeb.Blocks.Finance
             this.BlockUpdated += Block_BlockUpdated;
             this.AddConfigurationUpdateTrigger( upnlContent );
         }
-        
+
         /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Load" /> event.
         /// </summary>
@@ -130,7 +130,7 @@ namespace RockWeb.Blocks.Finance
 
             financialPledge.TotalAmount = tbTotalAmount.Text.AsDecimal();
 
-            var pledgeFrequencySelection = DefinedValueCache.Read( ddlFrequency.SelectedValue.AsInteger() );
+            var pledgeFrequencySelection = DefinedValueCache.Get( ddlFrequency.SelectedValue.AsInteger() );
             if ( pledgeFrequencySelection != null )
             {
                 financialPledge.PledgeFrequencyValueId = pledgeFrequencySelection.Id;
@@ -197,7 +197,7 @@ namespace RockWeb.Blocks.Finance
                 if ( confirmationEmailTemplateGuid.HasValue )
                 {
                     var emailMessage = new RockEmailMessage( confirmationEmailTemplateGuid.Value );
-                    emailMessage.AddRecipient( new RecipientData( person.Email, mergeFields ) );
+                    emailMessage.AddRecipient( new RockEmailMessageRecipient( person, mergeFields ) );
                     emailMessage.AppRoot = ResolveRockUrl( "~/" );
                     emailMessage.ThemeRoot = ResolveRockUrl( "~~/" );
                     emailMessage.Send();
@@ -237,7 +237,7 @@ namespace RockWeb.Blocks.Finance
                                 m.Group.GroupType.Guid == groupTypeGuid.Value &&
                                 m.PersonId == CurrentPerson.Id &&
                                 m.GroupMemberStatus == GroupMemberStatus.Active &&
-                                m.Group.IsActive )
+                                m.Group.IsActive && !m.Group.IsArchived )
                             .Select( m => new
                             {
                                 m.GroupId,
@@ -298,7 +298,7 @@ namespace RockWeb.Blocks.Finance
             drpDateRange.Visible = drpDateRange.LowerValue == null || drpDateRange.UpperValue == null;
 
             ddlFrequency.Items.Clear();
-            var frequencies = DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.FINANCIAL_FREQUENCY.AsGuid() ).DefinedValues.OrderBy( a => a.Order ).ThenBy( a => a.Value );
+            var frequencies = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.FINANCIAL_FREQUENCY.AsGuid() ).DefinedValues.OrderBy( a => a.Order ).ThenBy( a => a.Value );
             foreach ( var frequency in frequencies )
             {
                 ddlFrequency.Items.Add( new ListItem( frequency.Value, frequency.Id.ToString() ) );
@@ -350,21 +350,14 @@ namespace RockWeb.Blocks.Finance
                     }
                 }
 
-                // Same logic as AddTransaction.ascx.cs
-                var personMatches = personService.GetByMatch( firstName, tbLastName.Text, tbEmail.Text );
-                if ( personMatches.Count() == 1 )
-                {
-                    person = personMatches.FirstOrDefault();
-                }
-                else
-                {
-                    person = null;
-                }
+                // Same logic as TransactionEntry.ascx.cs
+                var personQuery = new PersonService.PersonMatchQuery( firstName, tbLastName.Text, tbEmail.Text, string.Empty);
+                person = personService.FindPerson( personQuery, true );
             }
 
             if ( person == null )
             {
-                var definedValue = DefinedValueCache.Read( GetAttributeValue( "NewConnectionStatus" ).AsGuidOrNull() ?? Rock.SystemGuid.DefinedValue.PERSON_CONNECTION_STATUS_PARTICIPANT.AsGuid() );
+                var definedValue = DefinedValueCache.Get( GetAttributeValue( "NewConnectionStatus" ).AsGuidOrNull() ?? Rock.SystemGuid.DefinedValue.PERSON_CONNECTION_STATUS_PARTICIPANT.AsGuid() );
                 person = new Person
                 {
                     FirstName = tbFirstName.Text,
@@ -375,8 +368,8 @@ namespace RockWeb.Blocks.Finance
                 };
 
                 person.IsSystem = false;
-                person.RecordTypeValueId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
-                person.RecordStatusValueId = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_PENDING.AsGuid() ).Id;
+                person.RecordTypeValueId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
+                person.RecordStatusValueId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_PENDING.AsGuid() ).Id;
 
                 PersonService.SaveNewPerson( person, rockContext, null, false );
             }

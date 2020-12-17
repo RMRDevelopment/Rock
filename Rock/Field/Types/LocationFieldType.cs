@@ -16,9 +16,12 @@
 //
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Web.UI;
+using System.Web.UI.WebControls;
 using Rock.Data;
 using Rock.Model;
+using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 
 namespace Rock.Field.Types
@@ -28,6 +31,129 @@ namespace Rock.Field.Types
     /// </summary>
     public class LocationFieldType : FieldType, IEntityFieldType
     {
+        #region Configuration
+
+        private const string ALLOWED_PICKER_MODES = "allowedPickerModes";
+        private const string CURRENT_PICKER_MODE = "currentPickerMode";
+
+        /// <summary>
+        /// Returns a list of the configuration keys
+        /// </summary>
+        /// <returns></returns>
+        public override List<string> ConfigurationKeys()
+        {
+            var configKeys = base.ConfigurationKeys();
+            configKeys.Add( ALLOWED_PICKER_MODES );
+            configKeys.Add( CURRENT_PICKER_MODE );
+
+            return configKeys;
+        }
+
+        /// <summary>
+        /// Creates the HTML controls required to configure this type of field
+        /// </summary>
+        /// <returns></returns>
+        public override List<Control> ConfigurationControls()
+        {
+            var controls = base.ConfigurationControls();
+
+            // Control to pick the available location types
+            var cblAvailableLocationTypes = new RockCheckBoxList();
+            cblAvailableLocationTypes.RepeatDirection = RepeatDirection.Horizontal;
+            cblAvailableLocationTypes.AutoPostBack = true;
+            cblAvailableLocationTypes.SelectedIndexChanged += OnQualifierUpdated;
+            cblAvailableLocationTypes.Label = "Available Location Types";
+            cblAvailableLocationTypes.Help = "Select the location types that can be used by the Location Picker.";
+
+            var locationTypes = ( LocationPickerMode[] ) Enum.GetValues( typeof( LocationPickerMode ) );
+            foreach ( LocationPickerMode locationType in locationTypes )
+            {
+                if ( locationType != LocationPickerMode.None && locationType !=LocationPickerMode.All)
+                {
+                    cblAvailableLocationTypes.Items.Add( new ListItem( locationType.ConvertToString(), locationType.ConvertToInt().ToString() ) );
+                }
+            }
+
+            controls.Add( cblAvailableLocationTypes );
+
+            // Control to pick the default location type
+            var rblDefaultLocationType = new RockRadioButtonList();
+            rblDefaultLocationType.RepeatDirection = RepeatDirection.Horizontal;
+            rblDefaultLocationType.AutoPostBack = true;
+            rblDefaultLocationType.SelectedIndexChanged += OnQualifierUpdated;
+            rblDefaultLocationType.Label = "Default Location Type";
+            rblDefaultLocationType.Help = "Select the location type that is initially displayed.";
+
+            foreach ( LocationPickerMode locationType in locationTypes )
+            {
+                if ( locationType != LocationPickerMode.None && locationType != LocationPickerMode.All )
+                {
+                    rblDefaultLocationType.Items.Add( new ListItem( locationType.ConvertToString(), locationType.ConvertToInt().ToString() ) );
+                }
+            }
+
+            controls.Add( rblDefaultLocationType );
+
+            return controls;
+        }
+
+        /// <summary>
+        /// Gets the configuration value.
+        /// </summary>
+        /// <param name="controls">The controls.</param>
+        /// <returns></returns>
+        public override Dictionary<string, ConfigurationValue> ConfigurationValues( List<Control> controls )
+        {
+            Dictionary<string, ConfigurationValue> configurationValues = new Dictionary<string, ConfigurationValue>();
+            configurationValues.Add( ALLOWED_PICKER_MODES, new ConfigurationValue( "Available Location Types", "Select the location types that can be used by the Location Picker.", string.Empty ) );
+            configurationValues.Add( CURRENT_PICKER_MODE, new ConfigurationValue( "Default Location Type", "Select the location type that is initially displayed.", string.Empty ) );
+
+            if ( controls != null && controls.Count == 2)
+            {
+                if ( controls[0] != null && controls[0] is RockCheckBoxList )
+                {
+                    configurationValues[ALLOWED_PICKER_MODES].Value = ( ( RockCheckBoxList ) controls[0] ).SelectedValues.AsDelimited( "," );
+                }
+
+                if ( controls[1] != null && controls[1] is RockRadioButtonList )
+                {
+                    configurationValues[CURRENT_PICKER_MODE].Value = ( ( RockRadioButtonList ) controls[1] ).SelectedValue;
+                }
+            }
+
+            return configurationValues;
+        }
+
+        /// <summary>
+        /// Sets the configuration value.
+        /// </summary>
+        /// <param name="controls">The controls.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        public override void SetConfigurationValues( List<Control> controls, Dictionary<string, ConfigurationValue> configurationValues )
+        {
+            if ( controls != null && controls.Count == 2)
+            {
+                if ( controls[0] != null && controls[0] is RockCheckBoxList && configurationValues.ContainsKey( ALLOWED_PICKER_MODES ) )
+                {
+                    var selectedValues = configurationValues[ALLOWED_PICKER_MODES].Value?.Split( ',' );
+                    if ( selectedValues != null )
+                    {
+                        ( ( RockCheckBoxList ) controls[0] ).Items.Cast<ListItem>().ToList().ForEach( li => li.Selected = selectedValues.Any( v => v == li.Value ) );
+                    }
+                }
+
+                if ( controls[1] != null && controls[1] is RockRadioButtonList && configurationValues.ContainsKey( CURRENT_PICKER_MODE ) )
+                {
+                    var selectedValue = configurationValues[CURRENT_PICKER_MODE].Value;
+                    if ( selectedValue != null )
+                    {
+                        ( ( RockRadioButtonList ) controls[1] ).SelectedValue = configurationValues[CURRENT_PICKER_MODE].Value;
+                    }
+                }
+            }
+        }
+
+        #endregion Configuration
 
         #region Formatting
 
@@ -49,7 +175,7 @@ namespace Rock.Field.Types
                 if ( locGuid.HasValue )
                 {
                     // Check to see if this is the org address first (to avoid db read)
-                    var globalAttributesCache = Web.Cache.GlobalAttributesCache.Read();
+                    var globalAttributesCache = GlobalAttributesCache.Get();
                     var orgLocGuid = globalAttributesCache.GetValue( "OrganizationAddress" ).AsGuidOrNull();
                     if ( orgLocGuid.HasValue && orgLocGuid.Value == locGuid.Value )
                     {
@@ -60,7 +186,7 @@ namespace Rock.Field.Types
                 using ( var rockContext = new RockContext() )
                 {
                     var service = new LocationService( rockContext );
-                    var location = service.Get( new Guid( value ) );
+                    var location = service.GetNoTracking( new Guid( value ) );
                     if ( location != null )
                     {
                         formattedValue = location.ToString();
@@ -85,9 +211,40 @@ namespace Rock.Field.Types
         /// </returns>
         public override Control EditControl( Dictionary<string, ConfigurationValue> configurationValues, string id )
         {
-            // TODO This field type should expose a CheckBoxList configuration control that allows one or more modes to be selected for the 
-            // location picker instead of always allowing all modes.
-            return new LocationPicker { ID = id, CurrentPickerMode = LocationPickerMode.Address, AllowedPickerModes = LocationPickerMode.All };
+            // If there are no configuration values then set to legacy defaults
+            if ( !configurationValues.Any() )
+            {
+                return new LocationPicker { ID = id, AllowedPickerModes = LocationPickerMode.All };
+            }
+
+            // Default allowed location picker modes is all
+            LocationPickerMode allowedPickerModes = LocationPickerMode.All;
+
+            // Get the selected current picker mode, use address if there isn't one specified. This is the mode the picker will start with unless the location specifies a different location type.
+            var currentPickerMode = configurationValues[CURRENT_PICKER_MODE].Value.ConvertToEnumOrNull<LocationPickerMode>() ?? LocationPickerMode.Address;
+
+            string[] allowedPickerModesConfig = null;
+            if ( configurationValues[ALLOWED_PICKER_MODES].Value.IsNotNullOrWhiteSpace() )
+            {
+                allowedPickerModesConfig = configurationValues[ALLOWED_PICKER_MODES].Value.Split( ',' );
+            }
+
+            if( allowedPickerModesConfig != null && allowedPickerModesConfig.Any() )
+            {
+                allowedPickerModes = LocationPickerMode.None;
+
+                foreach( var allowedPickerMode in allowedPickerModesConfig )
+                {
+                    allowedPickerModes |= allowedPickerMode.ConvertToEnum<LocationPickerMode>();
+                }
+            }
+            
+            return new LocationPicker {
+                ID = id,
+                CurrentPickerMode = currentPickerMode,
+                AllowedPickerModes = allowedPickerModes
+            };
+
         }
 
         /// <summary>
@@ -99,21 +256,13 @@ namespace Rock.Field.Types
         public override string GetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues )
         {
             var picker = control as LocationPicker;
-            string result = null;
 
             if ( picker != null )
             {
-                var guid = Guid.Empty;
-
-                if ( picker.Location != null )
-                {
-                    guid = picker.Location.Guid;
-                }
-
-                result = guid.ToString();
+                return picker.Location?.Guid.ToString() ?? string.Empty;
             }
 
-            return result;
+            return null;
         }
 
         /// <summary>
@@ -124,17 +273,23 @@ namespace Rock.Field.Types
         /// <param name="value">The value.</param>
         public override void SetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
-            if ( value != null )
+            var picker = control as LocationPicker;
+            if ( picker != null )
             {
-                var picker = control as LocationPicker;
-
-                if ( picker != null )
+                Guid? locationGuid = value.AsGuidOrNull();
+                if ( locationGuid.HasValue )
                 {
-                    Guid guid;
-                    Guid.TryParse( value, out guid );
-                    var location = new LocationService( new RockContext() ).Get( guid );
-                    picker.SetBestPickerModeForLocation( location );
-                    picker.Location = location;
+                    using ( var rockContext = new RockContext() )
+                    {
+                        var location = new LocationService( rockContext ).Get( locationGuid.Value );
+                        picker.SetBestPickerModeForLocation( location );
+                        picker.Location = location;
+                    }
+                }
+                else
+                {
+                    picker.SetBestPickerModeForLocation( null );
+                    picker.Location = null;
                 }
             }
         }
@@ -152,8 +307,8 @@ namespace Rock.Field.Types
         public int? GetEditValueAsEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues )
         {
             Guid guid = GetEditValue( control, configurationValues ).AsGuid();
-            var item = new LocationService( new RockContext() ).Get( guid );
-            return item != null ? item.Id : (int?)null;
+            var itemId = new LocationService( new RockContext() ).GetId( guid );
+            return itemId;
         }
 
         /// <summary>
@@ -164,9 +319,8 @@ namespace Rock.Field.Types
         /// <param name="id">The identifier.</param>
         public void SetEditValueFromEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues, int? id )
         {
-            var item = new LocationService( new RockContext() ).Get( id ?? 0 );
-            string guidValue = item != null ? item.Guid.ToString() : string.Empty;
-            SetEditValue( control, configurationValues, guidValue );
+            var itemGuid = new LocationService( new RockContext() ).GetGuid( id ?? 0 );
+            SetEditValue( control, configurationValues, itemGuid?.ToString() );
         }
 
         /// <summary>

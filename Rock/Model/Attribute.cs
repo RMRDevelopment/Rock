@@ -19,8 +19,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
+using System.Data.Entity.Infrastructure;
 using System.Data.Entity.ModelConfiguration;
+using System.Linq;
 using System.Runtime.Serialization;
+
 using Rock.Data;
 using Rock.Security;
 using Rock.Web.Cache;
@@ -33,7 +37,7 @@ namespace Rock.Model
     [RockDomain( "Core" )]
     [Table( "Attribute" )]
     [DataContract]
-    public partial class Attribute : Model<Attribute>, IOrdered
+    public partial class Attribute : Model<Attribute>, IOrdered, ICacheable
     {
 
         /// <summary>
@@ -219,13 +223,91 @@ namespace Rock.Model
         /// Gets or sets a value indicating whether this instance is analytic history.
         /// Only applies if this is an Attribute on an Entity that implements IAnalyticHistorical and IsAnalytic is True
         /// If this is true and IsAnalytic is also true, a change in value of this Attribute on the Entity makes the CurrentRowIndicator=1 record
-        /// to become CurrentRowIndicator=0, sets teh ExpireDate, then a new row with CurrentRowIndicator=1 to be created
+        /// to become CurrentRowIndicator=0, sets the ExpireDate, then a new row with CurrentRowIndicator=1 to be created
         /// </summary>
         /// <value>
         /// <c>true</c> if this instance is analytic history; otherwise, <c>false</c>.
         /// </value>
         [DataMember]
         public bool IsAnalyticHistory { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether this attribute is active.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this instance is active; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool IsActive { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether changes to this attribute's attribute values should be logged in AttributeValueHistorical
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [enable history]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool EnableHistory { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets any HTML to be rendered before the attribute's edit control 
+        /// </summary>
+        /// <value>
+        /// The pre HTML.
+        /// </value>
+        [DataMember]
+        public string PreHtml { get; set; }
+
+        /// <summary>
+        /// Gets or sets any HTML to be rendered after the attribute's edit control 
+        /// </summary>
+        /// <value>
+        /// The post HTML.
+        /// </value>
+        [DataMember]
+        public string PostHtml { get; set; }
+
+        /// <summary>
+        /// Gets or sets the shortened name of the attribute.
+        /// If null or whitespace then the full name is returned.
+        /// </summary>
+        /// <value>
+        /// The name of the abbreviated.
+        /// </value>
+        [MaxLength( 100 )]
+        [DataMember]
+        public string AbbreviatedName
+        {
+            get
+            {
+                if ( _abbreviatedName.IsNullOrWhiteSpace() )
+                {
+                    return Name.Truncate( 100, false );
+                }
+
+                return _abbreviatedName;
+            }
+            set
+            {
+                _abbreviatedName = value;
+            }
+        }
+        private string _abbreviatedName;
+
+        /// <summary>
+        /// Indicates whether or not this attribute should be displayed in public contexts (e.g., responding to an RSVP without logging in).
+        /// </summary>
+        /// <value>
+        /// A boolean value.
+        /// </value>
+        [DataMember]
+        public bool IsPublic { get; set; }
+
+        /// <summary>
+        /// Gets or sets a flag indicating if this attribute shows when doing a bulk entry form.
+        /// </summary>
+        [DataMember]
+        public bool ShowOnBulk { get; set; }
 
         #endregion
 
@@ -265,6 +347,7 @@ namespace Rock.Model
 
         /// <summary>
         /// Gets or sets the collection of <see cref="Rock.Model.Category">Categories</see> that this Attribute is associated with.
+        /// NOTE: Since changes to Categories isn't tracked by ChangeTracker, set the ModifiedDateTime if Categories are modified.
         /// </summary>
         /// <value>
         /// A collection of <see cref="Rock.Model.Category">Categories</see> that this Attribute is associated with.
@@ -295,14 +378,14 @@ namespace Rock.Model
 
                 if ( entityTypeId.HasValue )
                 {
-                    var entityType = EntityTypeCache.Read( entityTypeId.Value );
+                    var entityType = EntityTypeCache.Get( entityTypeId.Value );
                     var type = entityType.GetEntityType();
-                    if ( type != null && 
-                        ( typeof( ISecured ).IsAssignableFrom( type ) )  &&
+                    if ( type != null &&
+                        ( typeof( ISecured ).IsAssignableFrom( type ) ) &&
                         !( typeof( Rock.Extension.Component ).IsAssignableFrom( type ) )
                     )
                     {
-                        return (ISecured)Activator.CreateInstance( type );  
+                        return ( ISecured ) Activator.CreateInstance( type );
                     }
                 }
 
@@ -319,18 +402,18 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext">The database context.</param>
         /// <param name="state">The state.</param>
-        public override void PreSaveChanges( DbContext dbContext, System.Data.Entity.EntityState state )
+        public override void PreSaveChanges( Data.DbContext dbContext, EntityState state )
         {
-            if ( state != System.Data.Entity.EntityState.Deleted )
+            if ( state != EntityState.Deleted )
             {
                 // ensure that the BinaryFile.IsTemporary flag is set to false for any BinaryFiles that are associated with this record
-                var fieldTypeCache = FieldTypeCache.Read( this.FieldTypeId );
-                if ( fieldTypeCache.Field is Rock.Field.Types.BinaryFileFieldType )
+                var fieldTypeCache = FieldTypeCache.Get( this.FieldTypeId );
+                if ( fieldTypeCache?.Field is Rock.Field.Types.BinaryFileFieldType )
                 {
                     Guid? binaryFileGuid = DefaultValue.AsGuidOrNull();
                     if ( binaryFileGuid.HasValue )
                     {
-                        BinaryFileService binaryFileService = new BinaryFileService( (RockContext)dbContext );
+                        BinaryFileService binaryFileService = new BinaryFileService( ( RockContext ) dbContext );
                         var binaryFile = binaryFileService.Get( binaryFileGuid.Value );
                         if ( binaryFile != null && binaryFile.IsTemporary )
                         {
@@ -352,6 +435,161 @@ namespace Rock.Model
         public override string ToString()
         {
             return this.Key;
+        }
+
+        #endregion
+
+        #region ICacheable
+
+        private int? originalEntityTypeId;
+        private string originalEntityTypeQualifierColumn;
+        private string originalEntityTypeQualifierValue;
+
+        /// <summary>
+        /// Method that will be called on an entity immediately after the item is saved by context
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        /// <param name="entry">The entry.</param>
+        /// <param name="state">The state.</param>
+        public override void PreSaveChanges( Data.DbContext dbContext, DbEntityEntry entry, EntityState state )
+        {
+            if ( state == EntityState.Modified || state == EntityState.Deleted )
+            {
+                originalEntityTypeId = entry.OriginalValues["EntityTypeId"]?.ToString().AsIntegerOrNull();
+                originalEntityTypeQualifierColumn = entry.OriginalValues["EntityTypeQualifierColumn"]?.ToString();
+                originalEntityTypeQualifierValue = entry.OriginalValues["EntityTypeQualifierValue"]?.ToString();
+            }
+
+            base.PreSaveChanges( dbContext, entry, state );
+        }
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return AttributeCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            AttributeCache.UpdateCachedEntity( this.Id, entityState );
+            AttributeCache.UpdateCacheEntityAttributes( this, entityState );
+
+            int? entityTypeId;
+            string entityTypeQualifierColumn;
+            string entityTypeQualifierValue;
+
+            if ( entityState == EntityState.Deleted )
+            {
+                entityTypeId = originalEntityTypeId;
+                entityTypeQualifierColumn = originalEntityTypeQualifierColumn;
+                entityTypeQualifierValue = originalEntityTypeQualifierValue;
+            }
+            else
+            {
+                entityTypeId = this.EntityTypeId;
+                entityTypeQualifierColumn = this.EntityTypeQualifierColumn;
+                entityTypeQualifierValue = this.EntityTypeQualifierValue;
+            }
+
+            if ( ( !entityTypeId.HasValue || entityTypeId.Value == 0 ) && string.IsNullOrEmpty( entityTypeQualifierColumn ) && string.IsNullOrEmpty( entityTypeQualifierValue ) )
+            {
+                GlobalAttributesCache.Remove();
+            }
+
+            if ( ( !entityTypeId.HasValue || entityTypeId.Value == 0 ) && entityTypeQualifierColumn == Attribute.SYSTEM_SETTING_QUALIFIER && string.IsNullOrEmpty( entityTypeQualifierValue ) )
+            {
+                Rock.Web.SystemSettings.Remove();
+            }
+
+            if ( entityTypeId.HasValue )
+            {
+                if ( entityTypeId == EntityTypeCache.GetId<Block>() )
+                {
+                    // Update BlockTypes/Blocks that reference this attribute
+                    if ( entityTypeQualifierColumn.Equals( "BlockTypeId", StringComparison.OrdinalIgnoreCase ) )
+                    {
+                        int? blockTypeId = entityTypeQualifierValue.AsIntegerOrNull();
+                        if ( blockTypeId.HasValue )
+                        {
+                            BlockTypeCache.FlushItem( blockTypeId.Value );
+
+                            foreach ( var blockId in new BlockService( dbContext as RockContext ).GetByBlockTypeId( blockTypeId.Value ).Select( a => a.Id ).ToList() )
+                            {
+                                BlockCache.FlushItem( blockId );
+                            }
+                        }
+                    }
+                }
+                else if ( entityTypeId == EntityTypeCache.GetId<DefinedValue>() )
+                {
+                    // Update DefinedTypes/DefinedValues that reference this attribute
+                    if ( entityTypeQualifierColumn.Equals( "DefinedTypeId", StringComparison.OrdinalIgnoreCase ) )
+                    {
+                        int? definedTypeId = entityTypeQualifierValue.AsIntegerOrNull();
+                        if ( definedTypeId.HasValue )
+                        {
+                            DefinedTypeCache.FlushItem( definedTypeId.Value );
+
+                            foreach ( var definedValueId in new DefinedValueService( dbContext as RockContext ).GetByDefinedTypeId( definedTypeId.Value ).Select( a => a.Id ).ToList() )
+                            {
+                                DefinedValueCache.FlushItem( definedValueId );
+                            }
+                        }
+                    }
+                }
+                else if ( entityTypeId == EntityTypeCache.GetId<WorkflowActivityType>() )
+                {
+                    if ( entityTypeQualifierColumn.Equals( "ActivityTypeId", StringComparison.OrdinalIgnoreCase ) )
+                    {
+                        int? activityTypeId = entityTypeQualifierValue.AsIntegerOrNull();
+                        if ( activityTypeId.HasValue )
+                        {
+                            WorkflowActivityTypeCache.FlushItem( activityTypeId.Value );
+                        }
+                    }
+                }
+                else if ( entityTypeId == EntityTypeCache.GetId<GroupType>() )
+                {
+                    if ( entityTypeQualifierColumn.Equals( "Id", StringComparison.OrdinalIgnoreCase ) )
+                    {
+                        int? groupTypeId = entityTypeQualifierValue.AsIntegerOrNull();
+                        if ( groupTypeId.HasValue )
+                        {
+                            GroupTypeCache.FlushItem( groupTypeId.Value );
+                        }
+                    }
+                    else if ( entityTypeQualifierColumn.Equals( "GroupTypePurposeValueId", StringComparison.OrdinalIgnoreCase ) )
+                    {
+                        int? groupTypePurposeValueId = entityTypeQualifierValue.AsIntegerOrNull();
+                        if ( groupTypePurposeValueId.HasValue )
+                        {
+                            foreach ( var groupTypeId in GroupTypeCache.All().Where( a => a.GroupTypePurposeValueId == groupTypePurposeValueId.Value ).Select( a => a.Id ).ToList() )
+                            {
+                                GroupTypeCache.FlushItem( groupTypeId );
+                            }
+                        }
+                    }
+                }
+                else if ( entityTypeId.HasValue )
+                {
+                    // some other EntityType. If it the EntityType has a CacheItem associated with it, clear out all the CachedItems of that type to ensure they have a clean read of the Attributes that were Added, Changed or Removed
+                    EntityTypeCache entityType = EntityTypeCache.Get( entityTypeId.Value, dbContext as RockContext );
+
+                    if ( entityType?.HasEntityCache() == true )
+                    {
+                        entityType.ClearCachedItems();
+                    }
+                }
+
+            }
         }
 
         #endregion

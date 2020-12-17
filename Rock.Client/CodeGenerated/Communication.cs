@@ -35,7 +35,7 @@ namespace Rock.Client
         public int Id { get; set; }
 
         /// <summary />
-        public string AdditionalMergeFieldsJson { get; set; }
+        public string AdditionalMergeFieldsJson { get; set; } = @"[]";
 
         /// <summary />
         public string BCCEmails { get; set; }
@@ -51,6 +51,9 @@ namespace Rock.Client
 
         /// <summary />
         public string EnabledLavaCommands { get; set; }
+
+        /// <summary />
+        public bool ExcludeDuplicateRecipientAddress { get; set; }
 
         /// <summary />
         public Guid? ForeignGuid { get; set; }
@@ -74,6 +77,11 @@ namespace Rock.Client
         public int? ListGroupId { get; set; }
 
         /// <summary />
+        // Made Obsolete in Rock "1.7"
+        [Obsolete( "MediumDataJson is no longer used.", true )]
+        public string MediumDataJson { get; set; }
+
+        /// <summary />
         public string Message { get; set; }
 
         /// <summary />
@@ -88,7 +96,19 @@ namespace Rock.Client
         public string Name { get; set; }
 
         /// <summary />
+        public string PushData { get; set; }
+
+        /// <summary />
+        public int? PushImageBinaryFileId { get; set; }
+
+        /// <summary />
         public string PushMessage { get; set; }
+
+        /// <summary />
+        public int /* PushOpenAction*/? PushOpenAction { get; set; }
+
+        /// <summary />
+        public string PushOpenMessage { get; set; }
 
         /// <summary />
         public string PushSound { get; set; }
@@ -115,7 +135,13 @@ namespace Rock.Client
         public string Segments { get; set; }
 
         /// <summary />
+        public DateTime? SendDateTime { get; set; }
+
+        /// <summary />
         public int? SenderPersonAliasId { get; set; }
+
+        /// <summary />
+        public AnalyticsSourceDate SendSourceDate { get; set; }
 
         /// <summary />
         public int? SMSFromDefinedValueId { get; set; }
@@ -171,6 +197,7 @@ namespace Rock.Client
             this.CommunicationTemplateId = source.CommunicationTemplateId;
             this.CommunicationType = source.CommunicationType;
             this.EnabledLavaCommands = source.EnabledLavaCommands;
+            this.ExcludeDuplicateRecipientAddress = source.ExcludeDuplicateRecipientAddress;
             this.ForeignGuid = source.ForeignGuid;
             this.ForeignKey = source.ForeignKey;
             this.FromEmail = source.FromEmail;
@@ -182,7 +209,11 @@ namespace Rock.Client
             this.MessageMetaData = source.MessageMetaData;
             this.ModifiedAuditValuesAlreadyUpdated = source.ModifiedAuditValuesAlreadyUpdated;
             this.Name = source.Name;
+            this.PushData = source.PushData;
+            this.PushImageBinaryFileId = source.PushImageBinaryFileId;
             this.PushMessage = source.PushMessage;
+            this.PushOpenAction = source.PushOpenAction;
+            this.PushOpenMessage = source.PushOpenMessage;
             this.PushSound = source.PushSound;
             this.PushTitle = source.PushTitle;
             this.ReplyToEmail = source.ReplyToEmail;
@@ -191,7 +222,9 @@ namespace Rock.Client
             this.ReviewerPersonAliasId = source.ReviewerPersonAliasId;
             this.SegmentCriteria = source.SegmentCriteria;
             this.Segments = source.Segments;
+            this.SendDateTime = source.SendDateTime;
             this.SenderPersonAliasId = source.SenderPersonAliasId;
+            this.SendSourceDate = source.SendSourceDate;
             this.SMSFromDefinedValueId = source.SMSFromDefinedValueId;
             this.SMSMessage = source.SMSMessage;
             this.Status = source.Status;
@@ -229,6 +262,9 @@ namespace Rock.Client
 
         /// <summary />
         public PersonAlias ReviewerPersonAlias { get; set; }
+
+        /// <summary />
+        public int? SendDateKey { get; set; }
 
         /// <summary />
         public PersonAlias SenderPersonAlias { get; set; }

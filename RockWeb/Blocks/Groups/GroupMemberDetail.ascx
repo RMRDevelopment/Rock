@@ -5,7 +5,7 @@
 
         <asp:HiddenField ID="hfGroupId" runat="server" />
         <asp:HiddenField ID="hfGroupMemberId" runat="server" />
-
+        <asp:HiddenField ID="hfCampusId" runat="server" />
 
         <div class="panel panel-block">
             <div class="panel-heading">
@@ -15,14 +15,15 @@
                 </h1>
 
                 <div class="panel-labels">
-                    <Rock:HighlightLabel ID="hfDateAdded" runat="server" LabelType="Default" />
+                    <Rock:HighlightLabel ID="hlArchived" runat="server" CssClass="js-archived-label" LabelType="Danger" Text="Archived" />
+                    <Rock:HighlightLabel ID="hlDateAdded" runat="server" LabelType="Default" />
                 </div>
             </div>
             <Rock:PanelDrawer ID="pdAuditDetails" runat="server"></Rock:PanelDrawer>
             <div class="panel-body">
 
                 <Rock:NotificationBox ID="nbEditModeMessage" runat="server" NotificationBoxType="Info" />
-                <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                <asp:ValidationSummary ID="ValidationSummary1" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
                 <asp:CustomValidator ID="cvGroupMember" runat="server" Display="None" />
                 <Rock:NotificationBox ID="nbErrorMessage" runat="server" NotificationBoxType="Danger" />
 
@@ -38,9 +39,6 @@
                     </div>
                     <Rock:ModalAlert ID="maSignatureRequestSent" runat="server" Text="A Signature Request Has Been Sent." Visible="false" />
                 </asp:Panel>
-
-                <Rock:NotificationBox ID="NotificationBox1" runat="server" NotificationBoxType="Danger">
-                </Rock:NotificationBox>
 
                 <div id="pnlEditDetails" runat="server">
 
@@ -60,6 +58,11 @@
                         </div>
                         <div class="col-md-6">
                             <Rock:RockRadioButtonList ID="rblStatus" runat="server" Label="Status" RepeatDirection="Horizontal" />
+                            <Rock:RockRadioButtonList ID="rblCommunicationPreference" runat="server" RepeatDirection="Horizontal" Label="Communication Preference">
+                                <asp:ListItem Text="No Preference" Value="0" />
+                                <asp:ListItem Text="Email" Value="1" />
+                                <asp:ListItem Text="SMS" Value="2" />
+                            </Rock:RockRadioButtonList>
                             <Rock:RockControlWrapper id="rcwLinkedRegistrations" runat="server" Label="Registration">
                                 <ul class="list-unstyled">
                                     <asp:Repeater ID="rptLinkedRegistrations" runat="server">
@@ -74,10 +77,22 @@
                         </div>
                     </div>
 
+                    <asp:Panel ID="pnlScheduling" runat="server">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <Rock:RockDropDownList ID="ddlGroupMemberScheduleTemplate" runat="server" Label="Schedule Template" AutoPostBack="true" OnSelectedIndexChanged="ddlGroupMemberScheduleTemplate_SelectedIndexChanged" />
+                                <Rock:DatePicker ID="dpScheduleStartDate" runat="server" Label="Schedule Start Date" />
+                                <Rock:NumberBox ID="nbScheduleReminderEmailOffsetDays" runat="server" NumberType="Integer" Label="Schedule Reminder Email Offset Days" Help="The number of days prior to the schedule to send a reminder email or leave blank to use the default." Placeholder="Use default" />
+                            </div>
+                            <div class="col-md-6">
+                            </div>
+                        </div>
+                    </asp:Panel>
+
                     <div class="row">
                         <div class="col-md-12">
-                            <Rock:DynamicPlaceHolder ID="phAttributes" runat="server" />
-                            <Rock:DynamicPlaceHolder ID="phAttributesReadOnly" runat="server" />
+                            <Rock:AttributeValuesContainer ID="avcAttributes" runat="server" />
+                            <Rock:AttributeValuesContainer ID="avcAttributesReadOnly" runat="server" />
                         </div>
                     </div>
 
@@ -98,6 +113,23 @@
                     </asp:Panel>
 
                     <Rock:NotificationBox runat="server" ID="nbRecheckedNotification" NotificationBoxType="Success" Dismissable="true" Text="Successfully re-checked requirements at {0}" Visible="false" />
+                    <Rock:ModalDialog ID="mdRestoreArchivedPrompt" runat="server" Visible="false" Title="Restore Group Member" CancelLinkVisible="false">
+                        <Content>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <asp:HiddenField ID="hfRestoreGroupMemberId" runat="server" />
+                                    <Rock:NotificationBox ID="nbRestoreError" runat="server" NotificationBoxType="Danger" Visible="false"/>
+                                    <Rock:NotificationBox ID="nbRestoreArchivedGroupMember" runat="server" NotificationBoxType="Info" Text="There is an archived record for the person in this role in this group. Do you want to restore the previous settings? Notes will be retained." />
+                                </div>
+                            </div>
+                            <br />
+                            <div class="actions">
+                                <asp:LinkButton ID="btnRestoreArchivedGroupMember" runat="server" CssClass="btn btn-primary" Text="Restore" OnClick="btnRestoreArchivedGroupMember_Click" />
+                                <asp:LinkButton ID="btnDontRestoreArchiveGroupmember" runat="server" CssClass="btn btn-default" Text="Don't Restore" OnClick="btnDontRestoreArchiveGroupmember_Click" />
+                                <asp:LinkButton ID="btnCancelRestore" runat="server" CssClass="btn btn-link" Text="Cancel" OnClick="btnCancelRestore_Click" />
+                            </div>
+                        </Content>
+                    </Rock:ModalDialog>
 
                     <div class="actions">
                         <asp:LinkButton ID="btnSave" runat="server" AccessKey="s" Text="Save" ToolTip="Alt+S" CssClass="btn btn-primary" OnClick="btnSave_Click" />
@@ -114,13 +146,14 @@
 
         <Rock:ModalDialog ID="mdMoveGroupMember" runat="server" Title="Move Group Member" ValidationGroup="vgMoveGroupMember" Visible="false" CancelLinkVisible="false">
             <Content>
-                <asp:ValidationSummary ID="vsMoveGroupMember" runat="server" ValidationGroup="vgMoveGroupMember" HeaderText="Please Correct the Following" CssClass="alert alert-danger"  />
+                <asp:ValidationSummary ID="vsMoveGroupMember" runat="server" ValidationGroup="vgMoveGroupMember" HeaderText="Please correct the following:" CssClass="alert alert-validation"  />
                 <div class="row">
                     <div class="col-md-12">
                         <Rock:RockLiteral ID="lCurrentGroup" runat="server" Label="Current Group" />
                         <Rock:GroupPicker ID="gpMoveGroupMember" runat="server" Required="true" Label="Destination Group" ValidationGroup="vgMoveGroupMember" OnSelectItem="gpMoveGroupMember_SelectItem" />
                         <Rock:GroupRolePicker ID="grpMoveGroupMember" runat="server" Label="Role" ValidationGroup="vgMoveGroupMember" GroupTypeId="0" />   
                         <Rock:RockCheckBox ID="cbMoveGroupMemberMoveNotes" runat="server" ValidationGroup="vgMoveGroupMember" Label="Move Notes" Help="If this group member has notes, move these notes with them to their new group." />
+                        <Rock:RockCheckBox ID="cbMoveGroupMemberFundraisingTransactions" runat="server" ValidationGroup="vgMoveGroupMember" Label="Move Fundraising Financial Transactions" Help="If enabled the related fundraising financial transactions will be re-linked to the new fundraising group. If the new group has different financial accounts configured adjustment financial transactions may be created to move the dollars from one account to another.  This will only occur if the batches for the original accounts are closed. The new transactions will be placed in a new batch." />
                         <Rock:NotificationBox ID="nbMoveGroupMemberWarning" runat="server" NotificationBoxType="Warning" Visible="false" />
                     </div>
                 </div>

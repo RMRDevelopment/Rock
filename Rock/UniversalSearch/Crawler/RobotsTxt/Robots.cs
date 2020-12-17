@@ -17,6 +17,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Rock.UniversalSearch.Crawler.RobotsTxt.Enums;
 
 namespace Rock.UniversalSearch.Crawler.RobotsTxt
@@ -189,7 +190,7 @@ namespace Rock.UniversalSearch.Crawler.RobotsTxt
             // If not, we check against the global rules.
             // (though some robots ignore the rest after reading the rules for *)
             // We say "String.IsNullOrEmpty(x.Path)" while filtering because "Disallow: " means "Allow all".
-            // And the reason we remove the first characters of the paths before calling IsPathMatch() is because the first characters will allways be '/',
+            // And the reason we remove the first characters of the paths before calling IsPathMatch() is because the first characters will always be '/',
             // so there is no point having IsPathMatch() compare them.
             var matchingRules = rulesForThisRobot.Count > 0 ?
                 rulesForThisRobot.FindAll( x => String.IsNullOrEmpty( x.Path ) || isPathMatch( path.Substring( 1 ), x.Path.Substring( 1 ) ) )

@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Web;
 using System.Web.UI;
+
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 
@@ -79,7 +80,7 @@ namespace Rock.Field.Types
             configurationValues.Add( "keyprompt", new ConfigurationValue( "Key Prompt", "The text to display as a prompt in the key textbox.", "" ) );
             configurationValues.Add( "valueprompt", new ConfigurationValue( "Label Prompt", "The text to display as a prompt in the label textbox.", "" ) );
             configurationValues.Add( "definedtype", new ConfigurationValue( "Defined Type", "Optional Defined Type to select values from, otherwise values will be free-form text fields", "" ) );
-            configurationValues.Add( "customvalues", new ConfigurationValue( "Custom Values", "Optional list of options to use for the values.  Format is either 'value1,value2,value3,...', or 'value1:text1,value2:text2,value3:text3,...'.", "" ) );
+            configurationValues.Add( "customvalues", new ConfigurationValue( "Custom Values", "Optional list of options to use for the values.  Format is either 'value1,value2,value3,...', or 'value1^text1,value2^text2,value3^text3,...'.", "" ) );
             configurationValues.Add( "allowhtml", new ConfigurationValue( "Allow Html", "Allow Html content in values", "" ) );
             configurationValues.Add( "displayvaluefirst", new ConfigurationValue( "Display Value First", "Reverses the display order of the key and the value.", "" ) );
 
@@ -168,7 +169,7 @@ namespace Rock.Field.Types
             bool isDefinedType = configurationValues != null && configurationValues.ContainsKey( "definedtype" ) && configurationValues["definedtype"].Value.AsIntegerOrNull().HasValue;
 
             var values = new List<string>();
-            string[] nameValues = value.Split( new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries );
+            string[] nameValues = value?.Split( new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries ) ?? new string[0];
 
             foreach ( string nameValue in nameValues )
             {
@@ -181,7 +182,7 @@ namespace Rock.Field.Types
                 {
                     if ( isDefinedType )
                     {
-                        var definedValue = DefinedValueCache.Read( nameAndValue[1].AsInteger() );
+                        var definedValue = DefinedValueCache.Get( nameAndValue[1].AsInteger() );
                         if ( definedValue != null )
                         {
                             nameAndValue[1] = definedValue.Value;
@@ -248,10 +249,12 @@ namespace Rock.Field.Types
         /// <returns></returns>
         public override string GetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues )
         {
-            if ( control != null && control is KeyValueList )
+            var picker = control as KeyValueList;
+            if ( picker != null )
             {
-                return ( (KeyValueList)control ).Value;
+                return picker.Value;
             }
+
             return null;
         }
 
@@ -263,9 +266,10 @@ namespace Rock.Field.Types
         /// <param name="value">The value.</param>
         public override void SetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
-            if ( value!= null && control != null && control is KeyValueList )
+            var picker = control as KeyValueList;
+            if ( picker != null )
             {
-                ( (KeyValueList)control ).Value = value;
+                picker.Value = value;
             }
         }
 
@@ -324,7 +328,7 @@ namespace Rock.Field.Types
                 {
                     if ( isDefinedType )
                     {
-                        var definedValue = DefinedValueCache.Read( nameAndValue[1].AsInteger() );
+                        var definedValue = DefinedValueCache.Get( nameAndValue[1].AsInteger() );
                         if ( definedValue != null )
                         {
                             values.Add( new KeyValuePair<string, object>( nameAndValue[0], definedValue ) );

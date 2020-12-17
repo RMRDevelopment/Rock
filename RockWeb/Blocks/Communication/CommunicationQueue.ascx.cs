@@ -35,9 +35,39 @@ namespace RockWeb.Blocks.Communication
     [Category( "Communication" )]
     [Description( "Lists the status of all communications." )]
 
-    [LinkedPage( "Detail Page" )]
+    #region Block Attributes
+
+    [LinkedPage(
+        "Detail Page",
+        Key = AttributeKey.DetailPage )]
+
+    #endregion Block Attributes
     public partial class CommunicationQueue : Rock.Web.UI.RockBlock
     {
+        #region Attribute Keys
+
+        /// <summary>
+        /// Keys to use for Block Attributes
+        /// </summary>
+        private static class AttributeKey
+        {
+            public const string DetailPage = "DetailPage";
+        }
+
+        #endregion Attribute Keys
+
+        #region Page Parameter Keys
+
+        /// <summary>
+        /// Keys to use for Page Parameters
+        /// </summary>
+        private static class PageParameterKey
+        {
+            public const string CommunicationId = "CommunicationId";
+        }
+
+        #endregion
+
         #region Control Methods
 
         /// <summary>
@@ -127,7 +157,7 @@ namespace RockWeb.Blocks.Communication
         /// <param name="e">The <see cref="Rock.Web.UI.Controls.RowEventArgs" /> instance containing the event data.</param>
         protected void gCommunicationQueue_RowSelected( object sender, Rock.Web.UI.Controls.RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "CommunicationId", e.RowKeyId );
+            NavigateToLinkedPage( AttributeKey.DetailPage, PageParameterKey.CommunicationId, e.RowKeyId );
         }
 
         /// <summary>
@@ -164,7 +194,7 @@ namespace RockWeb.Blocks.Communication
         {
             var rockContext = new RockContext();
 
-            var jobEntityType = EntityTypeCache.Read( typeof( Rock.Model.ServiceJob ) );
+            var jobEntityType = EntityTypeCache.Get( typeof( Rock.Model.ServiceJob ) );
 
             int expirationDays = GetJobAttributeValue("ExpirationPeriod", 3, rockContext );
             int delayMins = GetJobAttributeValue( "DelayPeriod", 30, rockContext );
@@ -202,7 +232,7 @@ namespace RockWeb.Blocks.Communication
                 queryable = queryable.OrderByDescending( c => c.SendDateTime );
             }
 
-            gCommunicationQueue.EntityTypeId = EntityTypeCache.Read<Rock.Model.Communication>().Id;
+            gCommunicationQueue.EntityTypeId = EntityTypeCache.Get<Rock.Model.Communication>().Id;
             gCommunicationQueue.SetLinqDataSource( queryable );
             gCommunicationQueue.DataBind();
 
@@ -214,7 +244,7 @@ namespace RockWeb.Blocks.Communication
 
         private int GetJobAttributeValue( string key, int defaultValue, RockContext rockContext )
         {
-            var jobEntityType = EntityTypeCache.Read( typeof( Rock.Model.ServiceJob ) );
+            var jobEntityType = EntityTypeCache.Get( typeof( Rock.Model.ServiceJob ) );
 
             int intValue = 3;
             var jobExpirationAttribute = new AttributeService( rockContext )

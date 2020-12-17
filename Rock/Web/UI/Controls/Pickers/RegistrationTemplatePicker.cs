@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
@@ -25,7 +26,7 @@ using Rock.Web.Cache;
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select a registration template
     /// </summary>
     public class RegistrationTemplatePicker : ItemPicker
     {
@@ -36,7 +37,7 @@ namespace Rock.Web.UI.Controls
         protected override void OnInit( EventArgs e )
         {
             ItemRestUrlExtraParams = "?getCategorizedItems=true&showUnnamedEntityItems=false&showCategoriesThatHaveNoChildren=false";
-            ItemRestUrlExtraParams += "&entityTypeId=" + EntityTypeCache.Read( Rock.SystemGuid.EntityType.REGISTRATION_TEMPLATE.AsGuid() ).Id;
+            ItemRestUrlExtraParams += "&entityTypeId=" + EntityTypeCache.Get( Rock.SystemGuid.EntityType.REGISTRATION_TEMPLATE.AsGuid() ).Id;
             this.IconCssClass = "fa fa-calendar";
             base.OnInit( e );
         }

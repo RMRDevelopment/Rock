@@ -14,12 +14,11 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Web;
+
 using Rock.Data;
 using Rock.Model;
+using Rock.Web.Cache;
 
 namespace Rock.Security
 {
@@ -39,7 +38,7 @@ namespace Rock.Security
             get
             {
                 // Read should never return null since it will create entity type if it doesn't exist
-                return Rock.Web.Cache.EntityTypeCache.Read( this.GetType() ).Id;
+                return EntityTypeCache.Get( this.GetType() ).Id;
             }
         }
         /// <summary>
@@ -114,7 +113,9 @@ namespace Rock.Security
         /// <returns></returns>
         public bool IsAllowedByDefault( string action )
         {
-            return action == Authorization.VIEW;
+            // GlobalDefault is the ultimate base Parent Authority, so if Authorization wasn't specifically Denied until now, this is what all actions default to
+            // In the case of VIEW or TAG, we want to default to Allowed.
+            return action == Authorization.VIEW || action == Authorization.TAG;
         }
 
         /// <summary>

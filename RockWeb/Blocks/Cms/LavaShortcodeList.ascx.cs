@@ -22,13 +22,11 @@ using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.UI;
-using Rock.Web.UI.Controls;
 using System.ComponentModel;
 using Rock.Security;
-using Rock.Web.Cache;
-using System.Collections.Generic;
 using DotLiquid;
 using System.Web.UI.WebControls;
+using Rock.Lava.Shortcodes;
 
 namespace RockWeb.Blocks.Cms
 {
@@ -39,11 +37,26 @@ namespace RockWeb.Blocks.Cms
     [Category("CMS")]
     [Description( "Lists Lava Shortcode in the system." )]
 
-    [LinkedPage("Detail Page")]
+    #region Block Attributes
+
+    [LinkedPage(
+       "Detail Page",
+        Key = AttributeKey.DetailPage )]
+
+    #endregion Block Attributes
     public partial class LavaShortcodeList : RockBlock
     {
 
         public bool canAddEditDelete = false;
+
+        #region Attribute Keys
+
+        private static class AttributeKey
+        {
+            public const string DetailPage = "DetailPage";
+        }
+
+        #endregion Attribute Keys
 
         #region Control Methods
 
@@ -96,7 +109,7 @@ namespace RockWeb.Blocks.Cms
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnAddShortcut_Click( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "lavaShortcodeId", 0 );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "LavaShortcodeId", 0 );
         }
 
         /// <summary>
@@ -110,7 +123,7 @@ namespace RockWeb.Blocks.Cms
             RepeaterItem item = ( RepeaterItem ) btn.NamingContainer;
             HiddenField hfShortcodeId = ( HiddenField ) item.FindControl( "hfShortcodeId" );
 
-            NavigateToLinkedPage( "DetailPage", "lavaShortcodeId", hfShortcodeId.ValueAsInt() );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "LavaShortcodeId", hfShortcodeId.ValueAsInt() );
         }
 
         /// <summary>
@@ -153,6 +166,22 @@ namespace RockWeb.Blocks.Cms
                 LavaShortcode dataItem = (LavaShortcode)e.Item.DataItem;
 
                 e.Item.FindControl( "divEditPanel" ).Visible = !dataItem.IsSystem;
+                e.Item.FindControl( "divViewPanel" ).Visible = dataItem.IsSystem;
+
+                // Add special logic for shortcodes in c# assemblies
+                var shortcode = e.Item.DataItem as LavaShortcode;
+
+                if( shortcode.Id == -1 )
+                {
+                    // This is a shortcode from a c# assembly
+                    e.Item.FindControl( "btnView" ).Visible = false;
+                    var lMessages = (Literal)e.Item.FindControl( "lMessages" );
+
+                    if (lMessages != null )
+                    {
+                        lMessages.Text = "<div class='margin-t-md alert alert-info'>This shortcode is defined in code (verses being stored in the database) and therefore can not be modified.</div>";
+                    }
+                }
             }
         }
 
@@ -183,14 +212,63 @@ namespace RockWeb.Blocks.Cms
                 lavaShortcodes = lavaShortcodes.Where( s => s.IsActive == true );
             }
 
-            rptShortcodes.DataSource = lavaShortcodes.ToList().OrderBy( s => s.Name );
+            // To list the items from the database as we now need to add
+            // items in c# assemblies
+            var shortcodeList = lavaShortcodes.ToList();
+
+            // Start with block items
+            foreach ( var shortcodeInCode in Rock.Reflection.FindTypes( typeof( Rock.Lava.Shortcodes.RockLavaShortcodeBlockBase ) ).ToList() )
+            {
+                var shortcode = shortcodeInCode.Value;
+                var shortcodeMetadataAttribute = shortcode.GetCustomAttributes( typeof( LavaShortcodeMetadataAttribute ), true ).FirstOrDefault() as LavaShortcodeMetadataAttribute;
+                
+                // ignore shortcodes with no metadata
+                if ( shortcodeMetadataAttribute == null )
+                {
+                    continue;
+                }
+
+                shortcodeList.Add( new LavaShortcode {
+                    Id = -1,
+                    Name = shortcodeMetadataAttribute.Name,
+                    TagName = shortcodeMetadataAttribute.TagName,
+                    TagType = TagType.Block,
+                    IsActive = true,
+                    IsSystem = true,
+                    Description = shortcodeMetadataAttribute.Description,
+                    Documentation = shortcodeMetadataAttribute.Documentation
+                } );
+            }
+
+            // Next add inline items
+            foreach ( var shortcodeInCode in Rock.Reflection.FindTypes( typeof( Rock.Lava.Shortcodes.RockLavaShortcodeBase ) ).ToList() )
+            {
+                var shortcode = shortcodeInCode.Value;
+                var shortcodeMetadataAttribute = shortcode.GetCustomAttributes( typeof( LavaShortcodeMetadataAttribute ), true ).FirstOrDefault() as LavaShortcodeMetadataAttribute;
+
+                // ignore shortcodes with no metadata
+                if ( shortcodeMetadataAttribute == null )
+                {
+                    continue;
+                }
+
+                shortcodeList.Add( new LavaShortcode
+                {
+                    Id = -1,
+                    Name = shortcodeMetadataAttribute.Name,
+                    TagName = shortcodeMetadataAttribute.TagName,
+                    TagType = TagType.Inline,
+                    IsActive = true,
+                    IsSystem = true,
+                    Description = shortcodeMetadataAttribute.Description,
+                    Documentation = shortcodeMetadataAttribute.Documentation
+                } );
+            }
+
+            rptShortcodes.DataSource = shortcodeList.ToList().OrderBy( s => s.Name );
             rptShortcodes.DataBind();
         }
 
         #endregion
-
-
-
-        
     }
 }

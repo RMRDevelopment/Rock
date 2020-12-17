@@ -17,6 +17,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Web;
 using System.Web.UI;
 using System.Web.UI.WebControls;
 using Rock.Data;
@@ -51,10 +52,15 @@ namespace Rock.Reporting
         /// <value>
         /// The section name.
         /// </value>
-        public virtual string Section
-        {
-            get { return "Additional Filters"; }
-        }
+        public virtual string Section => "Additional Filters";
+
+        /// <summary>
+        /// Set this to show descriptive text that can help explain how complex filters work or offer assistance on possibly other filters that have better performance.
+        /// </summary>
+        /// <value>
+        /// The description.
+        /// </value>
+        public override string Description => string.Empty;
 
         /// <summary>
         /// Gets the default settings for all Attributes associated with this filter.
@@ -78,8 +84,40 @@ namespace Rock.Reporting
         /// <value>
         /// A set of key-value pairs representing the option names and values.
         /// </value>
-        public virtual Dictionary<string, object> Options {get; set;}
+        public virtual Dictionary<string, object> Options
+        {
+            get
+            {
+                if ( HttpContext.Current != null )
+                {
+                    return HttpContext.Current.Items[$"{this.GetType().FullName}:Options"] as Dictionary<string, object>;
+                }
 
+                return _nonHttpContextOptions;
+            }
+
+            set
+            {
+                if ( HttpContext.Current != null )
+                {
+                    HttpContext.Current.Items[$"{this.GetType().FullName}:Options"] = value;
+                }
+                else
+                {
+                    _nonHttpContextOptions = value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The _Options when HttpContext.Current is null
+        /// NOTE: ThreadStatic is per thread, but ASP.NET threads are ThreadPool threads, so they will be used again.
+        /// see https://www.hanselman.com/blog/ATaleOfTwoTechniquesTheThreadStaticAttributeAndSystemWebHttpContextCurrentItems.aspx
+        /// So be careful and only use the [ThreadStatic] trick if absolutely necessary
+        /// </summary>
+        [ThreadStatic]
+        private static Dictionary<string, object> _nonHttpContextOptions;
+   
         #endregion
 
         #region Public Methods
@@ -197,7 +235,7 @@ namespace Rock.Reporting
         /// <param name="entityType">Type of the entity.</param>
         /// <param name="controls">The controls.</param>
         /// <param name="filterMode">The filter mode.</param>
-        /// <returns></returns>
+        /// <returns>A formatted string representing the filter settings.</returns>
         public virtual string GetSelection( Type entityType, Control[] controls, FilterMode filterMode )
         {
             return GetSelection( entityType, controls );
@@ -209,11 +247,11 @@ namespace Rock.Reporting
         /// </summary>
         /// <param name="entityType">The System Type of the entity to which the filter will be applied.</param>
         /// <param name="controls">The collection of controls used to set the filter values.</param>
-        /// <returns>A formatted string.</returns>
+        /// <returns>A formatted string representing the filter settings.</returns>
         public virtual string GetSelection( Type entityType, Control[] controls )
         {
-            string comparisonType = ( (DropDownList)controls[0] ).SelectedValue;
-            string value = ( (TextBox)controls[1] ).Text;
+            string comparisonType = ( ( DropDownList ) controls[0] ).SelectedValue;
+            string value = ( ( TextBox ) controls[1] ).Text;
             return string.Format( "{0}|{1}", comparisonType, value );
         }
 
@@ -236,14 +274,14 @@ namespace Rock.Reporting
         /// </summary>
         /// <param name="entityType">Type of the entity.</param>
         /// <param name="controls">The controls.</param>
-        /// <param name="selection">The selection.</param>
+        /// <param name="selection">A formatted string representing the filter settings.</param>
         public virtual void SetSelection( Type entityType, Control[] controls, string selection )
         {
             string[] options = selection.Split( '|' );
             if ( options.Length >= 2 )
             {
-                ( (DropDownList)controls[0] ).SelectedValue = options[0];
-                ( (TextBox)controls[1] ).Text = options[1];
+                ( ( DropDownList ) controls[0] ).SelectedValue = options[0];
+                ( ( TextBox ) controls[1] ).Text = options[1];
             }
         }
 
@@ -270,9 +308,11 @@ namespace Rock.Reporting
         /// see RockWeb\Scripts\Rock\reportingInclude.js
         /// </summary>
         /// <param name="filterControl">The control that serves as the container for the filter controls.</param>
+        [RockObsolete( "1.10" )]
+        [Obsolete( "No Longer Needed" )]
         public void RegisterFilterCompareChangeScript( FilterField filterControl )
         {
-            ReportingHelper.RegisterJavascriptInclude( filterControl );
+            // no longer needed since the required javascript is now bundled
         }
 
         #endregion

@@ -14,8 +14,6 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
-
 namespace Rock.SystemGuid
 {
     /// <summary>
@@ -23,6 +21,11 @@ namespace Rock.SystemGuid
     /// </summary>
     public class NoteType
     {
+        /// <summary>
+        /// The content channel item structured content user value
+        /// </summary>
+        public const string CONTENT_CHANNEL_ITEM_STRUCTURED_CONTENT_USER_VALUE = "860C37A0-1A44-4681-B96D-4703813609D2";
+
         /// <summary>
         /// The fundraising opportunity comment
         /// </summary>

@@ -24,12 +24,15 @@ using System.Web.UI.WebControls;
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
+using Rock.Web.Cache;
 
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select a data view
     /// </summary>
+    [RockObsolete( "1.8" )]
+    [Obsolete("Use DataViewItemPicker instead", true )]
     public class DataViewPicker : RockDropDownList
     {
 
@@ -114,6 +117,8 @@ namespace Rock.Web.UI.Controls
                 // Get 
                 var categoryGuids = CategoryGuids ?? new List<Guid>();
 
+                var currentPerson = System.Web.HttpContext.Current?.Items["CurrentPerson"] as Person;
+
                 using ( var rockContext = new RockContext() )
                 {
                     var allEntityFilters = new DataViewFilterService( rockContext )
@@ -123,16 +128,15 @@ namespace Rock.Web.UI.Controls
                         
                     foreach ( var dataView in new DataViewService( rockContext )
                         .GetByEntityTypeId( EntityTypeId.Value )
-                        .Include( "EntityType" )
-                        .Include( "Category" )
                         .Include( "DataViewFilter" )
                         .AsNoTracking() )
                     {
-                        if ( !categoryGuids.Any() || ( dataView.Category != null && categoryGuids.Contains( dataView.Category.Guid ) ) )
+                        var category = dataView.CategoryId.HasValue ? CategoryCache.Get( dataView.CategoryId.Value ) : null;
+                        if ( !categoryGuids.Any() || ( category != null && categoryGuids.Contains( category.Guid ) ) )
                         { 
-                            var currentPerson = HttpContext.Current.Items["CurrentPerson"] as Person;
-                            if ( dataView.IsAuthorized( Authorization.VIEW, currentPerson ) &&
-                                dataView.DataViewFilter.IsAuthorized( Authorization.VIEW, currentPerson, allEntityFilters ) )
+                            if ( dataView.IsAuthorized( Authorization.VIEW, currentPerson )
+                                && dataView.DataViewFilter != null
+                                && dataView.DataViewFilter.IsAuthorized( Authorization.VIEW, currentPerson, allEntityFilters ) )
                             {
                                 this.Items.Add( new ListItem( dataView.Name, dataView.Id.ToString() ) );
                             }

@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
+
 using Rock.Model;
 
 namespace Rock.CheckIn
@@ -99,6 +100,15 @@ namespace Rock.CheckIn
         /// </value>
         [DataMember]
         public List<CheckInLocation> Locations { get; set; }
+
+        /// <summary>
+        /// Gets or sets the notes.
+        /// </summary>
+        /// <value>
+        /// The notes.
+        /// </value>
+        [DataMember]
+        public string Notes { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CheckInGroup" /> class.
@@ -187,7 +197,7 @@ namespace Rock.CheckIn
         }
 
         /// <summary>
-        /// Gets the available keys (for debuging info).
+        /// Gets the available keys (for debugging info).
         /// </summary>
         /// <value>
         /// The available keys.

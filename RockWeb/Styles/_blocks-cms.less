@@ -1,4 +1,4 @@
-﻿/*
+/*
     Used to manage styles for specific blocks.
 
     1. HTML Content - block to edit HTML on a page
@@ -21,9 +21,9 @@
 }
 
 .codeeditor-header {
-  /*position: absolute;
+  /* position: absolute;
     top: -4px;
-    right: 0;*/
+    right: 0; */
 
   .picker-mergefield {
     float: right;
@@ -34,6 +34,43 @@
   }
 }
 
+.ace_editor {
+  &.is-fullscreen {
+    height: auto;
+    width: auto;
+    border: 0;
+    margin: 0;
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2500;
+  }
+}
+
+.slug-row {
+  display: block;
+  margin-bottom: (@padding-base-vertical / 2);
+  border-bottom: 1px solid @input-border;
+  > .rollover-item {
+    margin-top: 7px;
+  }
+}
+
+.slug-full-url {
+  display: block;
+  float: left;
+  padding: 6px 0;
+}
+
+.slug-base-url {
+  opacity: .6;
+}
+
+.slug-literal {
+  font-weight: 700;
+}
 
 // 2. My Account
 // -------------------------
@@ -58,7 +95,7 @@
 
   p {
     margin-bottom: 10px;
-    font-weight: normal !important;
+    font-weight: @font-weight-normal !important;
 
     &.attributes {
       margin-bottom: 0;
@@ -78,7 +115,7 @@
       background-color: darken(@state-info-bg, 3%);
       border: 0;
 
-      &.collapsed i:before {
+      &.collapsed i::before {
         content: @fa-var-chevron-down;
       }
     }

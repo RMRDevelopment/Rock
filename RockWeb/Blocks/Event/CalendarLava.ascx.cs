@@ -17,8 +17,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data.Entity;
-using System.IO;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
@@ -29,9 +27,7 @@ using Rock.Model;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 using Rock.Attribute;
-using Rock.Store;
-using System.Text;
-using Rock.Security;
+using Ical.Net.DataTypes;
 
 namespace RockWeb.Blocks.Event
 {
@@ -42,12 +38,12 @@ namespace RockWeb.Blocks.Event
     [Category( "Event" )]
     [Description( "Renders a particular calendar using Lava." )]
 
-    [EventCalendarField( "Event Calendar", "The event calendar to be displayed", true, "1", order: 0 )]
-    [CustomDropdownListField( "Default View Option", "Determines the default view option", "Day,Week,Month", true, "Week", order: 1 )]
+    [EventCalendarField( "Event Calendar", "The event calendar to be displayed", true, "8A444668-19AF-4417-9C74-09F842572974", order: 0 )]
+    [CustomDropdownListField( "Default View Option", "Determines the default view option", "Day,Week,Month,Year,All", true, "Week", order: 1 )]
     [LinkedPage( "Details Page", "Detail page for events", order: 2 )]
     [LavaCommandsField( "Enabled Lava Commands", "The Lava commands that should be enabled for this HTML block.", false, order: 3 )]
 
-    [CampusesField(name: "Campuses", description: "Select campuses to display calendar events for. No selection will show all.", required: false, defaultCampusGuids: "", category: "", order: 4, key: "Campuses")]
+    [CampusesField( name: "Campuses", description: "Select campuses to display calendar events for. No selection will show all.", required: false, defaultCampusGuids: "", category: "", order: 4, key: "Campuses" )]
     [CustomRadioListField( "Campus Filter Display Mode", "", "1^Hidden, 2^Plain, 3^Panel Open, 4^Panel Closed", true, "1", order: 5 )]
 
     [CustomRadioListField( "Audience Filter Display Mode", "", "1^Hidden, 2^Plain, 3^Panel Open, 4^Panel Closed", true, "1", key: "CategoryFilterDisplayMode", order: 6 )]
@@ -58,17 +54,19 @@ namespace RockWeb.Blocks.Event
     [BooleanField( "Show Day View", "Determines whether the day view option is shown", false, order: 10 )]
     [BooleanField( "Show Week View", "Determines whether the week view option is shown", true, order: 11 )]
     [BooleanField( "Show Month View", "Determines whether the month view option is shown", true, order: 12 )]
+    [BooleanField( "Show Year View", "Determines whether the year view option is shown", false, order: 13 )]
+    [BooleanField( "Show All View", "Determines whether the all view option is shown (Limited to 2 years)", false, order: 14 )]
 
-    [BooleanField( "Enable Campus Context", "If the page has a campus context it's value will be used as a filter", order: 13 )]
-    [CodeEditorField( "Lava Template", "Lava template to use to display the list of events.", CodeEditorMode.Lava, CodeEditorTheme.Rock, 400, true, @"{% include '~~/Assets/Lava/Calendar.lava' %}", "", 14 )]
+    [BooleanField( "Enable Campus Context", "If the page has a campus context its value will be used as a filter", order: 15 )]
+    [CodeEditorField( "Lava Template", "Lava template to use to display the list of events.", CodeEditorMode.Lava, CodeEditorTheme.Rock, 400, true, @"{% include '~~/Assets/Lava/Calendar.lava' %}", "", 16 )]
 
-    [DayOfWeekField( "Start of Week Day", "Determines what day is the start of a week.", true, DayOfWeek.Sunday, order: 15 )]
+    [DayOfWeekField( "Start of Week Day", "Determines what day is the start of a week.", true, DayOfWeek.Sunday, order: 17 )]
 
-    [BooleanField( "Set Page Title", "Determines if the block should set the page title with the calendar name.", false, order: 16 )]
+    [BooleanField( "Set Page Title", "Determines if the block should set the page title with the calendar name.", false, order: 18 )]
 
-    [TextField("Campus Parameter Name", "The page parameter name that contains the id of the campus entity.", false, "campusId", order: 17)]
-    [TextField("Category Parameter Name", "The page parameter name that contains the id of the category entity.", false, "categoryId", order: 18)]
-    [TextField( "Date Parameter Name", "The page parameter name that contains the selected date.", false, "date", order: 19 )]
+    [TextField( "Campus Parameter Name", "The page parameter name that contains the id of the campus entity.", false, "CampusId", order: 19 )]
+    [TextField( "Category Parameter Name", "The page parameter name that contains the id of the category entity.", false, "CategoryId", order: 20 )]
+    [TextField( "Date Parameter Name", "The page parameter name that contains the selected date.", false, "Date", order: 21 )]
 
     public partial class CalendarLava : Rock.Web.UI.RockBlock
     {
@@ -76,6 +74,10 @@ namespace RockWeb.Blocks.Event
 
         private int _calendarId = 0;
         private string _calendarName = string.Empty;
+
+        /// <summary>
+        /// NOTE: this is Sunday vs RockDateTime.FirstDayOfWeek since it is used to show the selected week/month in the Calendar control
+        /// </summary>
         private DayOfWeek _firstDayOfWeek = DayOfWeek.Sunday;
 
         protected bool CampusPanelOpen { get; set; }
@@ -201,6 +203,8 @@ namespace RockWeb.Blocks.Event
             btnDay.CssClass = "btn btn-default" + ( ViewMode == "Day" ? " active" : string.Empty );
             btnWeek.CssClass = "btn btn-default" + ( ViewMode == "Week" ? " active" : string.Empty );
             btnMonth.CssClass = "btn btn-default" + ( ViewMode == "Month" ? " active" : string.Empty );
+            btnYear.CssClass = "btn btn-default" + ( ViewMode == "Year" ? " active" : string.Empty );
+            btnAll.CssClass = "btn btn-default" + ( ViewMode == "All" ? " active" : string.Empty );
 
             base.OnPreRender( e );
         }
@@ -348,7 +352,7 @@ namespace RockWeb.Blocks.Event
                 // If CampusId is null, then the event is an 'All Campuses' event, so include those
                 qry = qry.Where( c => !c.CampusId.HasValue || selectedCampusIdList.Contains( c.CampusId.Value ) );
             }
-            else if ( campusIdList.Any())
+            else if ( campusIdList.Any() )
             {
                 // If no campus filter is selected then check the block filtering
                 // If CampusId is null, then the event is an 'All Campuses' event, so include those
@@ -366,22 +370,36 @@ namespace RockWeb.Blocks.Event
             var today = RockDateTime.Today;
             var filterStart = FilterStartDate.HasValue ? FilterStartDate.Value : today;
             var monthStart = new DateTime( filterStart.Year, filterStart.Month, 1 );
-            var rangeStart = monthStart.AddMonths(-1 );
+            var rangeStart = monthStart.AddMonths( -1 );
             var rangeEnd = monthStart.AddMonths( 2 );
             var beginDate = FilterStartDate.HasValue ? FilterStartDate.Value : rangeStart;
             var endDate = FilterEndDate.HasValue ? FilterEndDate.Value : rangeEnd;
 
-            endDate = endDate.AddDays( 1 ).AddMilliseconds(-1 );
-            
-            // Get the occurrences 
+            endDate = endDate.AddDays( 1 ).AddMilliseconds( -1 );
+
+            // Get the occurrences
             var occurrences = qry.ToList();
             var occurrencesWithDates = occurrences
-                .Select( o => new EventOccurrenceDate
+                .Select( o =>
                 {
-                    EventItemOccurrence = o,
-                    Dates = o.GetStartTimes( beginDate, endDate ).ToList()
+                    var eventOccurrenceDate = new EventOccurrenceDate
+                    {
+                        EventItemOccurrence = o
+
+                    };
+
+                    if ( o.Schedule != null )
+                    {
+                        eventOccurrenceDate.ScheduleOccurrences = o.Schedule.GetICalOccurrences( beginDate, endDate ).ToList();
+                    }
+                    else
+                    {
+                        eventOccurrenceDate.ScheduleOccurrences = new List<Occurrence>();
+                    }
+
+                    return eventOccurrenceDate;
                 } )
-                .Where( d => d.Dates.Any() )
+                .Where( d => d.ScheduleOccurrences.Any() )
                 .ToList();
 
             CalendarEventDates = new List<DateTime>();
@@ -390,15 +408,18 @@ namespace RockWeb.Blocks.Event
             foreach ( var occurrenceDates in occurrencesWithDates )
             {
                 var eventItemOccurrence = occurrenceDates.EventItemOccurrence;
-                foreach ( var datetime in occurrenceDates.Dates )
+                foreach ( var scheduleOccurrence in occurrenceDates.ScheduleOccurrences )
                 {
-                    if ( eventItemOccurrence.Schedule.EffectiveEndDate.HasValue && ( eventItemOccurrence.Schedule.EffectiveStartDate != eventItemOccurrence.Schedule.EffectiveEndDate ) )
+
+                    var datetime = scheduleOccurrence.Period.StartTime.Value;
+                    var occurrenceEndTime = scheduleOccurrence.Period.EndTime;
+                    if ( occurrenceEndTime != null && occurrenceEndTime.Value.Date > datetime.Date )
                     {
-                        var multiDate = eventItemOccurrence.Schedule.EffectiveStartDate;
-                        while ( multiDate.HasValue && ( multiDate.Value < eventItemOccurrence.Schedule.EffectiveEndDate.Value ) )
+                        var multiDate = datetime;
+                        while ( multiDate <= occurrenceEndTime.Date && multiDate <= endDate )
                         {
-                            CalendarEventDates.Add( multiDate.Value.Date );
-                            multiDate = multiDate.Value.AddDays( 1 );
+                            CalendarEventDates.Add( multiDate.Date );
+                            multiDate = multiDate.AddDays( 1 );
                         }
                     }
                     else
@@ -415,6 +436,8 @@ namespace RockWeb.Blocks.Event
                             DateTime = datetime,
                             Date = datetime.ToShortDateString(),
                             Time = datetime.ToShortTimeString(),
+                            EndDate = occurrenceEndTime != null ? occurrenceEndTime.Value.ToShortDateString() : null,
+                            EndTime = occurrenceEndTime != null ? occurrenceEndTime.Value.ToShortTimeString() : null,
                             Campus = eventItemOccurrence.Campus != null ? eventItemOccurrence.Campus.Name : "All Campuses",
                             Location = eventItemOccurrence.Campus != null ? eventItemOccurrence.Campus.Name : "All Campuses",
                             LocationDescription = eventItemOccurrence.Location,
@@ -485,7 +508,17 @@ namespace RockWeb.Blocks.Event
             else if ( ViewMode == "Month" )
             {
                 FilterStartDate = new DateTime( today.Year, today.Month, 1 );
-                FilterEndDate = FilterStartDate.Value.AddMonths( 1 ).AddDays(-1 );
+                FilterEndDate = FilterStartDate.Value.AddMonths( 1 ).AddDays( -1 );
+            }
+            else if ( ViewMode == "Year" )
+            {
+                FilterStartDate = new DateTime( today.Year, today.Month, today.Day );
+                FilterEndDate = new DateTime( today.Year, 12, 31 );
+            }
+            else if ( ViewMode == "All" )
+            {
+                FilterStartDate = new DateTime( today.Year, today.Month, today.Day );
+                FilterEndDate = FilterStartDate.Value.AddDays( 730 );
             }
 
             // Setup small calendar Filter
@@ -519,7 +552,7 @@ namespace RockWeb.Blocks.Event
 
             cblCampus.DataBind();
 
-            if ( cblCampus.Items.Count == 1)
+            if ( cblCampus.Items.Count == 1 )
             {
                 CampusPanelClosed = false;
                 CampusPanelOpen = false;
@@ -531,7 +564,7 @@ namespace RockWeb.Blocks.Event
             if ( campusId.HasValue )
             {
                 // Check if there's a campus with this id.
-                var campus = CampusCache.Read( campusId.Value );
+                var campus = CampusCache.Get( campusId.Value );
                 if ( campus != null )
                 {
                     cblCampus.SetValue( campusId.Value );
@@ -541,7 +574,7 @@ namespace RockWeb.Blocks.Event
             {
                 if ( GetAttributeValue( "EnableCampusContext" ).AsBoolean() )
                 {
-                    var contextCampus = RockPage.GetCurrentContext( EntityTypeCache.Read( "Rock.Model.Campus" ) ) as Campus;
+                    var contextCampus = RockPage.GetCurrentContext( EntityTypeCache.Get( "Rock.Model.Campus" ) ) as Campus;
                     if ( contextCampus != null )
                     {
                         cblCampus.SetValue( contextCampus.Id );
@@ -552,7 +585,7 @@ namespace RockWeb.Blocks.Event
             // Setup Category Filter
             var selectedCategoryGuids = GetAttributeValue( "FilterCategories" ).SplitDelimitedValues( true ).AsGuidList();
             rcwCategory.Visible = selectedCategoryGuids.Any() && GetAttributeValue( "CategoryFilterDisplayMode" ).AsInteger() > 1;
-            var definedType = DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.MARKETING_CAMPAIGN_AUDIENCE_TYPE.AsGuid() );
+            var definedType = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.MARKETING_CAMPAIGN_AUDIENCE_TYPE.AsGuid() );
             if ( definedType != null )
             {
                 cblCategory.DataSource = definedType.DefinedValues.Where( v => selectedCategoryGuids.Contains( v.Guid ) );
@@ -578,12 +611,16 @@ namespace RockWeb.Blocks.Event
             var viewsVisible = new List<bool> {
                 GetAttributeValue( "ShowDayView" ).AsBoolean(),
                 GetAttributeValue( "ShowWeekView" ).AsBoolean(),
-                GetAttributeValue( "ShowMonthView" ).AsBoolean()
+                GetAttributeValue( "ShowMonthView" ).AsBoolean(),
+                GetAttributeValue( "ShowYearView" ).AsBoolean(),
+                GetAttributeValue( "ShowAllView" ).AsBoolean()
             };
             var howManyVisible = viewsVisible.Where( v => v ).Count();
             btnDay.Visible = howManyVisible > 1 && viewsVisible[0];
             btnWeek.Visible = howManyVisible > 1 && viewsVisible[1];
             btnMonth.Visible = howManyVisible > 1 && viewsVisible[2];
+            btnYear.Visible = howManyVisible > 1 && viewsVisible[3];
+            btnAll.Visible = howManyVisible > 1 && viewsVisible[4];
 
             // Set filter visibility
             bool showFilter = pnlCalendar.Visible || rcwCampus.Visible || rcwCategory.Visible || drpDateRange.Visible;
@@ -605,6 +642,8 @@ namespace RockWeb.Blocks.Event
             }
 
             var selectedDate = calEventCalendar.SelectedDate;
+            calEventCalendar.VisibleDate = calEventCalendar.SelectedDate;
+            var today = RockDateTime.Today;
             FilterStartDate = selectedDate;
             FilterEndDate = selectedDate;
             if ( ViewMode == "Week" )
@@ -615,7 +654,17 @@ namespace RockWeb.Blocks.Event
             else if ( ViewMode == "Month" )
             {
                 FilterStartDate = new DateTime( selectedDate.Year, selectedDate.Month, 1 );
-                FilterEndDate = FilterStartDate.Value.AddMonths( 1 ).AddDays(-1 );
+                FilterEndDate = FilterStartDate.Value.AddMonths( 1 ).AddDays( -1 );
+            }
+            else if ( ViewMode == "Year" )
+            {
+                FilterStartDate = new DateTime( selectedDate.Year, selectedDate.Month, selectedDate.Day );
+                FilterEndDate = new DateTime( selectedDate.Year, 12, 31 );
+            }
+            else if ( ViewMode == "All" )
+            {
+                FilterStartDate = new DateTime( today.Year, today.Month, today.Day );
+                FilterEndDate = FilterStartDate.Value.AddDays( 730 );
             }
 
             // Reset the selection
@@ -624,8 +673,8 @@ namespace RockWeb.Blocks.Event
 
         private void SetCalendarFilterDates()
         {
-            FilterStartDate = calEventCalendar.SelectedDates.Count > 0 ? calEventCalendar.SelectedDates[0] : (DateTime?)null;
-            FilterEndDate = calEventCalendar.SelectedDates.Count > 0 ? calEventCalendar.SelectedDates[calEventCalendar.SelectedDates.Count - 1] : (DateTime?)null;
+            FilterStartDate = calEventCalendar.SelectedDates.Count > 0 ? calEventCalendar.SelectedDates[0] : ( DateTime? ) null;
+            FilterEndDate = calEventCalendar.SelectedDates.Count > 0 ? calEventCalendar.SelectedDates[calEventCalendar.SelectedDates.Count - 1] : ( DateTime? ) null;
         }
 
         /// <summary>
@@ -661,7 +710,7 @@ namespace RockWeb.Blocks.Event
         /// <summary>
         /// A class to store event item occurrence data for liquid
         /// </summary>
-        [DotLiquid.LiquidType( "EventItemOccurrence", "DateTime", "Name", "Date", "Time", "Campus", "Location", "LocationDescription", "Description", "Summary", "OccurrenceNote", "DetailPage" )]
+        [DotLiquid.LiquidType( "EventItemOccurrence", "DateTime", "Name", "Date", "Time", "EndDate", "EndTime", "Campus", "Location", "LocationDescription", "Description", "Summary", "OccurrenceNote", "DetailPage" )]
         public class EventOccurrenceSummary
         {
             public EventItemOccurrence EventItemOccurrence { get; set; }
@@ -673,6 +722,10 @@ namespace RockWeb.Blocks.Event
             public string Date { get; set; }
 
             public string Time { get; set; }
+
+            public string EndDate { get; set; }
+
+            public string EndTime { get; set; }
 
             public string Campus { get; set; }
 
@@ -690,13 +743,13 @@ namespace RockWeb.Blocks.Event
         }
 
         /// <summary>
-        /// A class to store the event item occurrences dates
+        /// A block-level viewmodel for event item occurrences dates.
         /// </summary>
         public class EventOccurrenceDate
         {
             public EventItemOccurrence EventItemOccurrence { get; set; }
 
-            public List<DateTime> Dates { get; set; }
+            public List<Occurrence> ScheduleOccurrences { get; set; }
         }
 
         #endregion

@@ -18,6 +18,8 @@ using System;
 using System.Collections.Generic;
 using System.Data.Entity;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Web.Http;
 using Rock.Data;
 using Rock.Model;
@@ -181,8 +183,8 @@ namespace Rock.StatementGenerator.Rest
                     var dataView = new DataViewService( new RockContext() ).Get( options.DataViewId.Value );
                     if ( dataView != null )
                     {
-                        List<string> errorMessages = new List<string>();
-                        var personList = dataView.GetQuery( null, null, out errorMessages ).OfType<Rock.Model.Person>().Select( a => new { a.Id, a.GivingGroupId } ).ToList();
+                        var dataViewGetQueryArgs = new DataViewGetQueryArgs();
+                        var personList = dataView.GetQuery( dataViewGetQueryArgs ).OfType<Rock.Model.Person>().Select( a => new { a.Id, a.GivingGroupId } ).ToList();
                         HashSet<int> personIds = new HashSet<int>( personList.Select( a => a.Id ) );
                         HashSet<int> groupsIds = new HashSet<int>( personList.Where( a => a.GivingGroupId.HasValue ).Select( a => a.GivingGroupId.Value ).Distinct() );
 
@@ -217,8 +219,8 @@ namespace Rock.StatementGenerator.Rest
         /// <returns></returns>
         private static IQueryable<GroupLocation> GetGroupLocationQuery( RockContext rockContext )
         {
-            var groupLocationTypeIdHome = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuid() )?.Id;
-            var groupLocationTypeIdWork = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_WORK.AsGuid() )?.Id;
+            var groupLocationTypeIdHome = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuid() )?.Id;
+            var groupLocationTypeIdWork = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_WORK.AsGuid() )?.Id;
             var groupLocationTypeIds = new List<int>();
             if ( groupLocationTypeIdHome.HasValue )
             {
@@ -344,7 +346,7 @@ namespace Rock.StatementGenerator.Rest
 
                 if ( options.ExcludeOptedOutIndividuals == true && !options.DataViewId.HasValue )
                 {
-                    int? doNotSendGivingStatementAttributeId = AttributeCache.Read( Rock.StatementGenerator.SystemGuid.Attribute.PERSON_DO_NOT_SEND_GIVING_STATEMENT.AsGuid() )?.Id;
+                    int? doNotSendGivingStatementAttributeId = AttributeCache.Get( Rock.StatementGenerator.SystemGuid.Attribute.PERSON_DO_NOT_SEND_GIVING_STATEMENT.AsGuid() )?.Id;
                     if ( doNotSendGivingStatementAttributeId.HasValue )
                     {
                         var personIds = personList.Select( a => a.Id ).ToList();
@@ -403,16 +405,16 @@ namespace Rock.StatementGenerator.Rest
 
                 foreach ( var financialTransaction in financialTransactionsList )
                 {
-                    if ( options.TransactionAccountIds != null)
+                    if ( options.TransactionAccountIds != null )
                     {
                         // remove any Accounts that were not included (in case there was a mix of included and not included accounts in the transaction)
                         financialTransaction.TransactionDetails = financialTransaction.TransactionDetails.Where( a => options.TransactionAccountIds.Contains( a.AccountId ) ).ToList();
                     }
 
-                    financialTransaction.TransactionDetails = financialTransaction.TransactionDetails.OrderBy( a => a.Account.Order ).ThenBy( a => a.Account.Name ).ToList();
+                    financialTransaction.TransactionDetails = financialTransaction.TransactionDetails.OrderBy( a => a.Account.Order ).ThenBy( a => a.Account.PublicName ).ToList();
                 }
 
-                var lavaTemplateValue = DefinedValueCache.Read( options.LayoutDefinedValueGuid.Value );
+                var lavaTemplateValue = DefinedValueCache.Get( options.LayoutDefinedValueGuid.Value );
                 var lavaTemplateLava = lavaTemplateValue.GetAttributeValue( "LavaTemplate" );
                 var lavaTemplateFooterLava = lavaTemplateValue.GetAttributeValue( "FooterHtml" );
 
@@ -424,7 +426,7 @@ namespace Rock.StatementGenerator.Rest
                 var humanFriendlyEndDate = options.EndDate.HasValue ? options.EndDate.Value.AddDays( -1 ) : RockDateTime.Now.Date;
                 mergeFields.Add( "StatementEndDate", humanFriendlyEndDate );
 
-                var familyTitle = Rock.Data.RockUdfHelper.ufnCrm_GetFamilyTitle( rockContext, personId, groupId, null, false );
+                var familyTitle = Rock.Data.RockUdfHelper.ufnCrm_GetFamilyTitle( rockContext, personId, groupId, null, false, !options.ExcludeInActiveIndividuals );
 
                 mergeFields.Add( "Salutation", familyTitle );
 
@@ -542,6 +544,13 @@ namespace Rock.StatementGenerator.Rest
                         && options.CurrencyTypeIdsNonCash.Contains( a.Transaction.FinancialPaymentDetail.CurrencyTypeValueId.Value ) ).ToList();
                 }
 
+                // Add Merge Fields for Transactions for custom Statements that might want to organize the output by Transaction instead of TransactionDetail
+                var transactionListCash = transactionDetailListCash.GroupBy( a => a.Transaction ).Select( a => a.Key ).ToList();
+                var transactionListNonCash = transactionDetailListNonCash.GroupBy( a => a.Transaction ).Select( a => a.Key ).ToList();
+                mergeFields.Add( "Transactions", transactionListCash );
+                mergeFields.Add( "TransactionsNonCash", transactionListNonCash );
+
+                // Add the standard TransactionDetails and TransactionDetailsNonCash that the default Rock templates use
                 mergeFields.Add( "TransactionDetails", transactionDetailListCash );
                 mergeFields.Add( "TransactionDetailsNonCash", transactionDetailListNonCash );
 
@@ -551,10 +560,31 @@ namespace Rock.StatementGenerator.Rest
                 mergeFields.Add( "TotalContributionAmountNonCash", transactionDetailListNonCash.Sum( a => a.Amount ) );
                 mergeFields.Add( "TotalContributionCountNonCash", transactionDetailListNonCash.Count() );
 
-                mergeFields.Add( "AccountSummary", transactionDetailListCash.GroupBy( t => t.Account.Name ).Select( s => new { AccountName = s.Key, Total = s.Sum( a => a.Amount ), Order = s.Max( a => a.Account.Order ) } ).OrderBy( s => s.Order ) );
-                mergeFields.Add( "AccountSummaryNonCash", transactionDetailListNonCash.GroupBy( t => t.Account.Name ).Select( s => new { AccountName = s.Key, Total = s.Sum( a => a.Amount ), Order = s.Max( a => a.Account.Order ) } ).OrderBy( s => s.Order ) );
+                mergeFields.Add(
+                    "AccountSummary",
+                    transactionDetailListCash
+                        .GroupBy( t => t.Account.PublicName )
+                        .Select( s => new
+                        {
+                            AccountName = s.FirstOrDefault().Account.PublicName ?? s.Key,
+                            Total = s.Sum( a => a.Amount ),
+                            Order = s.Max( a => a.Account.Order )
+                        } )
+                        .OrderBy( s => s.Order ) );
 
-                if ( options.PledgesAccountIds.Any() )
+                mergeFields.Add(
+                    "AccountSummaryNonCash",
+                    transactionDetailListNonCash
+                        .GroupBy( t => t.Account.PublicName )
+                        .Select( s => new
+                        {
+                            AccountName = s.FirstOrDefault().Account.PublicName ?? s.Key,
+                            Total = s.Sum( a => a.Amount ),
+                            Order = s.Max( a => a.Account.Order )
+                        } )
+                        .OrderBy( s => s.Order ) );
+
+                if ( options.PledgesAccountIds != null && options.PledgesAccountIds.Any() )
                 {
                     var pledgeList = financialPledgeQry
                                         .Where( p => p.PersonAliasId.HasValue && personAliasIds.Contains( p.PersonAliasId.Value ) )
@@ -668,6 +698,86 @@ namespace Rock.StatementGenerator.Rest
         }
 
         /// <summary>
+        /// Render and return a giving statement for the specified person.
+        /// </summary>
+        /// <param name="personId">The person that made the contributions. That person's entire
+        /// giving group is included, which is typically the family.</param>
+        /// <param name="year">The contribution calendar year. ie 2019.  If not specified, the
+        /// current year is assumed.</param>
+        /// <param name="templateDefinedValueId">The defined value ID that represents the statement
+        /// lava. This defined value should be a part of the Statement Generator Lava Template defined
+        /// type. If no ID is specified, then the default defined value for the Statement Generator Lava
+        /// Template defined type is assumed.</param>
+        /// <returns>The rendered giving statement</returns>
+        [System.Web.Http.Route( "api/GivingStatement/{personId}" )]
+        [HttpGet]
+        [Authenticate, Secured]
+        public HttpResponseMessage RenderGivingStatement( int personId, [FromUri] int? year = null, [FromUri] int? templateDefinedValueId = null )
+        {
+            // Assume the current year if no year is specified
+            var currentYear = RockDateTime.Now.Year;
+            year = year ?? currentYear;
+            var isCurrentYear = year == currentYear;
+            var startDate = new DateTime( year.Value, 1, 1 );
+            var endDate = isCurrentYear ? RockDateTime.Now : new DateTime( year.Value + 1, 1, 1 );
+
+            // Load the statement lava defined type
+            var definedTypeCache = DefinedTypeCache.Get( SystemGuid.DefinedType.STATEMENT_GENERATOR_LAVA_TEMPLATE );
+            if ( definedTypeCache == null )
+            {
+                throw new Exception( "The defined type 'Statement Generator Lava Template' could not be found." );
+            }
+
+            // Get the specified defined value or the default if none is specified
+            var templateValues = definedTypeCache.DefinedValues;
+            var templateValue = templateDefinedValueId.HasValue ?
+                templateValues.FirstOrDefault( dv => dv.Id == templateDefinedValueId.Value ) :
+                templateValues.OrderBy( dv => dv.Order ).FirstOrDefault();
+
+            if ( templateValue == null )
+            {
+                throw new Exception( string.Format(
+                    "The defined value '{0}' within 'Statement Generator Lava Template' could not be found.",
+                    templateDefinedValueId.HasValue ?
+                        templateDefinedValueId.Value.ToString() :
+                        "default" ) );
+            }
+
+            // Declare the necessary services
+            var rockContext = new RockContext();
+            var personService = new PersonService( rockContext );
+
+            // Get the family ID
+            var person = personService.Get( personId );
+            if ( person == null )
+            {
+                throw new Exception( string.Format( "The person with ID {0} could not be found", personId ) );
+            }
+            if ( !person.PrimaryFamilyId.HasValue )
+            {
+                throw new Exception( string.Format( "The person with ID {0} does not have a primary family ID", personId ) );
+            }
+
+            // Build the options for the generator
+            var options = new StatementGeneratorOptions
+            {
+                EndDate = endDate,
+                LayoutDefinedValueGuid = templateValue.Guid,
+                StartDate = startDate,
+                ExcludeOptedOutIndividuals = false
+            };
+
+            // Get the generator result
+            var result = GetStatementGeneratorRecipientResult( person.PrimaryFamilyId.Value, options );
+
+            // Render the statement as HTML and send back to the user
+            var response = new HttpResponseMessage();
+            response.Content = new StringContent( result.Html );
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue( "text/html" );
+            return response;
+        }
+
+        /// <summary>
         /// Gets the financial pledge query.
         /// </summary>
         /// <param name="options">The options.</param>
@@ -682,7 +792,7 @@ namespace Rock.StatementGenerator.Rest
             // only include pledges that started *before* the enddate of the statement ( we don't want pledges that start AFTER the statement end date )
             if ( options.EndDate.HasValue )
             {
-                pledgeQry = pledgeQry.Where( p => p.StartDate <= options.EndDate.Value );
+                pledgeQry = pledgeQry.Where( p => p.StartDate < options.EndDate.Value );
             }
 
             // also only include pledges that ended *after* the statement start date ( we don't want pledges that ended BEFORE the statement start date )
@@ -725,13 +835,13 @@ namespace Rock.StatementGenerator.Rest
                     {
                         if ( !options.IncludeBusinesses )
                         {
-                            int recordTypeValueIdPerson = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
+                            int recordTypeValueIdPerson = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
                             pledgeQry = pledgeQry.Where( a => a.PersonAlias.Person.RecordTypeValueId == recordTypeValueIdPerson );
                         }
 
                         if ( options.ExcludeInActiveIndividuals )
                         {
-                            int recordStatusValueIdActive = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_ACTIVE.AsGuid() ).Id;
+                            int recordStatusValueIdActive = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_ACTIVE.AsGuid() ).Id;
                             pledgeQry = pledgeQry.Where( a => a.PersonAlias.Person.RecordStatusValueId == recordStatusValueIdActive );
                         }
 
@@ -765,7 +875,7 @@ namespace Rock.StatementGenerator.Rest
             }
 
             // default to Contributions if nothing specified
-            var transactionTypeContribution = Rock.Web.Cache.DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.TRANSACTION_TYPE_CONTRIBUTION.AsGuid() );
+            var transactionTypeContribution = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.TRANSACTION_TYPE_CONTRIBUTION.AsGuid() );
             if ( options.TransactionTypeIds == null || !options.TransactionTypeIds.Any() )
             {
                 options.TransactionTypeIds = new List<int>();
@@ -820,13 +930,13 @@ namespace Rock.StatementGenerator.Rest
                     {
                         if ( !options.IncludeBusinesses )
                         {
-                            int recordTypeValueIdPerson = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
+                            int recordTypeValueIdPerson = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_TYPE_PERSON.AsGuid() ).Id;
                             financialTransactionQry = financialTransactionQry.Where( a => a.AuthorizedPersonAlias.Person.RecordTypeValueId == recordTypeValueIdPerson );
                         }
 
                         if ( options.ExcludeInActiveIndividuals )
                         {
-                            int recordStatusValueIdActive = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_ACTIVE.AsGuid() ).Id;
+                            int recordStatusValueIdActive = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_RECORD_STATUS_ACTIVE.AsGuid() ).Id;
                             financialTransactionQry = financialTransactionQry.Where( a => a.AuthorizedPersonAlias.Person.RecordStatusValueId == recordStatusValueIdActive );
                         }
                     }

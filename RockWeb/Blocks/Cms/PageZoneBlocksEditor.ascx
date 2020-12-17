@@ -11,6 +11,8 @@
                     <asp:Literal ID="lZoneTitle" runat="server" /></h1>
                 </div>
 
+                <Rock:HighlightLabel ID="hlInvalidZoneWarning" runat="server" LabelType="Danger" CssClass="margin-l-md" Text="Invalid Zone" ToolTip="This zone is no longer part of the zones for this layout." Visible="false" />
+
                 <div class="pull-right">
                     <div class="input-group input-group-sm">
                         <Rock:RockDropDownList ID="ddlZones" runat="server" Label="" AutoPostBack="true" OnSelectedIndexChanged="ddlZones_SelectedIndexChanged" />
@@ -59,7 +61,7 @@
 
                 <div class="actions ">
                     <div class="pull-right">
-                        <asp:LinkButton ID="btnAddBlock" runat="server" ToolTip="Add Block" Text="<i class='fa fa-plus-circle'></i>" CssClass="btn btn-default btn-sm" OnClick="btnAddBlock_Click" />
+                        <asp:LinkButton ID="btnAddBlock" runat="server" Text="<i class='fa fa-plus-circle'></i> Add Block to Zone" CssClass="btn btn-default btn-sm" OnClick="btnAddBlock_Click" />
                     </div>
 
                 </div>
@@ -67,7 +69,8 @@
 
             <%--  This will hold blocks that need to be added to the page so that Custom Admin actions will work --%>
             <%-- Display -9999 offscreen. This will hopefully hide everything except for any modals that get shown with the Custom Action --%>
-            <asp:Panel ID="pnlBlocksHolder" runat="server" Style="position: absolute; left: -9999px">
+            <asp:Panel ID="pnlBlocksHolderDiv" runat="server" Style="position: absolute; left: -9999px">
+                <Rock:DynamicPlaceholder ID="phBlockHolder" runat="server" />
             </asp:Panel>
 
         </asp:Panel>
@@ -84,7 +87,7 @@
 
         <Rock:ModalDialog ID="mdAddBlock" runat="server" ValidationGroup="vgAddBlock" OnSaveClick="mdAddBlock_SaveClick" Title="Add Block">
             <Content>
-                <asp:ValidationSummary ID="vsAddBlock" runat="server" ValidationGroup="vgAddBlock" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                <asp:ValidationSummary ID="vsAddBlock" runat="server" ValidationGroup="vgAddBlock" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
                 <Rock:RockTextBox ID="tbNewBlockName" runat="server" Label="Name" Required="true" ValidationGroup="vgAddBlock" />
                 
                 <div class="row">

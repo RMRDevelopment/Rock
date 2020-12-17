@@ -18,19 +18,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using DotLiquid;
-using Rock.Data;
-using Rock.Model;
-using CSScriptLibrary;
 using System.Text.RegularExpressions;
-using Microsoft.CSharp;
+
+using CSScriptLibrary;
+
+using DotLiquid;
 
 namespace Rock.Lava.Blocks
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <seealso cref="DotLiquid.Block" />
     public class Execute : RockLavaBlockBase
@@ -93,7 +90,7 @@ namespace Rock.Lava.Blocks
                 return;
             }
 
-            string userScript = @"return ""Watson, can you hear me?"";"; // inital script here was just for testing
+            string userScript = @"return ""Watson, can you hear me?"";"; // initial script here was just for testing
 
             using ( TextWriter temp = new StringWriter() )
             {
@@ -103,10 +100,11 @@ namespace Rock.Lava.Blocks
 
                 if ( _runtimeType == RuntimeType.SCRIPT )
                 {
-                    // add default convience import
+                    // add default convenience import
                     _imports.Insert( 0, "Rock.Data" );
                     _imports.Insert( 0, "Rock.Model" );
                     _imports.Insert( 0, "Rock" );
+                    _imports.Insert( 0, "System" );
 
                     // treat this as a script
                     string imports = string.Empty;
@@ -142,11 +140,7 @@ namespace Rock.Lava.Blocks
                 else
                 {
                     // treat this like a class
-
-                    // remove any reference to 'using System;' as this will cause an issue
-                    var cleanScript = Regex.Replace( userScript, @"\s*using\s*System;", "" );
-
-                    dynamic csScript = CSScript.Evaluator.LoadCode<ILavaScript>( cleanScript );
+                    dynamic csScript = CSScript.Evaluator.LoadCode<ILavaScript>( userScript );
                     string scriptResult = csScript.Execute();
                     result.Write( scriptResult );
                 }
@@ -170,12 +164,11 @@ namespace Rock.Lava.Blocks
         /// </summary>
         /// <param name="markup">The markup.</param>
         /// <returns></returns>
-        /// <exception cref="System.Exception">No parameters were found in your command. The syntax for a parameter is parmName:'' (note that you must use single quotes).</exception>
         private Dictionary<string, string> ParseMarkup( string markup )
         {
             var parms = new Dictionary<string, string>();
 
-            var markupItems = Regex.Matches( markup, "(.*?:'[^']+')" )
+            var markupItems = Regex.Matches( markup, @"(\S*?:'[^']+')" )
                 .Cast<Match>()
                 .Select( m => m.Value )
                 .ToList();

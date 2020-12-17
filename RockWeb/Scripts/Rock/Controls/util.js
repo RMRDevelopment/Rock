@@ -24,14 +24,23 @@
           // note: this uses javascript's parseFloat which will convert the the numeric portion value to a float as long as it starts with a numeric value
             getValueAsPixels: function (a)
             {
-              var floatValue = parseFloat(a)
+              var floatValue = parseFloat(a);
               if (floatValue) {
-                return floatValue + 'px'
+                return floatValue + 'px';
               }
               else {
                 return '';
               }
-            }
+            },
+            getScrollbarWidth: function () {
+                // thx d.walsh
+                var scrollDiv = document.createElement('div');
+                scrollDiv.className = 'modal-scrollbar-measure';
+                document.body.appendChild(scrollDiv);
+                var scrollbarWidth = scrollDiv.offsetWidth - scrollDiv.clientWidth;
+                document.body.removeChild(scrollDiv);
+                return scrollbarWidth;
+            } // Static
         };
 
         return exports;

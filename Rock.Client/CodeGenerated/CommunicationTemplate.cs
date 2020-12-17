@@ -44,7 +44,7 @@ namespace Rock.Client
         public string CCEmails { get; set; }
 
         /// <summary />
-        public bool CssInliningEnabled { get; set; }
+        public bool CssInliningEnabled { get; set; } = true;
 
         /// <summary />
         public string Description { get; set; }
@@ -65,16 +65,21 @@ namespace Rock.Client
         public int? ImageFileId { get; set; }
 
         /// <summary />
-        public bool IsActive { get; set; }
+        public bool IsActive { get; set; } = true;
 
         /// <summary />
         public bool IsSystem { get; set; }
 
         /// <summary />
-        public string LavaFieldsJson { get; set; }
+        public string LavaFieldsJson { get; set; } = @"{}";
 
         /// <summary />
         public int? LogoBinaryFileId { get; set; }
+
+        /// <summary />
+        // Made Obsolete in Rock "1.7"
+        [Obsolete( "MediumDataJson is no longer used.", true )]
+        public string MediumDataJson { get; set; }
 
         /// <summary />
         public string Message { get; set; }
@@ -91,7 +96,19 @@ namespace Rock.Client
         public string Name { get; set; }
 
         /// <summary />
+        public string PushData { get; set; }
+
+        /// <summary />
+        public int? PushImageBinaryFileId { get; set; }
+
+        /// <summary />
         public string PushMessage { get; set; }
+
+        /// <summary />
+        public int /* PushOpenAction*/? PushOpenAction { get; set; }
+
+        /// <summary />
+        public string PushOpenMessage { get; set; }
 
         /// <summary />
         public string PushSound { get; set; }
@@ -165,7 +182,11 @@ namespace Rock.Client
             this.MessageMetaData = source.MessageMetaData;
             this.ModifiedAuditValuesAlreadyUpdated = source.ModifiedAuditValuesAlreadyUpdated;
             this.Name = source.Name;
+            this.PushData = source.PushData;
+            this.PushImageBinaryFileId = source.PushImageBinaryFileId;
             this.PushMessage = source.PushMessage;
+            this.PushOpenAction = source.PushOpenAction;
+            this.PushOpenMessage = source.PushOpenMessage;
             this.PushSound = source.PushSound;
             this.PushTitle = source.PushTitle;
             this.ReplyToEmail = source.ReplyToEmail;

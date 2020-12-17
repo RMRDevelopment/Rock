@@ -18,9 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
-using System.Linq;
 
-using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
@@ -60,7 +58,7 @@ namespace Rock.Workflow.Action
 
             var workflow = action.Activity.Workflow;
 
-            var activityType = WorkflowActivityTypeCache.Read( guid );
+            var activityType = WorkflowActivityTypeCache.Get( guid );
             if ( activityType == null )
             {
                 action.AddLogEntry( "Invalid Activity Property", true );

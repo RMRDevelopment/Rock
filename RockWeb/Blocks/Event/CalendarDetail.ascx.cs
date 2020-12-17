@@ -89,6 +89,7 @@ namespace RockWeb.Blocks.Event
             gEventAttributes.EmptyDataText = Server.HtmlEncode( None.Text );
             gEventAttributes.GridRebind += gEventAttributes_GridRebind;
             gEventAttributes.GridReorder += gEventAttributes_GridReorder;
+            gEventAttributes.RowDataBound += gEventAttributes_RowDataBound;
 
             gContentChannels.DataKeyNames = new string[] { "Guid" };
             gContentChannels.Actions.ShowAdd = UserCanAdministrate;
@@ -97,10 +98,18 @@ namespace RockWeb.Blocks.Event
             gContentChannels.GridRebind += gContentChannels_GridRebind;
 
             btnDelete.Attributes["onclick"] = string.Format( "javascript: return Rock.dialogs.confirmDelete(event, '{0}', 'This will also delete all the calendar items! Are you sure you wish to continue with the delete?');", EventCalendar.FriendlyTypeName );
-            btnSecurity.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.EventCalendar ) ).Id;
+            btnSecurity.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.EventCalendar ) ).Id;
 
             this.BlockUpdated += Block_BlockUpdated;
             this.AddConfigurationUpdateTrigger( upEventCalendar );
+
+            // Setup for being able to copy text to clipboard
+            RockPage.AddScriptLink( this.Page, "~/Scripts/clipboard.js/clipboard.min.js" );
+            string script = string.Format( @"
+    new ClipboardJS('#{0}');
+    $('#{0}').tooltip();
+", btnCopyToClipboard.ClientID );
+            ScriptManager.RegisterStartupScript( btnCopyToClipboard, btnCopyToClipboard.GetType(), "share-copy", script, true );
         }
 
         /// <summary>
@@ -113,7 +122,15 @@ namespace RockWeb.Blocks.Event
 
             if ( !Page.IsPostBack )
             {
-                ShowDetail( PageParameter( "EventCalendarId" ).AsInteger() );
+                var calendarEventId = PageParameter( "EventCalendarId" ).AsInteger();
+
+                // Set URL in feed button
+                var globalAttributes = GlobalAttributesCache.Get();
+                btnCopyToClipboard.Attributes["data-clipboard-text"] = string.Format( "{0}GetEventCalendarFeed.ashx?CalendarId={1}", globalAttributes.GetValue( "PublicApplicationRoot" ), calendarEventId );
+                btnCopyToClipboard.Disabled = false;
+
+
+                ShowDetail( calendarEventId );
             }
             else
             {
@@ -410,7 +427,7 @@ namespace RockWeb.Blocks.Event
         protected void lbCalendarsDetail_Click( object sender, EventArgs e )
         {
             var qryParams = new Dictionary<string, string>();
-            var pageCache = PageCache.Read( RockPage.PageId );
+            var pageCache = PageCache.Get( RockPage.PageId );
             if ( pageCache != null && pageCache.ParentPage != null )
             {
                 NavigateToPage( pageCache.ParentPage.Guid, qryParams );
@@ -478,32 +495,47 @@ namespace RockWeb.Blocks.Event
         }
 
         /// <summary>
+        /// Handles the RowDataBound event of the gEventAttributes control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="GridViewRowEventArgs"/> instance containing the event data.</param>
+        protected void gEventAttributes_RowDataBound( object sender, GridViewRowEventArgs e )
+        {
+            if ( e.Row.RowType != DataControlRowType.DataRow )
+            {
+                return;
+            }
+
+            var attribute = e.Row.DataItem as Attribute;
+            if ( attribute == null )
+            {
+                return;
+            }
+
+            bool isEditAuthorized = attribute.IsAuthorized( Authorization.EDIT, CurrentPerson );
+            ( ( LinkButton ) e.Row.Cells.OfType<DataControlFieldCell>().First( a => a.ContainingField is EditField ).Controls[0] ).Enabled = isEditAuthorized;
+            ( ( LinkButton ) e.Row.Cells.OfType<DataControlFieldCell>().First( a => a.ContainingField is DeleteField ).Controls[0] ).Enabled = isEditAuthorized;
+
+            string fieldTypeName = FieldTypeCache.GetName( attribute.FieldTypeId );
+            ( ( Literal ) e.Row.FindControl( "lFieldType" ) ).Text = fieldTypeName;
+        }
+
+        /// <summary>
         /// Handles the SaveClick event of the dlgAttribute control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void dlgEventAttribute_SaveClick( object sender, EventArgs e )
         {
-            Rock.Model.Attribute attribute = new Rock.Model.Attribute();
-            edtEventAttributes.GetAttributeProperties( attribute );
+#pragma warning disable 0618 // Type or member is obsolete
+            var attribute = SaveChangesToStateCollection( edtEventAttributes, EventAttributesState );
+#pragma warning restore 0618 // Type or member is obsolete
 
             // Controls will show warnings
             if ( !attribute.IsValid )
             {
                 return;
             }
-
-            if ( EventAttributesState.Any( a => a.Guid.Equals( attribute.Guid ) ) )
-            {
-                attribute.Order = EventAttributesState.Where( a => a.Guid.Equals( attribute.Guid ) ).FirstOrDefault().Order;
-                EventAttributesState.RemoveEntity( attribute.Guid );
-            }
-            else
-            {
-                attribute.Order = EventAttributesState.Any() ? EventAttributesState.Max( a => a.Order ) + 1 : 0;
-            }
-
-            EventAttributesState.Add( attribute );
 
             ReOrderEventAttributes( EventAttributesState );
 
@@ -802,7 +834,7 @@ namespace RockWeb.Blocks.Event
         {
             var attributeService = new AttributeService( rockContext );
             EventAttributesState = attributeService
-                .GetByEntityTypeId( new EventCalendarItem().TypeId ).AsQueryable()
+                .GetByEntityTypeId( new EventCalendarItem().TypeId, true ).AsQueryable()
                 .Where( a =>
                     a.EntityTypeQualifierColumn.Equals( "EventCalendarId", StringComparison.OrdinalIgnoreCase ) &&
                     a.EntityTypeQualifierValue.Equals( eventCalendar.Id.ToString() ) )
@@ -868,17 +900,6 @@ namespace RockWeb.Blocks.Event
             gEventAttributes.DataSource = EventAttributesState
                 .OrderBy( a => a.Order )
                 .ThenBy( a => a.Name )
-                .Select( a => new
-                {
-                    a.Id,
-                    a.Guid,
-                    a.Name,
-                    a.Description,
-                    FieldType = FieldTypeCache.GetName( a.FieldTypeId ),
-                    a.IsRequired,
-                    a.IsGridColumn,
-                    a.AllowSearch
-                } )
                 .ToList();
             gEventAttributes.DataBind();
         }
@@ -893,7 +914,7 @@ namespace RockWeb.Blocks.Event
             if ( attributeGuid.Equals( Guid.Empty ) )
             {
                 attribute = new Attribute();
-                attribute.FieldTypeId = FieldTypeCache.Read( Rock.SystemGuid.FieldType.TEXT ).Id;
+                attribute.FieldTypeId = FieldTypeCache.Get( Rock.SystemGuid.FieldType.TEXT ).Id;
             }
             else
             {
@@ -919,7 +940,7 @@ namespace RockWeb.Blocks.Event
         {
             // Get the existing attributes for this entity type and qualifier value
             var attributeService = new AttributeService( rockContext );
-            var existingAttributes = attributeService.Get( entityTypeId, qualifierColumn, qualifierValue );
+            var existingAttributes = attributeService.GetByEntityTypeQualifier( entityTypeId, qualifierColumn, qualifierValue, true );
 
             // Delete any of those attributes that were removed in the UI
             var selectedAttributeGuids = attributes.Select( a => a.Guid );
@@ -927,7 +948,6 @@ namespace RockWeb.Blocks.Event
             {
                 attributeService.Delete( attr );
                 rockContext.SaveChanges();
-                AttributeCache.Flush( attr.Id );
             }
 
             // Update the Attributes that were assigned in the UI
@@ -935,8 +955,6 @@ namespace RockWeb.Blocks.Event
             {
                 Helper.SaveAttributeEdits( attribute, entityTypeId, qualifierColumn, qualifierValue, rockContext );
             }
-
-            AttributeCache.FlushEntityAttributes();
         }
 
         #endregion
@@ -963,5 +981,48 @@ namespace RockWeb.Blocks.Event
 
         #endregion
 
+        #region Obsolete Code
+
+        /// <summary>
+        /// Add or update the saved state of an Attribute using values from the AttributeEditor.
+        /// Non-editable system properties of the existing Attribute state are preserved.
+        /// </summary>
+        /// <param name="editor">The AttributeEditor that holds the updated Attribute values.</param>
+        /// <param name="attributeStateCollection">The stored state collection.</param>
+        [RockObsolete( "1.11" )]
+        [Obsolete( "This method is required for backward-compatibility - new blocks should use the AttributeEditor.SaveChangesToStateCollection() extension method instead." )]
+        private Rock.Model.Attribute SaveChangesToStateCollection( AttributeEditor editor, List<Rock.Model.Attribute> attributeStateCollection )
+        {
+            // Load the editor values into a new Attribute instance.
+            Rock.Model.Attribute attribute = new Rock.Model.Attribute();
+
+            editor.GetAttributeProperties( attribute );
+
+            // Get the stored state of the Attribute, and copy the values of the non-editable properties.
+            var attributeState = attributeStateCollection.Where( a => a.Guid.Equals( attribute.Guid ) ).FirstOrDefault();
+
+            if ( attributeState != null )
+            {
+                attribute.Order = attributeState.Order;
+                attribute.CreatedDateTime = attributeState.CreatedDateTime;
+                attribute.CreatedByPersonAliasId = attributeState.CreatedByPersonAliasId;
+                attribute.ForeignGuid = attributeState.ForeignGuid;
+                attribute.ForeignId = attributeState.ForeignId;
+                attribute.ForeignKey = attributeState.ForeignKey;
+
+                attributeStateCollection.RemoveEntity( attribute.Guid );
+            }
+            else
+            {
+                // Set the Order of the new entry as the last item in the collection.
+                attribute.Order = attributeStateCollection.Any() ? attributeStateCollection.Max( a => a.Order ) + 1 : 0;
+            }
+
+            attributeStateCollection.Add( attribute );
+
+            return attribute;
+        }
+
+        #endregion
     }
 }

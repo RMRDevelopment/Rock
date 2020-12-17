@@ -18,13 +18,15 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity.Spatial;
+using System.Data.SqlTypes;
 using System.Drawing;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
+using Microsoft.SqlServer.Types;
+
 using Rock.Web.Cache;
 
 namespace Rock.Web.UI.Controls
@@ -366,7 +368,13 @@ namespace Rock.Web.UI.Controls
                     // Now we split the lat1,long1|lat2,long2|... stored in the hidden
                     // into something that's usable by DbGeography's PolygonFromText
                     // Well Known Text (http://en.wikipedia.org/wiki/Well-known_text) representation.
-                    return DbGeography.PolygonFromText( ConvertPolyToWellKnownText( _hfGeoPath.Value ), 4326 );
+
+                    /* 8/7/2020 - NA
+                     *  I tried using this DbSpatialServices.Default.GeographyFromProviderValue( sqlGeography );
+                     *  but it will use the MULTIPOLYGON format which is not compatible with our single
+                     *  POLYGON implementation.
+                     */
+                    return DbGeography.PolygonFromText( ConvertPolyToWellKnownText( _hfGeoPath.Value ), DbGeography.DefaultCoordinateSystemId );
                 }
             }
 
@@ -397,7 +405,7 @@ namespace Rock.Web.UI.Controls
                     // Now split the lat1,long1 stored in the hidden into something
                     // that's usable by DbGeography's PolygonFromText Well Known Text (WKT)
                     // (http://en.wikipedia.org/wiki/Well-known_text) representation.
-                    return DbGeography.FromText( ConvertPointToWellKnownText( _hfGeoPath.Value ), 4326 );
+                    return DbGeography.FromText( ConvertPointToWellKnownText( _hfGeoPath.Value ), DbGeography.DefaultCoordinateSystemId );
                 }
             }
 
@@ -626,7 +634,7 @@ namespace Rock.Web.UI.Controls
                     <h4>Geography Picker <a class='pull-right btn btn-link btn-minimal' title='Toggle Fullscreen' id='btnExpandToggle_{0}'><i class='fa fa-expand'></i></a></h4>
                     <!-- Our custom delete button that we add to the map for deleting polygons. -->
                     <div style='display:none; z-index: 10; position: absolute; left: 200px; margin-top: 5px; line-height:0;' id='gmnoprint-delete-button_{0}'>
-                        <div onmouseover=""this.style.background='WhiteSmoke';"" onmouseout=""this.style.background='white';""style='direction: ltr; overflow: hidden; text-align: left; position: relative; color: rgb(140, 75, 75); font-family: Arial, sans-serif; font-size: 13px; background-color: rgb(255, 255, 255); padding: 4px; border-radius: 2px; -webkit-background-clip: padding-box; background-clip: padding-box; -webkit-box-shadow: rgba(0, 0, 0, 0.3) 0px 1px 4px -1px; box-shadow: rgba(0, 0, 0, 0.3) 0px 1px 4px -1px; font-weight: 500; background-position: initial initial; background-repeat: initial initial;' title='Delete selected shape'>
+                        <div onmouseover=""this.style.background='WhiteSmoke';"" onmouseout=""this.style.background='white';"" style='direction: ltr; overflow: hidden; text-align: left; position: relative; color: rgb(140, 75, 75); font-family: Arial, sans-serif; font-size: 13px; background-color: rgb(255, 255, 255); padding: 4px; border-radius: 2px; -webkit-background-clip: padding-box; background-clip: padding-box; -webkit-box-shadow: rgba(0, 0, 0, 0.3) 0px 1px 4px -1px; box-shadow: rgba(0, 0, 0, 0.3) 0px 1px 4px -1px; font-weight: 500; background-position: initial initial; background-repeat: initial initial;' title='Delete selected shape'>
                             <span style='display: inline-block;'><div style='width: 16px; height: 16px; overflow: hidden; position: relative;'><i class='fa fa-times' style='font-size: 16px; padding-left: 2px; color: #aaa;'></i></div></span>
                         </div>
                     </div>
@@ -693,7 +701,7 @@ namespace Rock.Web.UI.Controls
 
             try
             {
-                DefinedValueCache dvcMapStyle = DefinedValueCache.Read( this.MapStyleValueGuid );
+                DefinedValueCache dvcMapStyle = DefinedValueCache.Get( this.MapStyleValueGuid );
                 if ( dvcMapStyle != null )
                 {
                     mapStyle = dvcMapStyle.GetAttributeValue( "DynamicMapStyle" );
@@ -716,12 +724,12 @@ namespace Rock.Web.UI.Controls
             else
             {
                 // If no centerpoint was defined, try to get it from organization address
-                var globalAttributes = Rock.Web.Cache.GlobalAttributesCache.Read();
+                var globalAttributes = GlobalAttributesCache.Get();
                 Guid guid = globalAttributes.GetValue( "OrganizationAddress" ).AsGuid();
                 if ( !guid.Equals( Guid.Empty ) )
                 {
                     var location = new Rock.Model.LocationService( new Rock.Data.RockContext() ).Get( guid );
-                    if (location != null && location.GeoPoint != null && location.GeoPoint.Latitude != null && location.GeoPoint.Latitude != null )
+                    if (location != null && location.GeoPoint != null && location.GeoPoint.Latitude != null && location.GeoPoint.Longitude != null )
                     {
                         CenterPoint = location.GeoPoint;
                         options += string.Format( ", centerLatitude: '{0}', centerLongitude: '{1}'", location.GeoPoint.Latitude, location.GeoPoint.Longitude );
@@ -859,6 +867,65 @@ if ($('#{1}').length > 0)
             }
             isClockwise = ( sum > 0 ) ? true : false;
             return isClockwise;
+        }
+
+        /// <summary>
+        /// Determines whether [is geo fence valid] [the specified error message].
+        /// </summary>
+        /// <param name="errorMessage">The error message.</param>
+        /// <returns>
+        ///   <c>true</c> if [is geo fence valid] [the specified error message]; otherwise, <c>false</c>.
+        /// </returns>
+        public bool IsGeoFenceValid( out string errorMessage )
+        {
+            EnsureChildControls();
+            if ( string.IsNullOrWhiteSpace( _hfGeoPath.Value ) )
+            {
+                errorMessage = string.Empty;
+                return true;
+            }
+
+            try
+            {
+                /*
+                 * 8/7/2020 - NA
+                 * We use the SqlGeography as an intermediate conversion because it has
+                 * methods to determine if the fence is a single polygon (has 1 geometry).
+                 * If that passes, then we can consider the geo-fence valid.
+                 *
+                 * Reason: Some administrators were creating incompatible shapes using the
+                 * GeoPicker that will otherwise break the check-in geo-location kiosk matching.
+                 */
+                var polygonText = ConvertPolyToWellKnownText( _hfGeoPath.Value );
+                var sqlGeography = SqlGeography.STGeomFromText( new SqlChars( polygonText ), DbGeography.DefaultCoordinateSystemId ).MakeValid();
+
+                if ( sqlGeography == null || ! sqlGeography.STIsValid() )
+                {
+                    errorMessage = "The selected geo-fence path is invalid.";
+                    return false;
+                }
+                
+                if ( sqlGeography.STNumGeometries() > 1 )
+                {
+                    errorMessage=  "The geo-fence has overlapping lines or is made up of multiple polygons. Only one polygon is allowed.";
+                    return false;
+                }
+
+                var dbGeography = DbGeography.PolygonFromText( polygonText, DbGeography.DefaultCoordinateSystemId );
+                if ( dbGeography == null )
+                {
+                    errorMessage = "Unable to convert the given geo-fence path to a compatible format.";
+                    return false;
+                }
+            }
+            catch
+            {
+                errorMessage = "Unable to convert the given geo-fence path to a compatible format.";
+                return false;
+            }
+
+            errorMessage = string.Empty;
+            return true;
         }
 
         #endregion

@@ -17,34 +17,65 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data.Entity;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
+using System.Web;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 
 using Rock;
 using Rock.Attribute;
 using Rock.CheckIn;
+using Rock.Data;
+using Rock.Model;
+using Rock.Utility;
 using Rock.Web.UI;
 
 namespace RockWeb.Blocks.CheckIn
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     [DisplayName( "Success" )]
     [Category( "Check-in" )]
     [Description( "Displays the details of a successful checkin." )]
 
-    [LinkedPage( "Person Select Page", "", false, "", "", 5 )]
-    [TextField( "Title", "", false, "Checked-in", "Text", 6 )]
-    [TextField( "Detail Message", "The message to display indicating person has been checked in. Use {0} for person, {1} for group, {2} for schedule, and {3} for the security code", false,
-        "{0} was checked into {1} in {2} at {3}", "Text", 7 )]
+    #region Block Attributes
+
+    [LinkedPage( "Person Select Page",
+        Key = AttributeKey.PersonSelectPage,
+        IsRequired = false,
+        Order = 5 )]
+
+    [TextField( "Title",
+        Key = AttributeKey.Title,
+        IsRequired = false,
+        DefaultValue = "Checked-in",
+        Category = "Text",
+        Order = 6 )]
+
+    [TextField( "Detail Message",
+        Key = AttributeKey.DetailMessage,
+        Description = "The message to display indicating person has been checked in. Use {0} for person, {1} for group, {2} for schedule, and {3} for the security code",
+        IsRequired = false,
+        DefaultValue = "{0} was checked into {1} in {2} at {3}",
+        Category = "Text",
+        Order = 7 )]
+
+    #endregion Block Attributes
 
     public partial class Success : CheckInBlock
     {
+        private static class AttributeKey
+        {
+            public const string PersonSelectPage = "PersonSelectPage";
+            public const string Title = "Title";
+            public const string DetailMessage = "DetailMessage";
+        }
+
         /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Init" /> event.
         /// </summary>
@@ -53,7 +84,6 @@ namespace RockWeb.Blocks.CheckIn
         {
             base.OnInit( e );
 
-            RockPage.AddScriptLink( "~/Scripts/CheckinClient/cordova-2.4.0.js", false );
             RockPage.AddScriptLink( "~/Scripts/CheckinClient/ZebraPrint.js" );
             RockPage.AddScriptLink( "~/Scripts/CheckinClient/checkin-core.js" );
 
@@ -62,6 +92,53 @@ namespace RockWeb.Blocks.CheckIn
             {
                 bodyTag.AddCssClass( "checkin-success-bg" );
             }
+        }
+
+        /// <summary>
+        /// CheckinResult for rendering the Success Lava Template
+        /// </summary>
+        /// <seealso cref="DotLiquid.Drop" />
+        public class CheckinResult : DotLiquid.Drop
+        {
+            /// <summary>
+            /// Gets the person.
+            /// </summary>
+            /// <value>
+            /// The person.
+            /// </value>
+            public CheckInPerson Person { get; internal set; }
+
+            /// <summary>
+            /// Gets the group.
+            /// </summary>
+            /// <value>
+            /// The group.
+            /// </value>
+            public CheckInGroup Group { get; internal set; }
+
+            /// <summary>
+            /// Gets the location.
+            /// </summary>
+            /// <value>
+            /// The location.
+            /// </value>
+            public Location Location { get; internal set; }
+
+            /// <summary>
+            /// Gets the schedule.
+            /// </summary>
+            /// <value>
+            /// The schedule.
+            /// </value>
+            public CheckInSchedule Schedule { get; internal set; }
+
+            /// <summary>
+            /// Gets the detail message.
+            /// </summary>
+            /// <value>
+            /// The detail message.
+            /// </value>
+            public string DetailMessage { get; internal set; }
         }
 
         /// <summary>
@@ -82,11 +159,13 @@ namespace RockWeb.Blocks.CheckIn
                 {
                     try
                     {
-                        lTitle.Text = GetAttributeValue( "Title" );
-                        string detailMsg = GetAttributeValue( "DetailMessage" );
+                        lTitle.Text = GetAttributeValue( AttributeKey.Title );
+                        string detailMsg = GetAttributeValue( AttributeKey.DetailMessage );
 
                         var printFromClient = new List<CheckInLabel>();
                         var printFromServer = new List<CheckInLabel>();
+
+                        List<CheckinResult> checkinResultList = new List<CheckinResult>();
 
                         // Print the labels
                         foreach ( var family in CurrentCheckInState.CheckIn.Families.Where( f => f.Selected ) )
@@ -105,10 +184,14 @@ namespace RockWeb.Blocks.CheckIn
                                         {
                                             foreach ( var schedule in location.GetSchedules( true ) )
                                             {
-                                                var li = new HtmlGenericControl( "li" );
-                                                li.InnerText = string.Format( detailMsg, person.ToString(), group.ToString(), location.ToString(), schedule.ToString(), person.SecurityCode );
-
-                                                phResults.Controls.Add( li );
+                                                string detailMessage = string.Format( detailMsg, person.ToString(), group.ToString(), location.Location.Name, schedule.ToString(), person.SecurityCode );
+                                                CheckinResult checkinResult = new CheckinResult();
+                                                checkinResult.Person = person;
+                                                checkinResult.Group = group;
+                                                checkinResult.Location = location.Location;
+                                                checkinResult.Schedule = schedule;
+                                                checkinResult.DetailMessage = detailMessage;
+                                                checkinResultList.Add( checkinResult );
                                             }
                                         }
                                     }
@@ -122,94 +205,74 @@ namespace RockWeb.Blocks.CheckIn
                             }
                         }
 
+                        var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( this.RockPage, null, new Rock.Lava.CommonMergeFieldsOptions { GetLegacyGlobalMergeFields = false } );
+                        mergeFields.Add( "CheckinResultList", checkinResultList );
+                        mergeFields.Add( "Kiosk", CurrentCheckInState.Kiosk );
+                        mergeFields.Add( "RegistrationModeEnabled", CurrentCheckInState.Kiosk.RegistrationModeEnabled );
+                        mergeFields.Add( "Messages", CurrentCheckInState.Messages );
+                        if ( LocalDeviceConfig.CurrentGroupTypeIds != null )
+                        {
+                            var checkInAreas = LocalDeviceConfig.CurrentGroupTypeIds.Select( a => Rock.Web.Cache.GroupTypeCache.Get( a ) );
+                            mergeFields.Add( "CheckinAreas", checkInAreas );
+                        }
+
                         if ( printFromClient.Any() )
                         {
                             var urlRoot = string.Format( "{0}://{1}", Request.Url.Scheme, Request.Url.Authority );
+#if DEBUG
+                            // This is extremely useful when debugging with ngrok and an iPad on the local network.
+                            // X-Original-Host will contain the name of your ngrok hostname, therefore the labels will
+                            // get a LabelFile url that will actually work with that iPad.
+                            if ( Request.Headers["X-Forwarded-Proto"] != null && Request.Headers["X-Original-Host" ] != null )
+                            {
+                                urlRoot = string.Format( "{0}://{1}", Request.Headers.GetValues( "X-Forwarded-Proto" ).First(), Request.Headers.GetValues( "X-Original-Host" ).First() );
+                            }
+#endif
                             printFromClient
                                 .OrderBy( l => l.PersonId )
                                 .ThenBy( l => l.Order )
                                 .ToList()
                                 .ForEach( l => l.LabelFile = urlRoot + l.LabelFile );
+
                             AddLabelScript( printFromClient.ToJson() );
                         }
 
                         if ( printFromServer.Any() )
                         {
-                            Socket socket = null;
-                            string currentIp = string.Empty;
+                            var messages = ZebraPrint.PrintLabels( printFromServer );
+                            mergeFields.Add( "ZebraPrintMessageList", messages );
+                        }
 
-                            foreach ( var label in printFromServer
-                                .OrderBy( l => l.PersonId )
-                                .ThenBy( l => l.Order ) )
+                        var successLavaTemplate = CurrentCheckInState.CheckInType.SuccessLavaTemplate;
+                        lCheckinResultsHtml.Text = successLavaTemplate.ResolveMergeFields( mergeFields );
+
+                        if ( LocalDeviceConfig.GenerateQRCodeForAttendanceSessions )
+                        {
+                            HttpCookie attendanceSessionGuidsCookie = Request.Cookies[CheckInCookieKey.AttendanceSessionGuids];
+                            if ( attendanceSessionGuidsCookie == null )
                             {
-                                var labelCache = KioskLabel.Read( label.FileGuid );
-                                if ( labelCache != null )
-                                {
-                                    if ( !string.IsNullOrWhiteSpace( label.PrinterAddress ) )
-                                    {
-                                        if ( label.PrinterAddress != currentIp )
-                                        {
-                                            if ( socket != null && socket.Connected )
-                                            {
-                                                socket.Shutdown( SocketShutdown.Both );
-                                                socket.Close();
-                                            }
-
-                                            currentIp = label.PrinterAddress;
-                                            int printerPort = 9100;
-                                            var printerIp = currentIp;
-
-                                            // If the user specified in 0.0.0.0:1234 syntax then pull our the IP and port numbers.
-                                            if ( printerIp.Contains( ":" ) )
-                                            {
-                                                var segments = printerIp.Split( ':' );
-
-                                                printerIp = segments[0];
-                                                printerPort = segments[1].AsInteger();
-                                            }
-
-                                            var printerEndpoint = new IPEndPoint( IPAddress.Parse( currentIp ), printerPort );
-
-                                            socket = new Socket( AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp );
-                                            IAsyncResult result = socket.BeginConnect( printerEndpoint, null, null );
-                                            bool success = result.AsyncWaitHandle.WaitOne( 5000, true );
-                                        }
-
-                                        string printContent = labelCache.FileContent;
-                                        foreach ( var mergeField in label.MergeFields )
-                                        {
-                                            if ( !string.IsNullOrWhiteSpace( mergeField.Value ) )
-                                            {
-                                                printContent = Regex.Replace( printContent, string.Format( @"(?<=\^FD){0}(?=\^FS)", mergeField.Key ), ZebraFormatString( mergeField.Value ) );
-                                            }
-                                            else
-                                            {
-                                                // Remove the box preceding merge field
-                                                printContent = Regex.Replace( printContent, string.Format( @"\^FO.*\^FS\s*(?=\^FT.*\^FD{0}\^FS)", mergeField.Key ), string.Empty );
-                                                // Remove the merge field
-                                                printContent = Regex.Replace( printContent, string.Format( @"\^FD{0}\^FS", mergeField.Key ), "^FD^FS" );
-                                            }
-                                        }
-
-                                        if ( socket.Connected )
-                                        {
-                                            var ns = new NetworkStream( socket );
-                                            byte[] toSend = System.Text.Encoding.ASCII.GetBytes( printContent );
-                                            ns.Write( toSend, 0, toSend.Length );
-                                        }
-                                        else
-                                        {
-                                            phResults.Controls.Add( new LiteralControl( "<br/>NOTE: Could not connect to printer!" ) );
-                                        }
-                                    }
-                                }
+                                attendanceSessionGuidsCookie = new HttpCookie( CheckInCookieKey.AttendanceSessionGuids );
+                                attendanceSessionGuidsCookie.Value = string.Empty;
                             }
 
-                            if ( socket != null && socket.Connected )
+                            // set (or reset) the expiration to be 8 hours from the current time)
+                            attendanceSessionGuidsCookie.Expires = RockDateTime.Now.AddHours( 8 );
+
+                            var attendanceSessionGuids = attendanceSessionGuidsCookie.Value.Split( ',' ).AsGuidList();
+                            attendanceSessionGuids = ValidAttendanceSessionGuids( attendanceSessionGuids );
+
+                            // Add the guid to the list of checkin session cookie guids if it's not already there.
+                            if ( CurrentCheckInState.CheckIn.CurrentFamily.AttendanceCheckinSessionGuid.HasValue &&
+                                !attendanceSessionGuids.Contains( CurrentCheckInState.CheckIn.CurrentFamily.AttendanceCheckinSessionGuid.Value ) )
                             {
-                                socket.Shutdown( SocketShutdown.Both );
-                                socket.Close();
+                                attendanceSessionGuids.Add( CurrentCheckInState.CheckIn.CurrentFamily.AttendanceCheckinSessionGuid.Value );
                             }
+
+                            attendanceSessionGuidsCookie.Value = attendanceSessionGuids.AsDelimited( "," );
+
+                            Response.Cookies.Set( attendanceSessionGuidsCookie );
+
+                            lCheckinQRCodeHtml.Text = string.Format( "<div class='qr-code-container text-center'><img class='img-responsive qr-code' src='{0}' alt='Check-in QR Code' width='500' height='500'></div>", GetAttendanceSessionsQrCodeImageUrl( attendanceSessionGuidsCookie ) );
                         }
 
                     }
@@ -229,18 +292,6 @@ namespace RockWeb.Blocks.CheckIn
         protected void lbDone_Click( object sender, EventArgs e )
         {
             NavigateToHomePage();
-        }
-
-        private string ZebraFormatString( string input, bool isJson = false )
-        {
-            if ( isJson )
-            {
-                return input.Replace( "é", @"\\82" );  // fix acute e
-            }
-            else
-            {
-                return input.Replace( "é", @"\82" );  // fix acute e
-            }
         }
 
         /// <summary>
@@ -266,7 +317,7 @@ namespace RockWeb.Blocks.CheckIn
                 }
 
                 SaveState();
-                NavigateToLinkedPage( "PersonSelectPage" );
+                NavigateToLinkedPage( AttributeKey.PersonSelectPage );
 
             }
             else
@@ -274,6 +325,35 @@ namespace RockWeb.Blocks.CheckIn
                 NavigateToHomePage();
             }
         }
+
+
+        /// <summary>
+        /// Checks the given list of the attendance check-in session guids are still valid
+        /// and returns the valid ones back.
+        /// NOTE: Because someone could check-in a person multiple times, only the
+        /// latest attendance record will have the correct attendance check-in session guid.
+        /// That means attendance check-in session guids could be old/invalid, so
+        /// this method will filter out the old/ones so a QR code does not
+        /// become unnecessarily dense.
+        /// </summary>
+        /// <param name="sessionGuids">The attendance session guids.</param>
+        /// <returns></returns>
+        private List<Guid> ValidAttendanceSessionGuids( List<Guid> sessionGuids )
+        {
+            if ( sessionGuids == null )
+            {
+                return new List<Guid>();
+            }
+            if ( !sessionGuids.Any() )
+            {
+                return sessionGuids;
+            }
+
+            return new AttendanceService( new RockContext() ).Queryable().AsNoTracking()
+                .Where( a => sessionGuids.Contains( a.AttendanceCheckInSession.Guid ) )
+                .Select( a => a.AttendanceCheckInSession.Guid ).Distinct().ToList();
+        }
+
 
         /// <summary>
         /// Adds the label script.
@@ -284,7 +364,7 @@ namespace RockWeb.Blocks.CheckIn
             string script = string.Format( @"
 
         // setup deviceready event to wait for cordova
-	    if (navigator.userAgent.match(/(iPhone|iPod|iPad)/)) {{
+	    if (navigator.userAgent.match(/(iPhone|iPod|iPad)/) && typeof window.RockCheckinNative === 'undefined') {{
             document.addEventListener('deviceready', onDeviceReady, false);
         }} else {{
             $( document ).ready(function() {{
@@ -296,39 +376,30 @@ namespace RockWeb.Blocks.CheckIn
         var labelData = {0};
 
 		function onDeviceReady() {{
-            try {{			
+            try {{
                 printLabels();
-            }} 
+            }}
             catch (err) {{
                 console.log('An error occurred printing labels: ' + err);
             }}
 		}}
-		
-		function alertDismissed() {{
-		    // do something
-		}}
-		
+
 		function printLabels() {{
 		    ZebraPrintPlugin.printTags(
-            	JSON.stringify(labelData), 
-            	function(result) {{ 
+            	JSON.stringify(labelData),
+            	function(result) {{
 			        console.log('Tag printed');
 			    }},
-			    function(error) {{   
+			    function(error) {{
 				    // error is an array where:
 				    // error[0] is the error message
 				    // error[1] determines if a re-print is possible (in the case where the JSON is good, but the printer was not connected)
 			        console.log('An error occurred: ' + error[0]);
-                    navigator.notification.alert(
-                        'An error occurred while printing the labels.' + error[0],  // message
-                        alertDismissed,         // callback
-                        'Error',            // title
-                        'Ok'                  // buttonName
-                    );
+                    alert('An error occurred while printing the labels. ' + error[0]);
 			    }}
             );
 	    }}
-", ZebraFormatString( jsonObject, true ) );
+", jsonObject );
             ScriptManager.RegisterStartupScript( this, this.GetType(), "addLabelScript", script, true );
         }
 

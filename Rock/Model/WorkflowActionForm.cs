@@ -19,13 +19,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
 
 using Rock.Data;
 using Rock.Web.Cache;
-using Rock.Workflow;
 
 namespace Rock.Model
 {
@@ -35,10 +34,19 @@ namespace Rock.Model
     [RockDomain( "Workflow" )]
     [Table( "WorkflowActionForm" )]
     [DataContract]
-    public partial class WorkflowActionForm : Model<WorkflowActionForm>
+    public partial class WorkflowActionForm : Model<WorkflowActionForm>, ICacheable
     {
 
         #region Entity Properties
+
+        /// <summary>
+        /// Gets or sets the notification system communication identifier.
+        /// </summary>
+        /// <value>
+        /// The notification system communication identifier.
+        /// </value>
+        [DataMember]
+        public int? NotificationSystemCommunicationId { get; set; }
 
         /// <summary>
         /// Gets or sets the notification system email identifier.
@@ -47,6 +55,8 @@ namespace Rock.Model
         /// The notification system email identifier.
         /// </value>
         [DataMember]
+        [Obsolete( "Use NotificationSystemCommunicationId instead." )]
+        [RockObsolete( "1.10" )]
         public int? NotificationSystemEmailId { get; set; }
 
         /// <summary>
@@ -129,7 +139,18 @@ namespace Rock.Model
         /// The notification system email.
         /// </value>
         [LavaInclude]
-        public virtual SystemEmail NotificationSystemEmail {get;set;}
+        [Obsolete( "Use NotificationSystemCommunication instead." )]
+        [RockObsolete( "1.10" )]
+        public virtual SystemEmail NotificationSystemEmail { get; set; }
+
+        /// <summary>
+        /// Gets or sets the notification system communication.
+        /// </summary>
+        /// <value>
+        /// The notification system communication.
+        /// </value>
+        [LavaInclude]
+        public virtual SystemCommunication NotificationSystemCommunication { get; set; }
 
         /// <summary>
         /// Gets or sets the buttons.
@@ -157,6 +178,29 @@ namespace Rock.Model
         public WorkflowActionForm()
         {
             IncludeActionsInNotification = true;
+        }
+
+        #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return WorkflowActionFormCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            WorkflowActionFormCache.UpdateCachedEntity( this.Id, entityState );
         }
 
         #endregion
@@ -211,7 +255,7 @@ namespace Rock.Model
 
                     if ( details.Length > 1 )
                     {
-                        var definedValue = DefinedValueCache.Read( details[1].AsGuid() );
+                        var definedValue = DefinedValueCache.Get( details[1].AsGuid() );
                         if ( definedValue != null )
                         {
                             button.Html = definedValue.GetAttributeValue( "ButtonHTML" );
@@ -239,7 +283,11 @@ namespace Rock.Model
         /// </summary>
         public WorkflowActionFormConfiguration()
         {
+            this.HasOptional( f => f.NotificationSystemCommunication ).WithMany().HasForeignKey( f => f.NotificationSystemCommunicationId ).WillCascadeOnDelete( false );
+
+#pragma warning disable CS0618 // Type or member is obsolete
             this.HasOptional( f => f.NotificationSystemEmail ).WithMany().HasForeignKey( f => f.NotificationSystemEmailId ).WillCascadeOnDelete( false );
+#pragma warning restore CS0618 // Type or member is obsolete
         }
     }
 

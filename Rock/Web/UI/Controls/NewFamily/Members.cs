@@ -20,7 +20,6 @@ using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
 
-using Rock.Model;
 using Rock.Web.Cache;
 
 namespace Rock.Web.UI.Controls
@@ -247,7 +246,7 @@ namespace Rock.Web.UI.Controls
                         writer.AddAttribute( HtmlTextWriterAttribute.Class, "required" );
                     }
                     writer.RenderBeginTag( HtmlTextWriterTag.Th );
-                    writer.Write( GlobalAttributesCache.Read().GetValue( "core.GradeLabel" ) );
+                    writer.Write( GlobalAttributesCache.Get().GetValue( "core.GradeLabel" ) );
                     writer.RenderEndTag();
                 }
 

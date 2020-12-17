@@ -9,7 +9,7 @@
 
             <div class="panel panel-block">
                 <div class="panel-heading">
-                    <h1 class="panel-title"><i class="fa fa-cloud-upload"></i>
+                    <h1 class="panel-title"><i class="fa fa-praying-hands"></i>
                         <asp:Literal ID="lActionTitle" runat="server" /></h1>
 
                     <div class="panel-labels">
@@ -21,7 +21,7 @@
                 <div class="panel-body">
                     <asp:HiddenField ID="hfPrayerRequestId" runat="server" />
 
-                    <asp:ValidationSummary ID="valValidation" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                    <asp:ValidationSummary ID="valValidation" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                     <!-- Edit -->
                     <div id="pnlEditDetails" runat="server">

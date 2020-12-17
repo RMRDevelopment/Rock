@@ -15,9 +15,6 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
 
 namespace Rock.SystemGuid
 {
@@ -47,9 +44,16 @@ namespace Rock.SystemGuid
         public const string GROUPTYPE_KNOWN_RELATIONSHIPS = "E0C5A0E2-B7B3-4EF4-820D-BBF7F9A374EF";
 
         /// <summary>
-        /// Implied relationship group type guid
+        /// Implied relationship group type guid (aka peer network group type)
         /// </summary>
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use GROUPTYPE_PEER_NETWORK instead.", true )]
         public const string GROUPTYPE_IMPLIED_RELATIONSHIPS = "8C0E5852-F08F-4327-9AA5-87800A6AB53E";
+
+        /// <summary>
+        /// Peer network group type guid
+        /// </summary>
+        public const string GROUPTYPE_PEER_NETWORK = "8C0E5852-F08F-4327-9AA5-87800A6AB53E";
 
         /// <summary>
         /// Serving Team group type guid
@@ -95,5 +99,20 @@ namespace Rock.SystemGuid
         /// Communication List group type guid
         /// </summary>
         public const string GROUPTYPE_COMMUNICATIONLIST = "D1D95777-FFA3-CBB3-4A6D-658706DAED33";
+
+        /// <summary>
+        /// The Service Attendance group type guid
+        /// </summary>
+        public const string GROUPTYPE_SERVICE_ATTENDANCE = "77713830-AE5E-4B1A-94FA-E145DFF85035";
+
+        /// <summary>
+        /// The Services group type guid
+        /// </summary>
+        public const string GROUPTYPE_SERVICES = "235BAE2B-5760-4763-AADF-3938F34BA100";
+
+        /// <summary>
+        /// Campus Team group type guid
+        /// </summary>
+        public const string GROUPTYPE_CAMPUS_TEAM = "BADD7A6C-1FB3-4E11-A721-6D1377C6958C";
     }
 }

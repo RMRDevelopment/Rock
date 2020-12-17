@@ -19,6 +19,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
+
 using Rock.Data;
 
 namespace Rock.Model
@@ -297,6 +298,7 @@ namespace Rock.Model
         /// The birth date key.
         /// </value>
         [DataMember]
+        [FieldType( Rock.SystemGuid.FieldType.DATE )]
         public int? BirthDateKey { get; set; }
 
         /// <summary>

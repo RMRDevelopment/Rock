@@ -24,10 +24,12 @@ using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Web;
 using Rock.Data;
 using Rock.UniversalSearch;
 using Rock.UniversalSearch.Crawler;
 using Rock.UniversalSearch.IndexModels;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -38,7 +40,7 @@ namespace Rock.Model
     [RockDomain( "CMS" )]
     [Table( "Site" )]
     [DataContract]
-    public partial class Site : Model<Site>, IRockIndexable
+    public partial class Site : Model<Site>, IRockIndexable, ICacheable
     {
         #region Entity Properties
 
@@ -62,6 +64,65 @@ namespace Rock.Model
         [MaxLength( 100 )]
         [DataMember( IsRequired = true )]
         public string Name { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether this instance is active.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this instance is active; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool IsActive
+        {
+            get { return _isActive; }
+            set { _isActive = value; }
+        }
+        private bool _isActive = true;
+
+        /// <summary>
+        /// Gets or sets the configuration mobile phone binary file identifier.
+        /// </summary>
+        /// <value>
+        /// The configuration mobile phone binary file identifier.
+        /// </value>
+        [DataMember]
+        public int? ConfigurationMobilePhoneBinaryFileId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the configuration tablet binary file identifier.
+        /// </summary>
+        /// <value>
+        /// The configuration tablet binary file identifier.
+        /// </value>
+        [DataMember]
+        public int? ConfigurationMobileTabletBinaryFileId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the additional settings.
+        /// </summary>
+        /// <value>
+        /// The additional settings.
+        /// </value>
+        [DataMember]
+        public string AdditionalSettings { get; set; }
+
+        /// <summary>
+        /// Gets or sets the type of the site.
+        /// </summary>
+        /// <value>
+        /// The type of the site.
+        /// </value>
+        [DataMember]
+        public SiteType SiteType { get; set; }
+
+        /// <summary>
+        /// Gets or sets the thumbnail binary file identifier.
+        /// </summary>
+        /// <value>
+        /// The thumbnail  file identifier.
+        /// </value>
+        [DataMember]
+        public int? ThumbnailBinaryFileId { get; set; }
 
         /// <summary>
         /// Gets or sets a user defined description/summary  of the Site.
@@ -365,13 +426,90 @@ namespace Rock.Model
         public int? FavIconBinaryFileId { get; set; }
 
         /// <summary>
+        /// Gets or sets the site logo binary file identifier.
+        /// </summary>
+        /// <value>
+        /// The site logo binary file identifier.
+        /// </value>
+        [DataMember]
+        public int? SiteLogoBinaryFileId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the latest version date time.
+        /// </summary>
+        /// <value>
+        /// The latest version date time.
+        /// </value>
+        [DataMember]
+        public DateTime? LatestVersionDateTime { get; set; }
+
+        /// <summary>
+        /// Enabling this feature will prevent other sites from using this sites routes and prevent routes from other sites from working on this site.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [enable exclusive routes]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool EnableExclusiveRoutes { get; set; }
+
+        /// <summary>
+        /// Gets or sets the configuration mobile file path.
+        /// </summary>
+        /// <value>
+        /// The configuration mobile file path.
+        /// </value>
+        [NotMapped]
+        public string ConfigurationMobilePhoneFileUrl
+        {
+            get
+            {
+                return Site.GetFileUrl( this.ConfigurationMobilePhoneBinaryFileId );
+            }
+            private set { }
+        }
+
+        /// <summary>
+        /// Gets or sets the configuration tablet file path.
+        /// </summary>
+        /// <value>
+        /// The configuration tablet file path.
+        /// </value>
+        [NotMapped]
+        public string ConfigurationTabletFileUrl
+        {
+            get
+            {
+                return Site.GetFileUrl( this.ConfigurationMobileTabletBinaryFileId );
+            }
+            private set { }
+        }
+
+        /// <summary>
+        /// Gets the thumbnail file URL.
+        /// </summary>
+        /// <value>
+        /// The thumbnail file URL.
+        /// </value>
+        [NotMapped]
+        public string ThumbnailFileUrl
+        {
+            get
+            {
+                return Site.GetFileUrl( this.ThumbnailBinaryFileId );
+            }
+            private set { }
+        }
+
+
+        /// <summary>
         /// Gets or sets the FontAwesome icon CSS weight that will be used for the Site
         /// </summary>
         /// <value>
         /// The icon CSS weight.
         /// </value>
         [DataMember]
-        [Obsolete("Moved to Theme")]
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Moved to Theme", true )]
         public IconCssWeight IconCssWeight { get; set; }
 
         #endregion
@@ -411,6 +549,7 @@ namespace Rock.Model
         /// <value>
         /// The icon extensions.
         /// </value>
+        [RockObsolete( "1.8" )]
         [Obsolete( "Moved to Theme" )]
         public virtual ICollection<DefinedValue> IconExtensions { get; set; } = new Collection<DefinedValue>();
 
@@ -541,15 +680,51 @@ namespace Rock.Model
         public virtual BinaryFile FavIconBinaryFile { get; set; }
 
         /// <summary>
+        /// Gets or sets the site logo binary file.
+        /// </summary>
+        /// <value>
+        /// The site logo binary file.
+        /// </value>
+        [LavaInclude]
+        public virtual BinaryFile SiteLogoBinaryFile { get; set; }
+
+        /// <summary>
+        /// Gets or sets the thumbnail binary file.
+        /// </summary>
+        /// <value>
+        /// The thumbnail binary file.
+        /// </value>
+        [LavaInclude]
+        public virtual BinaryFile ThumbnailBinaryFile { get; set; }
+
+        /// <summary>
+        /// Gets or sets the configuration mobile phone binary file.
+        /// </summary>
+        /// <value>
+        /// The configuration mobile phone binary file.
+        /// </value>
+        [LavaInclude]
+        public virtual BinaryFile ConfigurationMobilePhoneBinaryFile { get; set; }
+
+        /// <summary>
+        /// Gets or sets the configuration tablet phone binary file.
+        /// </summary>
+        /// <value>
+        /// The configuration mobile tablet binary file.
+        /// </value>
+        [LavaInclude]
+        public virtual BinaryFile ConfigurationMobileTabletBinaryFile { get; set; }
+
+        /// <summary>
         /// Gets the default domain URI.
         /// </summary>
         /// <value>
         /// The default domain URI.
         /// </value>
         [LavaInclude]
-        public virtual Uri DefaultDomainUri 
+        public virtual Uri DefaultDomainUri
         {
-            get 
+            get
             {
                 try
                 {
@@ -565,7 +740,7 @@ namespace Rock.Model
                 }
                 catch { }
 
-                return new Uri( Rock.Web.Cache.GlobalAttributesCache.Read().GetValue( "PublicApplicationRoot" ) );
+                return new Uri( GlobalAttributesCache.Get().GetValue( "PublicApplicationRoot" ) );
             }
         }
 
@@ -691,15 +866,95 @@ namespace Rock.Model
             }
         }
 
+        /// <summary>
+        /// Gets the file URL.
+        /// </summary>
+        /// <param name="fileId">The configuration mobile phone file identifier.</param>
+        /// <returns>full path of resource from Binary file path</returns>
+        private static string GetFileUrl( int? fileId )
+        {
+            string virtualPath = string.Empty;
+            if ( fileId.HasValue )
+            {
+                using ( var rockContext = new RockContext() )
+                {
+                    var binaryFile = new BinaryFileService( rockContext ).Get( ( int ) fileId );
+                    if ( binaryFile != null )
+                    {
+                        if ( binaryFile.Path.Contains( "~" ) )
+                        {
+                            // Need to build out full path
+                            virtualPath = VirtualPathUtility.ToAbsolute( binaryFile.Path );
+                            var globalAttributes = GlobalAttributesCache.Get();
+                            string publicAppRoot = globalAttributes.GetValue( "PublicApplicationRoot" );
+                            virtualPath = $"{publicAppRoot}{virtualPath}";
+                        }
+                        else
+                        {
+                            virtualPath = binaryFile.Path;
+                        }
+                    }
+                }
+            }
+
+            return virtualPath;
+        }
+
+        #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return SiteCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            SiteCache.UpdateCachedEntity( this.Id, entityState );
+
+            foreach ( int pageId in new PageService( ( RockContext ) dbContext ).GetBySiteId( this.Id )
+                    .Select( p => p.Id )
+                    .ToList() )
+            {
+                PageCache.UpdateCachedEntity( pageId, EntityState.Detached );
+            }
+        }
+
         #endregion
     }
 
     #region enums
 
+
+    /// <summary>
+    /// Types Web, Mobile
+    /// </summary>
+    public enum SiteType
+    {
+        /// <summary>
+        /// </summary>
+        Web,
+
+        /// <summary>
+        /// </summary>
+        Mobile
+    }
+
     /// <summary>
     /// Font Awesome Icon CSS Weight
     /// </summary>
-    [Obsolete("Moved to Theme")]
+    [RockObsolete( "1.8" )]
+    [Obsolete( "Moved to Theme", true )]
     public enum IconCssWeight
     {
 
@@ -752,6 +1007,10 @@ namespace Rock.Model
             this.HasOptional( p => p.CommunicationPageRoute ).WithMany().HasForeignKey( p => p.CommunicationPageRouteId ).WillCascadeOnDelete( false );
             this.HasOptional( p => p.MobilePage ).WithMany().HasForeignKey( p => p.MobilePageId ).WillCascadeOnDelete( false );
             this.HasOptional( p => p.FavIconBinaryFile ).WithMany().HasForeignKey( p => p.FavIconBinaryFileId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.SiteLogoBinaryFile ).WithMany().HasForeignKey( p => p.SiteLogoBinaryFileId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.ThumbnailBinaryFile ).WithMany().HasForeignKey( p => p.ThumbnailBinaryFileId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.ConfigurationMobilePhoneBinaryFile ).WithMany().HasForeignKey( p => p.ConfigurationMobilePhoneBinaryFileId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.ConfigurationMobileTabletBinaryFile ).WithMany().HasForeignKey( p => p.ConfigurationMobileTabletBinaryFileId ).WillCascadeOnDelete( false );
 
 #pragma warning disable 0618
             // Need Associative table for IconExtensions (which are Defined Values)

@@ -14,7 +14,6 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
@@ -79,7 +78,7 @@ namespace Rock.Model
         /// The device unique identifier.
         /// </value>
         [DataMember]
-        [MaxLength( 20 )]
+        [MaxLength( 50 )]
         public string DeviceUniqueIdentifier { get; set; }
 
         /// <summary>
@@ -111,6 +110,60 @@ namespace Rock.Model
         [DataMember]
         public bool NotificationsEnabled { get; set; }
 
+        /// <summary>
+        /// Gets or sets a flag indicating if this is an active personal device. This value is required.
+        /// </summary>
+        /// <value>
+        /// A <see cref="System.Boolean"/> value that is <c>true</c> if this personal device is active, otherwise <c>false</c>.
+        /// </value>
+        [Required]
+        [DataMember( IsRequired = true )]
+        [Previewable]
+        public bool IsActive
+        {
+            get { return _isActive; }
+            set { _isActive = value; }
+        }
+        private bool _isActive = true;
+
+        /// <summary>
+        /// Gets or sets the site identifier.
+        /// </summary>
+        /// <value>
+        /// The site identifier.
+        /// </value>
+        [DataMember]
+        public int? SiteId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the manufacturer.
+        /// </summary>
+        /// <value>
+        /// The manufacturer.
+        /// </value>
+        [DataMember]
+        [MaxLength( 50 )]
+        public string Manufacturer { get; set; }
+
+        /// <summary>
+        /// Gets or sets the model.
+        /// </summary>
+        /// <value>
+        /// The model.
+        /// </value>
+        [DataMember]
+        [MaxLength( 50 )]
+        public string Model { get; set; }
+
+        /// <summary>
+        /// Gets or sets the name.
+        /// </summary>
+        /// <value>
+        /// The name.
+        /// </value>
+        [DataMember]
+        [MaxLength( 50 )]
+        public string Name { get; set; }
         #endregion
 
         #region Virtual Properties
@@ -134,19 +187,13 @@ namespace Rock.Model
         public virtual DefinedValue PersonalDeviceType { get; set; }
 
         /// <summary>
-        /// Gets or sets the personal device type identifier.
+        /// Gets or sets the site.
         /// </summary>
         /// <value>
-        /// The personal device type identifier.
+        /// The site.
         /// </value>
-        [NotMapped]
-        [Obsolete( "Use PersonalDeviceTypeValueId instead." )]
-        public virtual int PersonalDeviceTypeId
-        {
-            get { return PersonalDeviceTypeValueId ?? 0; }
-            set { PersonalDeviceTypeValueId = value; }
-        }
-
+        [DataMember]
+        public virtual Site Site { get; set; }
         #endregion
     }
 
@@ -164,6 +211,7 @@ namespace Rock.Model
         {
             this.HasOptional( r => r.PersonAlias ).WithMany().HasForeignKey( r => r.PersonAliasId ).WillCascadeOnDelete( false );
             this.HasOptional( r => r.PersonalDeviceType ).WithMany().HasForeignKey( r => r.PersonalDeviceTypeValueId ).WillCascadeOnDelete( false );
+            this.HasOptional( r => r.Site ).WithMany().HasForeignKey( r => r.SiteId ).WillCascadeOnDelete( false );
         }
     }
 

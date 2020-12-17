@@ -16,23 +16,28 @@
 //
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Web;
+
 using Quartz;
+
 using Rock.Attribute;
 using Rock.Communication;
 using Rock.Data;
 using Rock.Model;
-using Rock.Web.Cache;
 
 namespace Rock.Jobs
 {
     /// <summary>
-    /// Sends a birthday email
+    /// This job will send a Lava email template to a list of people whose birthday is today.
     /// </summary>
-    [SystemEmailField( "Birthday Email", required: true )]
+    [DisplayName( "Send Birthday Email" )]
+    [Description( "This job will send a Lava email template to a list of people whose birthday is today." )]
+
+    [SystemCommunicationField( "Birthday Email", required: true )]
     [IntegerRangeField( "Age Range",
         @"The age range to include. For example, if you specify a range of 4-18, people will get the email on their 4th birthday and up till their 18th birthday. 
          Leave blank to include all ages. Note: If a person's birth year is blank, they will get an email regardless of the age range." )]
@@ -64,9 +69,9 @@ namespace Rock.Jobs
             JobDataMap dataMap = context.JobDetail.JobDataMap;
             Guid? systemEmailGuid = dataMap.GetString( "BirthdayEmail" ).AsGuidOrNull();
 
-            SystemEmailService emailService = new SystemEmailService( rockContext );
+            var emailService = new SystemCommunicationService( rockContext );
 
-            SystemEmail systemEmail = null;
+            SystemCommunication systemEmail = null;
             if ( systemEmailGuid.HasValue )
             {
                 systemEmail = emailService.Get( systemEmailGuid.Value );
@@ -101,9 +106,9 @@ namespace Rock.Jobs
             }
 
             // only include people that have an email address and want an email
-            personQry = personQry.Where( a => ( a.Email != null ) && ( a.Email != "" ) && ( a.EmailPreference == EmailPreference.EmailAllowed ) );
+            personQry = personQry.Where( a => ( a.Email != null ) && ( a.Email != string.Empty ) && ( a.EmailPreference != EmailPreference.DoNotEmail ) && (a.IsEmailActive) );
 
-            var recipients = new List<RecipientData>();
+            var recipients = new List<RockEmailMessageRecipient>();
 
             var personList = personQry.AsNoTracking().ToList();
             foreach ( var person in personList )
@@ -111,14 +116,29 @@ namespace Rock.Jobs
                 var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( null );
                 mergeFields.Add( "Person", person );
 
-                recipients.Add( new RecipientData( person.Email, mergeFields ) );
+                recipients.Add( new RockEmailMessageRecipient( person, mergeFields ) );
             }
 
             var emailMessage = new RockEmailMessage( systemEmail.Guid );
             emailMessage.SetRecipients( recipients );
-            emailMessage.Send();
+            var errors = new List<string>();
 
+            emailMessage.Send(out errors);
             context.Result = string.Format( "{0} birthday emails sent", recipients.Count() );
+
+            if (errors.Any())
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine();
+                sb.Append( string.Format( "{0} Errors: ", errors.Count() ) );
+                errors.ForEach( e => { sb.AppendLine(); sb.Append( e ); } );
+                string errorMessage = sb.ToString();
+                context.Result += errorMessage;
+                var exception = new Exception( errorMessage);
+                HttpContext context2 = HttpContext.Current;
+                ExceptionLogService.LogException( exception, context2 );
+                throw exception;
+            }
         }
     }
 }

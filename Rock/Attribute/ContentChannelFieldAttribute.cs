@@ -14,8 +14,6 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
-
 namespace Rock.Attribute
 {
     /// <summary>
@@ -25,7 +23,7 @@ namespace Rock.Attribute
     public class ContentChannelFieldAttribute : FieldAttribute
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="DefinedValueFieldAttribute" /> class.
+        /// Initializes a new instance of the <see cref="ContentChannelFieldAttribute"/> class.
         /// </summary>
         /// <param name="name">The name.</param>
         /// <param name="description">The description.</param>

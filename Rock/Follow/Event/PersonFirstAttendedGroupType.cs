@@ -21,10 +21,9 @@ using System.Data.Entity;
 using System.Linq;
 
 using Rock;
-using Rock.Data;
 using Rock.Attribute;
+using Rock.Data;
 using Rock.Model;
-using Rock.Web.Cache;
 
 namespace Rock.Follow.Event
 {
@@ -76,8 +75,8 @@ namespace Rock.Follow.Event
                             a.DidAttend.Value &&
                             a.PersonAlias != null &&
                             a.PersonAlias.PersonId == personAlias.PersonId &&
-                            a.Group != null &&
-                            a.Group.GroupType.Guid.Equals( groupTypeGuid.Value ) )
+                            a.Occurrence.Group != null &&
+                            a.Occurrence.Group.GroupType.Guid.Equals( groupTypeGuid.Value ) )
                         .Min( a => a.StartDateTime );
 
                     if ( firstAttended.HasValue )

@@ -15,18 +15,18 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select a workflow type and then a workflow of that type
     /// </summary>
     public class WorkflowPicker : CompositeControl, IRockControl
     {
@@ -388,8 +388,8 @@ namespace Rock.Web.UI.Controls
                 var workflowTypes = workflowTypeService.Queryable().AsNoTracking()
                     .Where( t => 
                         t.Category != null &&
-                        t.IsActive.HasValue && 
-                        t.IsActive.Value )
+                        t.IsActive.HasValue &&
+                        t.IsActive.Value)
                     .OrderBy( t => t.Category.Name)
                     .ThenBy( t => t.Name )
                     .Select(a => new { a.Id, CategoryName = a.Category.Name, a.Name} )
@@ -397,7 +397,7 @@ namespace Rock.Web.UI.Controls
                     .ToList();
                 foreach ( var t in workflowTypes )
                 {
-                    _ddlWorkflowType.Items.Add( new ListItem( string.Format( "{0}:{1}", t.CategoryName, t.Name), t.Id.ToString().ToUpper() ) );
+                    _ddlWorkflowType.Items.Add( new ListItem( string.Format( "{0}: {1}", t.CategoryName, t.Name), t.Id.ToString().ToUpper() ) );
                 }
             }
         }

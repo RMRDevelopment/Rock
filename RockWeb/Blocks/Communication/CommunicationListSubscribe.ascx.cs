@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // </copyright>
-//
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -29,6 +29,7 @@ using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 using Rock.Attribute;
 using Rock.Web.UI;
+using System.Data.Entity;
 
 namespace RockWeb.Blocks.Communication
 {
@@ -38,21 +39,52 @@ namespace RockWeb.Blocks.Communication
     [DisplayName( "Communication List Subscribe" )]
     [Category( "Communication" )]
     [Description( "Block that allows a person to manage the communication lists that they are subscribed to" )]
-    [GroupCategoryField( "Communication List Categories", "Select the categories of the communication lists to display, or select none to show all that the user is authorized to view.", true, Rock.SystemGuid.GroupType.GROUPTYPE_COMMUNICATIONLIST, defaultValue: Rock.SystemGuid.Category.GROUPTYPE_COMMUNICATIONLIST_PUBLIC, required: false, order: 1 )]
-    [BooleanField( "Show Medium Preference", "Show the user's current medium preference for each list and allow them to change it.", true, order: 2 )]
+
+    #region Block Attributes
+
+    [GroupCategoryField(
+        "Communication List Categories",
+        Description = "Select the categories of the communication lists to display, or select none to show all that the user is authorized to view.",
+        AllowMultiple = true,
+        GroupTypeGuid = Rock.SystemGuid.GroupType.GROUPTYPE_COMMUNICATIONLIST,
+        DefaultValue = Rock.SystemGuid.Category.GROUPTYPE_COMMUNICATIONLIST_PUBLIC,
+        IsRequired = false,
+        Key = AttributeKey.CommunicationListCategories,
+        Order = 1 )]
+    [BooleanField(
+        "Show Medium Preference",
+        Description = "Show the user's current medium preference for each list and allow them to change it.",
+        DefaultBooleanValue = true,
+        Key = AttributeKey.ShowMediumPreference,
+        Order = 2 )]
+
+    #endregion Block Attributes
     public partial class CommunicationListSubscribe : RockBlock
     {
+        #region Attribute Keys
+
+        /// <summary>
+        /// Keys to use for Block Attributes
+        /// </summary>
+        private static class AttributeKey
+        {
+            public const string CommunicationListCategories = "CommunicationListCategories";
+            public const string ShowMediumPreference = "ShowMediumPreference";
+        }
+
+        #endregion Attribute Keys
+
         #region fields
 
         /// <summary>
         /// The person's group member record for each CommunicationListId
         /// </summary>
-        Dictionary<int, GroupMember> personCommunicationListsMember = null;
+        private Dictionary<int, GroupMember> personCommunicationListsMember = null;
 
         /// <summary>
         /// The show medium preference
         /// </summary>
-        bool showMediumPreference = true;
+        private bool showMediumPreference = true;
 
         #endregion
 
@@ -119,28 +151,20 @@ namespace RockWeb.Blocks.Communication
                 if ( cbCommunicationListIsSubscribed.Text.IsNullOrWhiteSpace() )
                 {
                     cbCommunicationListIsSubscribed.Text = group.Name;
-
                 }
 
                 cbCommunicationListIsSubscribed.Checked = groupMember != null && groupMember.GroupMemberStatus == GroupMemberStatus.Active;
 
                 CommunicationType communicationType = CurrentPerson.CommunicationPreference == CommunicationType.SMS ? CommunicationType.SMS : CommunicationType.Email;
-                if ( groupMember != null )
+
+                // if GroupMember record has SMS or Email specified, that takes precedence over their Person.CommunicationPreference
+                var groupMemberHasSmsOrEmailPreference = groupMember != null &&
+                        ( groupMember.CommunicationPreference == CommunicationType.SMS ||
+                            groupMember.CommunicationPreference == CommunicationType.Email );
+
+                if ( groupMemberHasSmsOrEmailPreference )
                 {
-                    groupMember.LoadAttributes();
-                    var groupMemberCommunicationType = ( CommunicationType? ) groupMember.GetAttributeValue( "PreferredCommunicationMedium" ).AsIntegerOrNull();
-                    if ( groupMemberCommunicationType.HasValue )
-                    {
-                        // if GroupMember record has SMS or Email specified, that takes precedence over their Person.CommunicationPreference
-                        if ( groupMemberCommunicationType.Value == CommunicationType.SMS )
-                        {
-                            communicationType = CommunicationType.SMS;
-                        }
-                        else if ( groupMemberCommunicationType.Value == CommunicationType.Email )
-                        {
-                            communicationType = CommunicationType.Email;
-                        }
-                    }
+                    communicationType = groupMember.CommunicationPreference;
                 }
 
                 tglCommunicationPreference.Checked = communicationType == CommunicationType.Email;
@@ -220,10 +244,8 @@ namespace RockWeb.Blocks.Communication
                             }
                         }
 
-                        groupMember.LoadAttributes();
                         CommunicationType communicationType = tglCommunicationPreference.Checked ? CommunicationType.Email : CommunicationType.SMS;
-                        groupMember.SetAttributeValue( "PreferredCommunicationMedium", communicationType.ConvertToInt().ToString() );
-                        groupMember.SaveAttributeValue( "PreferredCommunicationMedium", rockContext );
+                        groupMember.CommunicationPreference = communicationType;
                     }
                 }
                 else
@@ -234,7 +256,7 @@ namespace RockWeb.Blocks.Communication
                         var groupMember = new GroupMember();
                         groupMember.PersonId = this.CurrentPersonId.Value;
                         groupMember.GroupId = group.Id;
-                        int? defaultGroupRoleId = GroupTypeCache.Read( group.GroupTypeId ).DefaultGroupRoleId;
+                        int? defaultGroupRoleId = GroupTypeCache.Get( group.GroupTypeId ).DefaultGroupRoleId;
                         if ( defaultGroupRoleId.HasValue )
                         {
                             groupMember.GroupRoleId = defaultGroupRoleId.Value;
@@ -248,20 +270,13 @@ namespace RockWeb.Blocks.Communication
                         }
 
                         groupMember.GroupMemberStatus = GroupMemberStatus.Active;
-                        groupMember.LoadAttributes();
                         CommunicationType communicationType = tglCommunicationPreference.Checked ? CommunicationType.Email : CommunicationType.SMS;
-                        groupMember.SetAttributeValue( "PreferredCommunicationMedium", communicationType.ConvertToInt().ToString() );
+                        groupMember.CommunicationPreference = communicationType;
 
                         if ( groupMember.IsValidGroupMember( rockContext ) )
                         {
                             groupMemberService.Add( groupMember );
                             rockContext.SaveChanges();
-                            groupMember.SaveAttributeValue( "PreferredCommunicationMedium", rockContext );
-
-                            if ( group.IsSecurityRole || group.GroupType.Guid.Equals( Rock.SystemGuid.GroupType.GROUPTYPE_SECURITY_ROLE.AsGuid() ) )
-                            {
-                                Rock.Security.Role.Flush( group.Id );
-                            }
                         }
                         else
                         {
@@ -288,23 +303,31 @@ namespace RockWeb.Blocks.Communication
                 return;
             }
 
+            int communicationListGroupTypeId = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_COMMUNICATIONLIST.AsGuid() ).Id;
+            int? communicationListGroupTypeDefaultRoleId = GroupTypeCache.Get( communicationListGroupTypeId ).DefaultGroupRoleId;
+
             var rockContext = new RockContext();
-            var groupService = new GroupService( rockContext );
-            var groupMemberService = new GroupMemberService( rockContext );
-            var categoryService = new CategoryService( rockContext );
 
-            int communicationListGroupTypeId = GroupTypeCache.Read( Rock.SystemGuid.GroupType.GROUPTYPE_COMMUNICATIONLIST.AsGuid() ).Id;
+            var memberOfList = new GroupMemberService( rockContext ).GetByPersonId( CurrentPersonId.Value ).AsNoTracking().Select( a => a.GroupId ).ToList();
 
-            // Get a list of all the Active CommunicationLists, but exclude Sync'd groups that the person is not in (Sync'ing would remove that person)
-            var communicationListQry = groupService.Queryable()
-                .Where( a => a.GroupTypeId == communicationListGroupTypeId
-                        && a.IsActive
-                        && ( a.SyncDataViewId == null || a.Members.Any( m => m.PersonId == this.CurrentPersonId ) ) );
+            // Get a list of syncs for the communication list groups where the default role is sync'd AND the current person is NOT a member of
+            // This is used to filter out the list of communication lists.
+            var commGroupSyncsForDefaultRole = new GroupSyncService( rockContext )
+                .Queryable()
+                .Where( a => a.Group.GroupTypeId == communicationListGroupTypeId )
+                .Where( a => a.GroupTypeRoleId == communicationListGroupTypeDefaultRoleId )
+                .Where( a => !memberOfList.Contains( a.GroupId ) )
+                .Select( a => a.GroupId )
+                .ToList();
 
-            var categoryGuids = this.GetAttributeValue( "CommunicationListCategories" ).SplitDelimitedValues().AsGuidList();
+            var communicationLists = new GroupService( rockContext )
+               .Queryable()
+               .Where( a => a.GroupTypeId == communicationListGroupTypeId && !commGroupSyncsForDefaultRole.Contains( a.Id ) )
+               .ToList();
 
-            var communicationLists = communicationListQry.ToList();
+            var categoryGuids = this.GetAttributeValue( AttributeKey.CommunicationListCategories ).SplitDelimitedValues().AsGuidList();
             var viewableCommunicationLists = new List<Group>();
+
             foreach ( var communicationList in communicationLists )
             {
                 communicationList.LoadAttributes( rockContext );
@@ -340,12 +363,15 @@ namespace RockWeb.Blocks.Communication
             var groupIds = viewableCommunicationLists.Select( a => a.Id ).ToList();
             var personId = this.CurrentPersonId.Value;
 
-            showMediumPreference = this.GetAttributeValue( "ShowMediumPreference" ).AsBoolean();
+            showMediumPreference = this.GetAttributeValue( AttributeKey.ShowMediumPreference ).AsBoolean();
 
-            personCommunicationListsMember = new GroupMemberService( rockContext ).Queryable()
+            personCommunicationListsMember = new GroupMemberService( rockContext )
+                .Queryable()
+                .AsNoTracking()
                 .Where( a => groupIds.Contains( a.GroupId ) && a.PersonId == personId )
                 .GroupBy( a => a.GroupId )
-                .ToList().ToDictionary( k => k.Key, v => v.FirstOrDefault() );
+                .ToList()
+                .ToDictionary( k => k.Key, v => v.FirstOrDefault() );
 
             rptCommunicationLists.DataSource = viewableCommunicationLists;
             rptCommunicationLists.DataBind();
@@ -355,7 +381,5 @@ namespace RockWeb.Blocks.Communication
         }
 
         #endregion
-
-
     }
 }

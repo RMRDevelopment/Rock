@@ -18,7 +18,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
-using System.Data.Entity;
 using System.Linq;
 
 using Rock.Attribute;
@@ -107,7 +106,7 @@ namespace Rock.Workflow.Action
                 Guid? guid = GetAttributeValue( action, "UnopenedTimeoutActivity" ).AsGuidOrNull();
                 if ( guid.HasValue )
                 {
-                    unopenedActivityType = WorkflowActivityTypeCache.Read( guid.Value );
+                    unopenedActivityType = WorkflowActivityTypeCache.Get( guid.Value );
                     unopenedTimeout = GetAttributeValue( action, "UnopenedTimeoutLength" ).AsIntegerOrNull();
 
                     if ( emailStatus != OPENED_STATUS &&
@@ -127,7 +126,7 @@ namespace Rock.Workflow.Action
                 guid = GetAttributeValue( action, "NoActionTimeoutActivity" ).AsGuidOrNull();
                 if ( guid.HasValue )
                 {
-                    noActionActivityType = WorkflowActivityTypeCache.Read( guid.Value );
+                    noActionActivityType = WorkflowActivityTypeCache.Get( guid.Value );
                     noActionTimeout = GetAttributeValue( action, "NoActionTimeoutLength" ).AsIntegerOrNull();
 
                     if ( emailStatus != CLICKED_STATUS &&
@@ -156,7 +155,7 @@ namespace Rock.Workflow.Action
             // Use the current action type' guid as the key for a 'DateTime Sent' attribute 
             string AttrKey = action.ActionTypeCache.Guid.ToString() + "_DateTimeSent";
 
-            // Check to see if the action's activity does not yet have the the 'DateTime Sent' attribute.
+            // Check to see if the action's activity does not yet have the 'DateTime Sent' attribute.
             // The first time this action runs on any workflow instance using this action instance, the 
             // attribute will not exist and need to be created
             if ( !action.Activity.Attributes.ContainsKey( AttrKey ) )
@@ -167,18 +166,16 @@ namespace Rock.Workflow.Action
                 attribute.EntityTypeQualifierValue = action.Activity.ActivityTypeId.ToString();
                 attribute.Name = "DateTime Sent";
                 attribute.Key = AttrKey;
-                attribute.FieldTypeId = FieldTypeCache.Read( Rock.SystemGuid.FieldType.TEXT.AsGuid() ).Id;
+                attribute.FieldTypeId = FieldTypeCache.Get( Rock.SystemGuid.FieldType.TEXT.AsGuid() ).Id;
 
                 // Need to save the attribute now (using different context) so that an attribute id is returned.
                 using ( var newRockContext = new RockContext() )
                 {
                     new AttributeService( newRockContext ).Add( attribute );
                     newRockContext.SaveChanges();
-                    AttributeCache.FlushEntityAttributes();
-                    WorkflowActivityTypeCache.Flush( action.Activity.ActivityTypeId );
                 }
 
-                action.Activity.Attributes.Add( AttrKey, AttributeCache.Read( attribute ) );
+                action.Activity.Attributes.Add( AttrKey, AttributeCache.Get( attribute ) );
                 var attributeValue = new AttributeValueCache();
                 attributeValue.AttributeId = attribute.Id;
                 attributeValue.Value = RockDateTime.Now.ToString( "o" );
@@ -186,7 +183,7 @@ namespace Rock.Workflow.Action
             }
             else
             {
-                // Check to see if this action instance has a value for the 'Delay Activated' attrbute
+                // Check to see if this action instance has a value for the 'Delay Activated' attribute
                 DateTime? dateSent = action.Activity.GetAttributeValue( AttrKey ).AsDateTime();
                 if ( dateSent.HasValue )
                 {
@@ -209,7 +206,7 @@ namespace Rock.Workflow.Action
             // Use the current action type' guid as the key for a 'Email Status' attribute 
             string AttrKey = action.ActionTypeCache.Guid.ToString() + "_EmailStatus";
 
-            // Check to see if the action's activity does not yet have the the 'Email Status' attribute.
+            // Check to see if the action's activity does not yet have the 'Email Status' attribute.
             // The first time this action runs on any workflow instance using this action instance, the 
             // attribute will not exist and need to be created
             if ( !action.Activity.Attributes.ContainsKey( AttrKey ) )
@@ -220,18 +217,16 @@ namespace Rock.Workflow.Action
                 attribute.EntityTypeQualifierValue = action.Activity.ActivityTypeId.ToString();
                 attribute.Name = "Email Status";
                 attribute.Key = AttrKey;
-                attribute.FieldTypeId = FieldTypeCache.Read( Rock.SystemGuid.FieldType.TEXT.AsGuid() ).Id;
+                attribute.FieldTypeId = FieldTypeCache.Get( Rock.SystemGuid.FieldType.TEXT.AsGuid() ).Id;
 
                 // Need to save the attribute now (using different context) so that an attribute id is returned.
                 using ( var newRockContext = new RockContext() )
                 {
                     new AttributeService( newRockContext ).Add( attribute );
                     newRockContext.SaveChanges();
-                    AttributeCache.FlushEntityAttributes();
-                    WorkflowActivityTypeCache.Flush( action.Activity.ActivityTypeId );
                 }
 
-                action.Activity.Attributes.Add( AttrKey, AttributeCache.Read( attribute ) );
+                action.Activity.Attributes.Add( AttrKey, AttributeCache.Get( attribute ) );
                 var attributeValue = new AttributeValueCache();
                 attributeValue.AttributeId = attribute.Id;
                 attributeValue.Value = string.Empty;
@@ -255,15 +250,15 @@ namespace Rock.Workflow.Action
             string body = GetAttributeValue( action, "Body" );
             bool createCommunicationRecord = GetAttributeValue( action, "SaveCommunicationHistory" ).AsBoolean();
 
-            string fromEmail = string.Empty;
+            string fromEmailAddress = string.Empty;
             string fromName = string.Empty;
             Guid? fromGuid = fromValue.AsGuidOrNull();
             if ( fromGuid.HasValue )
             {
-                var attribute = AttributeCache.Read( fromGuid.Value, rockContext );
+                var attribute = AttributeCache.Get( fromGuid.Value, rockContext );
                 if ( attribute != null )
                 {
-                    string fromAttributeValue = action.GetWorklowAttributeValue( fromGuid.Value );
+                    string fromAttributeValue = action.GetWorkflowAttributeValue( fromGuid.Value );
                     if ( !string.IsNullOrWhiteSpace( fromAttributeValue ) )
                     {
                         if ( attribute.FieldType.Class == "Rock.Field.Types.PersonFieldType" )
@@ -277,21 +272,21 @@ namespace Rock.Workflow.Action
                                     .FirstOrDefault();
                                 if ( person != null && !string.IsNullOrWhiteSpace( person.Email ) )
                                 {
-                                    fromEmail = person.Email;
+                                    fromEmailAddress = person.Email;
                                     fromName = person.FullName;
                                 }
                             }
                         }
                         else
                         {
-                            fromEmail = fromAttributeValue;
+                            fromEmailAddress = fromAttributeValue;
                         }
                     }
                 }
             }
             else
             {
-                fromEmail = fromValue;
+                fromEmailAddress = fromValue;
             }
 
             var metaData = new Dictionary<string, string>();
@@ -300,17 +295,18 @@ namespace Rock.Workflow.Action
             Guid? guid = to.AsGuidOrNull();
             if ( guid.HasValue )
             {
-                var attribute = AttributeCache.Read( guid.Value, rockContext );
+                var attribute = AttributeCache.Get( guid.Value, rockContext );
                 if ( attribute != null )
                 {
-                    string toValue = action.GetWorklowAttributeValue( guid.Value );
+                    string toValue = action.GetWorkflowAttributeValue( guid.Value );
                     if ( !string.IsNullOrWhiteSpace( toValue ) )
                     {
                         switch ( attribute.FieldType.Class )
                         {
                             case "Rock.Field.Types.TextFieldType":
                                 {
-                                    Send( toValue, fromEmail, fromName, subject, body, mergeFields, rockContext, createCommunicationRecord, metaData );
+                                    var recipientEmails = toValue.ResolveMergeFields( mergeFields );
+                                    Send( recipientEmails, fromEmailAddress, fromName, subject, body, mergeFields, createCommunicationRecord, metaData );
                                     break;
                                 }
                             case "Rock.Field.Types.PersonFieldType":
@@ -342,7 +338,8 @@ namespace Rock.Workflow.Action
                                         {
                                             var personDict = new Dictionary<string, object>( mergeFields );
                                             personDict.Add( "Person", person );
-                                            Send( person.Email, fromEmail, fromName, subject, body, personDict, rockContext, createCommunicationRecord, metaData );
+                                            var recipients = new RockEmailMessageRecipient[1] { new RockEmailMessageRecipient( person, personDict ) }.ToList();
+                                            Send( recipients, fromEmailAddress, fromName, subject, body, createCommunicationRecord, metaData );
                                         }
                                     }
                                     break;
@@ -353,18 +350,42 @@ namespace Rock.Workflow.Action
             }
             else
             {
-                Send( to.ResolveMergeFields( mergeFields ), fromEmail, fromName, subject, body, mergeFields, rockContext, createCommunicationRecord, metaData );
+                var recipientEmails = to.ResolveMergeFields( mergeFields );
+                Send( recipientEmails, fromEmailAddress, fromName, subject, body, mergeFields, createCommunicationRecord, metaData );
             }
         }
 
-        private void Send( string recipients, string fromEmail, string fromName, string subject, string body, Dictionary<string, object> mergeFields, RockContext rockContext, bool createCommunicationRecord,
-            Dictionary<string, string> metaData )
+        /// <summary>
+        /// Sends the specified recipient emails.
+        /// </summary>
+        /// <param name="recipientEmails">The recipient emails.</param>
+        /// <param name="fromEmail">From email.</param>
+        /// <param name="fromName">From name.</param>
+        /// <param name="subject">The subject.</param>
+        /// <param name="body">The body.</param>
+        /// <param name="mergeFields">The merge fields.</param>
+        /// <param name="createCommunicationRecord">if set to <c>true</c> [create communication record].</param>
+        /// <param name="metaData">The meta data.</param>
+        private void Send( string recipientEmails, string fromEmail, string fromName, string subject, string body, Dictionary<string, object> mergeFields, bool createCommunicationRecord, Dictionary<string, string> metaData )
+        {
+            var recipients = recipientEmails.ResolveMergeFields( mergeFields ).SplitDelimitedValues().Select( e => RockEmailMessageRecipient.CreateAnonymous( e, mergeFields ) ).ToList();
+            Send( recipients, fromEmail, fromName, subject, body, createCommunicationRecord, metaData );
+        }
+
+        /// <summary>
+        /// Sends the specified recipients.
+        /// </summary>
+        /// <param name="recipients">The recipients.</param>
+        /// <param name="fromEmail">From email.</param>
+        /// <param name="fromName">From name.</param>
+        /// <param name="subject">The subject.</param>
+        /// <param name="body">The body.</param>
+        /// <param name="createCommunicationRecord">if set to <c>true</c> [create communication record].</param>
+        /// <param name="metaData">The meta data.</param>
+        private void Send( List<RockEmailMessageRecipient> recipients, string fromEmail, string fromName, string subject, string body, bool createCommunicationRecord, Dictionary<string, string> metaData )
         {
             var emailMessage = new RockEmailMessage();
-            foreach ( string recipient in recipients.SplitDelimitedValues().ToList() )
-            {
-                emailMessage.AddRecipient( new RecipientData( recipient, mergeFields ) );
-            }
+            emailMessage.SetRecipients( recipients );
             emailMessage.FromEmail = fromEmail;
             emailMessage.FromName = fromName;
             emailMessage.Subject = subject;
@@ -435,7 +456,7 @@ namespace Rock.Workflow.Action
                 if ( activityGuid.HasValue )
                 {
                     var workflow = action.Activity.Workflow;
-                    var activityType = WorkflowActivityTypeCache.Read( activityGuid.Value );
+                    var activityType = WorkflowActivityTypeCache.Get( activityGuid.Value );
                     if ( workflow != null && activityType != null )
                     {
                         WorkflowActivity.Activate( activityType, workflow );

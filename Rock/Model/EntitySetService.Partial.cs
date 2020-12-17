@@ -15,9 +15,13 @@
 // </copyright>
 //
 using System;
+using System.Collections.Generic;
+using System.Data.Entity;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Rock.Data;
+using Rock.Transactions;
 using Rock.Web.Cache;
 
 namespace Rock.Model
@@ -36,13 +40,13 @@ namespace Rock.Model
         public IQueryable<IEntity> GetEntityQuery( int entitySetId )
         {
             var entitySet = this.Get( entitySetId );
-            if ( !entitySet.EntityTypeId.HasValue )
+            if ( entitySet?.EntityTypeId == null )
             {
                 // the EntitySet Items are not IEntity items
                 return null;
             }
 
-            EntityTypeCache itemEntityType = EntityTypeCache.Read( entitySet.EntityTypeId.Value );
+            EntityTypeCache itemEntityType = EntityTypeCache.Get( entitySet.EntityTypeId.Value );
 
             var rockContext = this.Context as RockContext;
             var entitySetItemsService = new EntitySetItemService( rockContext );
@@ -78,6 +82,26 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Gets the entity query based for Items that are in the EntitySet
+        /// Note that this does not include duplicates and isn't sorted by EntitySetItem.Order
+        /// For example: If the EntitySet.EntityType is Person, this will return a Person Query of the items in this set
+        /// </summary>
+        /// <param name="entitySetId">The entity set identifier.</param>
+        /// <returns></returns>
+        public IQueryable<T> GetEntityQuery<T>( int entitySetId ) where T : Rock.Data.Entity<T>, new()
+        {
+            var rockContext = this.Context as RockContext;
+            var entitySetItemsService = new EntitySetItemService( rockContext );
+            var entityItemEntityIdQry = entitySetItemsService.Queryable().Where( a => a.EntitySetId == entitySetId ).Select( a => a.EntityId );
+
+            var entityQry = new Service<T>( rockContext ).Queryable();
+
+            entityQry = entityQry.Where( a => entityItemEntityIdQry.Contains( a.Id ) );
+
+            return entityQry;
+        }
+
+        /// <summary>
         /// Gets the entity items with the Entity when the Type is known at design time
         /// </summary>
         /// <typeparam name="T"></typeparam>
@@ -102,6 +126,31 @@ namespace Rock.Model
                 EntitySetId = a.EntitySetId,
                 Item = a.Item
             } );
+        }
+
+        /// <summary>
+        /// Launch a workflow for each item in the set using a Rock transaction.
+        /// </summary>
+        /// <param name="entitySetId">The entity set identifier.</param>
+        /// <param name="workflowTypeId">The workflow type identifier.</param>
+        public void LaunchWorkflows( int entitySetId, int workflowTypeId )
+        {
+            LaunchWorkflows( entitySetId, workflowTypeId, null );
+        }
+
+        /// <summary>
+        /// Launch a workflow for each item in the set using a Rock transaction.
+        /// </summary>
+        /// <param name="entitySetId">The entity set identifier.</param>
+        /// <param name="workflowTypeId">The workflow type identifier.</param>
+        /// <param name="attributeValues">The attribute values.</param>
+        public void LaunchWorkflows( int entitySetId, int workflowTypeId, Dictionary<string, string> attributeValues )
+        {
+            var query = GetEntityQuery( entitySetId ).AsNoTracking();
+            var entities = query.ToList();
+            var launchWorkflowDetails = entities.Select( e => new LaunchWorkflowDetails( e, attributeValues ) ).ToList();
+
+            new LaunchWorkflowsTransaction( workflowTypeId, launchWorkflowDetails ).Enqueue();
         }
 
         /// <summary>

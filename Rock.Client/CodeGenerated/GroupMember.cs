@@ -35,6 +35,15 @@ namespace Rock.Client
         public int Id { get; set; }
 
         /// <summary />
+        public int? ArchivedByPersonAliasId { get; set; }
+
+        /// <summary />
+        public DateTime? ArchivedDateTime { get; set; }
+
+        /// <summary />
+        public Rock.Client.Enums.CommunicationType CommunicationPreference { get; set; } = Rock.Client.Enums.CommunicationType.Email;
+
+        /// <summary />
         public DateTime? DateTimeAdded { get; set; }
 
         /// <summary />
@@ -47,7 +56,7 @@ namespace Rock.Client
         public int GroupId { get; set; }
 
         /// <summary />
-        public Rock.Client.Enums.GroupMemberStatus GroupMemberStatus { get; set; }
+        public Rock.Client.Enums.GroupMemberStatus GroupMemberStatus { get; set; } = Rock.Client.Enums.GroupMemberStatus.Active;
 
         /// <summary />
         public int? GroupOrder { get; set; }
@@ -57,6 +66,12 @@ namespace Rock.Client
 
         /// <summary />
         public int? GuestCount { get; set; }
+
+        /// <summary />
+        public DateTime? InactiveDateTime { get; set; }
+
+        /// <summary />
+        public bool IsArchived { get; set; }
 
         /// <summary />
         public bool IsNotified { get; set; }
@@ -74,6 +89,15 @@ namespace Rock.Client
 
         /// <summary />
         public int PersonId { get; set; }
+
+        /// <summary />
+        public int? ScheduleReminderEmailOffsetDays { get; set; }
+
+        /// <summary />
+        public DateTime? ScheduleStartDate { get; set; }
+
+        /// <summary />
+        public int? ScheduleTemplateId { get; set; }
 
         /// <summary>
         /// Leave this as NULL to let Rock set this
@@ -108,6 +132,9 @@ namespace Rock.Client
         public void CopyPropertiesFrom( GroupMember source )
         {
             this.Id = source.Id;
+            this.ArchivedByPersonAliasId = source.ArchivedByPersonAliasId;
+            this.ArchivedDateTime = source.ArchivedDateTime;
+            this.CommunicationPreference = source.CommunicationPreference;
             this.DateTimeAdded = source.DateTimeAdded;
             this.ForeignGuid = source.ForeignGuid;
             this.ForeignKey = source.ForeignKey;
@@ -116,11 +143,16 @@ namespace Rock.Client
             this.GroupOrder = source.GroupOrder;
             this.GroupRoleId = source.GroupRoleId;
             this.GuestCount = source.GuestCount;
+            this.InactiveDateTime = source.InactiveDateTime;
+            this.IsArchived = source.IsArchived;
             this.IsNotified = source.IsNotified;
             this.IsSystem = source.IsSystem;
             this.ModifiedAuditValuesAlreadyUpdated = source.ModifiedAuditValuesAlreadyUpdated;
             this.Note = source.Note;
             this.PersonId = source.PersonId;
+            this.ScheduleReminderEmailOffsetDays = source.ScheduleReminderEmailOffsetDays;
+            this.ScheduleStartDate = source.ScheduleStartDate;
+            this.ScheduleTemplateId = source.ScheduleTemplateId;
             this.CreatedDateTime = source.CreatedDateTime;
             this.ModifiedDateTime = source.ModifiedDateTime;
             this.CreatedByPersonAliasId = source.CreatedByPersonAliasId;
@@ -137,6 +169,12 @@ namespace Rock.Client
     public partial class GroupMember : GroupMemberEntity
     {
         /// <summary />
+        public PersonAlias ArchivedByPersonAlias { get; set; }
+
+        /// <summary />
+        public ICollection<GroupMemberAssignment> GroupMemberAssignments { get; set; }
+
+        /// <summary />
         public ICollection<GroupMemberRequirement> GroupMemberRequirements { get; set; }
 
         /// <summary />
@@ -144,6 +182,9 @@ namespace Rock.Client
 
         /// <summary />
         public Person Person { get; set; }
+
+        /// <summary />
+        public GroupMemberScheduleTemplate ScheduleTemplate { get; set; }
 
         /// <summary>
         /// NOTE: Attributes are only populated when ?loadAttributes is specified. Options for loadAttributes are true, false, 'simple', 'expanded' 

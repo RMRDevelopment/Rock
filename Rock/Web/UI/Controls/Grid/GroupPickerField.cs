@@ -17,7 +17,6 @@
 using System;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using System.Web.UI.HtmlControls;
 
 namespace Rock.Web.UI.Controls
 {
@@ -62,10 +61,10 @@ namespace Rock.Web.UI.Controls
                 ViewState["ColumnIndex"] = value;
             }
         }
-        
+
         /// <summary>
-        /// When exporting a grid with an Export source of ColumnOutput, this property controls whether a column is included
-        /// in the export or not
+        /// When exporting a grid to Excel, this property controls whether a column is included
+        /// in the export. See <seealso cref="ExcelExportBehavior" />.
         /// </summary>
         public override ExcelExportBehavior ExcelExportBehavior
         {
@@ -104,7 +103,7 @@ namespace Rock.Web.UI.Controls
             ParentGrid = control as Grid;
             if ( ParentGrid != null )
             {
-                ColumnIndex = ParentGrid.Columns.IndexOf( this );
+                ColumnIndex = ParentGrid.GetColumnIndex( this );
             }
 
             return base.Initialize( sortingEnabled, control );

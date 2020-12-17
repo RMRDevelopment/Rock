@@ -35,6 +35,12 @@ namespace Rock.Client
         public int Id { get; set; }
 
         /// <summary />
+        public int? ConnectionRequestDetailPageId { get; set; }
+
+        /// <summary />
+        public int? ConnectionRequestDetailPageRouteId { get; set; }
+
+        /// <summary />
         public int DaysUntilRequestIdle { get; set; }
 
         /// <summary />
@@ -47,6 +53,9 @@ namespace Rock.Client
         public bool EnableFutureFollowup { get; set; }
 
         /// <summary />
+        public bool EnableRequestSecurity { get; set; }
+
+        /// <summary />
         public Guid? ForeignGuid { get; set; }
 
         /// <summary />
@@ -54,6 +63,9 @@ namespace Rock.Client
 
         /// <summary />
         public string IconCssClass { get; set; }
+
+        /// <summary />
+        public bool IsActive { get; set; } = true;
 
         /// <summary>
         /// If the ModifiedByPersonAliasId is being set manually and should not be overwritten with current user when saved, set this value to true
@@ -102,13 +114,17 @@ namespace Rock.Client
         public void CopyPropertiesFrom( ConnectionType source )
         {
             this.Id = source.Id;
+            this.ConnectionRequestDetailPageId = source.ConnectionRequestDetailPageId;
+            this.ConnectionRequestDetailPageRouteId = source.ConnectionRequestDetailPageRouteId;
             this.DaysUntilRequestIdle = source.DaysUntilRequestIdle;
             this.Description = source.Description;
             this.EnableFullActivityList = source.EnableFullActivityList;
             this.EnableFutureFollowup = source.EnableFutureFollowup;
+            this.EnableRequestSecurity = source.EnableRequestSecurity;
             this.ForeignGuid = source.ForeignGuid;
             this.ForeignKey = source.ForeignKey;
             this.IconCssClass = source.IconCssClass;
+            this.IsActive = source.IsActive;
             this.ModifiedAuditValuesAlreadyUpdated = source.ModifiedAuditValuesAlreadyUpdated;
             this.Name = source.Name;
             this.OwnerPersonAliasId = source.OwnerPersonAliasId;
@@ -128,6 +144,9 @@ namespace Rock.Client
     /// </summary>
     public partial class ConnectionType : ConnectionTypeEntity
     {
+        /// <summary />
+        public PageRoute ConnectionRequestDetailPageRoute { get; set; }
+
         /// <summary>
         /// NOTE: Attributes are only populated when ?loadAttributes is specified. Options for loadAttributes are true, false, 'simple', 'expanded' 
         /// </summary>

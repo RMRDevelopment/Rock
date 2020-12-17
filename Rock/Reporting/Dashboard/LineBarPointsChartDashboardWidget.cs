@@ -14,7 +14,6 @@
 // limitations under the License.
 // </copyright>
 //
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -22,19 +21,19 @@ using System.Linq;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
+
 using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Field;
 using Rock.Model;
-using Rock.Reporting.Dashboard;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 
 namespace Rock.Reporting.Dashboard
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     [DisplayName( "Line Chart" )]
     [Category( "Reporting > Dashboard" )]
@@ -158,7 +157,7 @@ namespace Rock.Reporting.Dashboard
                 return this.ControlsOfTypeRecursive<SlidingDateRangePicker>().First( a => a.ID == "drpSlidingDateRange" );
             }
         }
-        
+
         /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Init" /> event.
         /// </summary>
@@ -232,7 +231,7 @@ namespace Rock.Reporting.Dashboard
                 HtmlGenericControl iEdit = new HtmlGenericControl( "i" );
                 lbEdit.Controls.Add( iEdit );
                 lbEdit.CausesValidation = false;
-                iEdit.Attributes.Add( "class", "fa fa-pencil-square-o" );
+                iEdit.Attributes.Add( "class", "fa fa-edit" );
 
                 // will toggle the block config so they are no longer showing
                 lbEdit.Attributes["onclick"] = "Rock.admin.pageAdmin.showBlockConfig()";
@@ -296,7 +295,7 @@ namespace Rock.Reporting.Dashboard
                 int position = 0;
                 foreach ( var metricPartition in metricCategory.Metric.MetricPartitions.OrderBy( a => a.Order ) )
                 {
-                    var metricPartitionEntityType = EntityTypeCache.Read( metricPartition.EntityTypeId ?? 0 );
+                    var metricPartitionEntityType = EntityTypeCache.Get( metricPartition.EntityTypeId ?? 0 );
                     var controlId = string.Format( "metricPartition{0}_entityTypeEditControl", metricPartition.Id );
                     Control entityTypeEditControl = phMetricValuePartitions.FindControl( controlId );
 
@@ -344,7 +343,7 @@ namespace Rock.Reporting.Dashboard
             {
                 foreach ( var metricPartition in metricCategory.Metric.MetricPartitions.OrderBy( a => a.Order ) )
                 {
-                    var metricPartitionEntityType = EntityTypeCache.Read( metricPartition.EntityTypeId ?? 0 );
+                    var metricPartitionEntityType = EntityTypeCache.Get( metricPartition.EntityTypeId ?? 0 );
                     var controlId = string.Format( "metricPartition{0}_entityTypeEditControl", metricPartition.Id );
                     Control entityTypeEditControl = phMetricValuePartitions.FindControl( controlId );
 
@@ -385,7 +384,7 @@ namespace Rock.Reporting.Dashboard
                 {
                     if ( metricPartition.EntityTypeId.HasValue )
                     {
-                        var entityTypeCache = EntityTypeCache.Read( metricPartition.EntityTypeId.Value );
+                        var entityTypeCache = EntityTypeCache.Get( metricPartition.EntityTypeId.Value );
                         if ( entityTypeCache != null && entityTypeCache.SingleValueFieldType != null )
                         {
                             var fieldType = entityTypeCache.SingleValueFieldType;
@@ -543,7 +542,7 @@ namespace Rock.Reporting.Dashboard
                     var result = new MetricPartitionEntityId();
 
                     result.MetricPartition = mp;
-                    var entityTypeCache = EntityTypeCache.Read( result.MetricPartition.EntityTypeId ?? 0 );
+                    var entityTypeCache = EntityTypeCache.Get( result.MetricPartition.EntityTypeId ?? 0 );
 
                     if ( entityTypeCache != null && this.ContextEntity( entityTypeCache.Name ) != null )
                     {
@@ -571,7 +570,7 @@ namespace Rock.Reporting.Dashboard
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public class MetricPartitionEntityId
         {
@@ -692,7 +691,7 @@ namespace Rock.Reporting.Dashboard
             flotChartControl.Options.legend.position = this.GetAttributeValue( "LegendPosition" );
 
             flotChartControl.MetricId = this.MetricId;
-            
+
             if ( this.GetEntityFromContextEnabled )
             {
                 var metricPartitionEntityIds = GetPrimaryMetricPartitionEntityIdFromContext();

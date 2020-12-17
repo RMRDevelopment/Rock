@@ -21,10 +21,10 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Reporting;
-using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 
 namespace Rock.Field.Types
@@ -36,13 +36,6 @@ namespace Rock.Field.Types
     [Serializable]
     public class GroupMemberFieldType : FieldType, IEntityFieldType, IEntityQualifierFieldType
     {
-        #region Controls
-
-        private GroupPicker _gpGroupPicker;
-        private int? _groupId;
-
-        #endregion
-
         #region Configuration
 
         private const string GROUP_KEY = "group";
@@ -72,27 +65,14 @@ namespace Rock.Field.Types
         {
             var controls = base.ConfigurationControls();
 
-            // Save the selected groupType before we rebind it.
-            int? groupId = null;
-            if ( _gpGroupPicker != null )
-            {
-                groupId = _gpGroupPicker.SelectedValue.AsIntegerOrNull();
-
-                // store this so we know if the Group actually changes when the SelectedIndexChanged is fired.
-                _groupId = groupId;
-            }
-
             // build a group picker (the one that gets selected is
             // used to build a list of groupmember values) 
-            _gpGroupPicker = new GroupPicker();
-            _gpGroupPicker.Label = "Group";
-            _gpGroupPicker.Help = "The Group to select the member(s) from.";
-            _gpGroupPicker.SelectItem += OnQualifierUpdated;
-            if ( groupId.HasValue )
-            {
-                _gpGroupPicker.SetValue( groupId.Value );
-            }
-            controls.Add( _gpGroupPicker );
+            var gpGroupPicker = new GroupPicker();
+
+            gpGroupPicker.Label = "Group";
+            gpGroupPicker.Help = "The Group to select the member(s) from.";
+            gpGroupPicker.SelectItem += OnQualifierUpdated;
+            controls.Add( gpGroupPicker );
 
             // Add checkbox for deciding if the group member picker list is rendered as a drop
             // down list or a checkbox list.
@@ -228,7 +208,7 @@ namespace Rock.Field.Types
                     var groupMemberService = new GroupMemberService( rockContext );
                     foreach ( Guid guid in value.Split( new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries ).AsGuidList() )
                     {
-                        var groupMember = groupMemberService.Get( guid );
+                        var groupMember = groupMemberService.GetNoTracking( guid );
                         if ( groupMember != null )
                         {
                             names.Add( groupMember.Person.FullName );
@@ -289,31 +269,26 @@ namespace Rock.Field.Types
 
             int? groupId = configurationValues != null && configurationValues.ContainsKey( GROUP_KEY ) ? configurationValues[GROUP_KEY].Value.AsIntegerOrNull() : null;
 
-            if ( groupId.HasValue )
+            if ( configurationValues != null && configurationValues.ContainsKey( ALLOW_MULTIPLE_KEY ) && configurationValues[ALLOW_MULTIPLE_KEY].Value.AsBoolean() )
             {
-                if ( configurationValues != null && configurationValues.ContainsKey( ALLOW_MULTIPLE_KEY ) && configurationValues[ALLOW_MULTIPLE_KEY].Value.AsBoolean() )
+                // Select multiple members
+                editControl = new GroupMembersPicker { ID = id, GroupId = groupId };
+            }
+            else
+            {
+                // Select single member
+                editControl = new GroupMemberPicker { ID = id, GroupId = groupId };
+                if ( configurationValues != null && configurationValues.ContainsKey( ENHANCED_SELECTION_KEY ) && configurationValues[ENHANCED_SELECTION_KEY].Value.AsBoolean() )
                 {
-                    // Select multiple members
-                    editControl = new GroupMembersPicker { ID = id, GroupId = groupId };
+                    ( ( GroupMemberPicker ) editControl ).EnhanceForLongLists = true;
                 }
-                else
-                {
-                    // Select single member
-                    editControl = new GroupMemberPicker { ID = id, GroupId = groupId };
-                    if ( configurationValues != null && configurationValues.ContainsKey( ENHANCED_SELECTION_KEY ) && configurationValues[ENHANCED_SELECTION_KEY].Value.AsBoolean() )
-                    {
-                        ( ( GroupMemberPicker ) editControl ).EnhanceForLongLists = true;
-                    }
-                }
-
-                return editControl;
             }
 
-            return null;
+            return editControl;
         }
 
         /// <summary>
-        /// Reads new values entered by the user for the field
+        /// Gets the selected GroupMember(s) as a comma-delimited list of GroupMember.Guid
         /// </summary>
         /// <param name="control">Parent control that controls were added to in the CreateEditControl() method</param>
         /// <param name="configurationValues"></param>
@@ -324,60 +299,52 @@ namespace Rock.Field.Types
 
             if ( control != null && control is ListControl )
             {
-                groupMemberIdList.AddRange( ( (ListControl)control ).Items.Cast<ListItem>()
+                groupMemberIdList.AddRange( ( ( ListControl ) control ).Items.Cast<ListItem>()
                     .Where( i => i.Selected )
                     .Select( i => i.Value ).AsIntegerList() );
-            }
 
-            var guids = new List<Guid>();
+                var guids = new List<Guid>();
 
-            using ( var rockContext = new RockContext() )
-            {
-                var groupMemberService = new GroupMemberService( rockContext );
-                foreach ( int groupMemberId in groupMemberIdList )
+                if ( groupMemberIdList.Any() )
                 {
-                    var groupMember = groupMemberService.Get( groupMemberId );
-                    if ( groupMember != null )
+                    using ( var rockContext = new RockContext() )
                     {
-                        guids.Add( groupMember.Guid );
+                        var groupMemberService = new GroupMemberService( rockContext );
+                        guids = groupMemberService.Queryable().AsNoTracking().Where( t => groupMemberIdList.Contains( t.Id ) ).Select( a => a.Guid ).ToList();
                     }
                 }
+
+                return guids.AsDelimited( "," );
             }
 
-            return guids.AsDelimited( "," );
+            return null;
+
         }
 
         /// <summary>
-        /// Sets the value.
+        /// Sets the value as a GroupMember.Guid or a List of GroupMember.Guids (as strings)
         /// </summary>
         /// <param name="control">The control.</param>
         /// <param name="configurationValues"></param>
         /// <param name="value">The value.</param>
         public override void SetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
-            if ( value != null )
+            var picker = control as ListControl;
+            if ( picker != null )
             {
-                if ( control != null && control is ListControl )
+                List<int> selectedGroupMemberIds = new List<int>();
+                List<Guid> selectedGroupMemberGuids = value?.Split( ',' ).AsGuidList();
+                if ( selectedGroupMemberGuids != null )
                 {
-                    var ids = new List<string>();
                     using ( var rockContext = new RockContext() )
                     {
-                        var groupMemberService = new GroupMemberService( rockContext );
-                        foreach ( Guid guid in value.Split( new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries ).AsGuidList() )
-                        {
-                            var groupMember = groupMemberService.Get( guid );
-                            if ( groupMember != null )
-                            {
-                                ids.Add( groupMember.Id.ToString() );
-                            }
-                        }
+                        selectedGroupMemberIds = new GroupMemberService( rockContext ).GetByGuids( selectedGroupMemberGuids ).Select( a => a.Id ).ToList();
                     }
+                }
 
-                    var listControl = control as ListControl;
-                    foreach ( ListItem li in listControl.Items )
-                    {
-                        li.Selected = ids.Contains( li.Value );
-                    }
+                foreach ( ListItem li in picker.Items )
+                {
+                    li.Selected = selectedGroupMemberIds.Contains( li.Value.AsInteger() );
                 }
             }
         }
@@ -539,7 +506,7 @@ namespace Rock.Field.Types
                 }
             }
 
-            return values.Select( v => "'" + v + "'" ).ToList().AsDelimited( " or " );
+            return AddQuotes( values.ToList().AsDelimited( "' OR '" ) );
         }
 
         /// <summary>
@@ -685,18 +652,36 @@ namespace Rock.Field.Types
                     }
                 }
 
-                return comparison;
+                if ( comparison == null )
+                {
+                    // No Value specified, so return NoAttributeFilterExpression ( which means don't filter )
+                    return new NoAttributeFilterExpression();
+                }
+                else
+                {
+                    return comparison;
+                }
             }
 
             selectedValues = filterValues[0].Split( new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries ).ToList();
-            if ( selectedValues.Any() )
+            int valueCount = selectedValues.Count();
+            MemberExpression propertyExpression = Expression.Property( parameterExpression, "Value" );
+            if ( valueCount == 0 )
             {
-                MemberExpression propertyExpression = Expression.Property( parameterExpression, "Value" );
+                // No Value specified, so return NoAttributeFilterExpression ( which means don't filter )
+                return new NoAttributeFilterExpression();
+            }
+            else if ( valueCount == 1 )
+            {
+                // only one value, so do an Equal instead of Contains which might compile a little bit faster
+                ComparisonType comparisonType = ComparisonType.EqualTo;
+                return ComparisonHelper.ComparisonExpression( comparisonType, propertyExpression, AttributeConstantExpression( selectedValues[0] ) );
+            }
+            else
+            {
                 ConstantExpression constantExpression = Expression.Constant( selectedValues, typeof( List<string> ) );
                 return Expression.Call( constantExpression, typeof( List<string> ).GetMethod( "Contains", new Type[] { typeof( string ) } ), propertyExpression );
             }
-
-            return null;
         }
 
         #endregion

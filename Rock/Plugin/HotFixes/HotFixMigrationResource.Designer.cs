@@ -19,7 +19,7 @@ namespace Rock.Plugin.HotFixes {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "16.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class HotFixMigrationResource {
@@ -277,11 +277,13 @@ namespace Rock.Plugin.HotFixes {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to INSERT INTO [LavaShortCode]
+        ///   Looks up a localized string similar to IF ( SELECT COUNT(*) FROM [LavaShortCode] WHERE [Guid] = &apos;EA1335B7-158F-464F-8994-98C53D4E47FF&apos; ) = 0
+        ///BEGIN
+        ///INSERT INTO [LavaShortCode]
         ///	([Name], [Description], [Documentation], [IsSystem], [IsActive], [TagName], [Markup], [TagType], [EnabledLavaCommands], [Parameters], [Guid])
         ///	VALUES
         ///	(&apos;Vimeo&apos;,&apos;Creates a responsive Vimeo embed from just a simple video id.&apos;,&apos;&lt;p&gt;Embedding a Vimeo video is easy, right? Well what if you want it to be responsive (adjust with the size of the window)? Or what about 
-        ///control of what is shown in the player? The Vimeo shortcode helps to shorten (see what we did there) the time it tak [rest of string was truncated]&quot;;.
+        ///contro [rest of string was truncated]&quot;;.
         /// </summary>
         public static string _050_MigrationRollupsForV7_4_AddVimeoShortCode {
             get {
@@ -362,23 +364,25 @@ namespace Rock.Plugin.HotFixes {
                 return ResourceManager.GetString("_050_MigrationRollupsForV7_4_spAnalytics_ETL_Campus", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        /// Looks up a localized string similar to IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[spCrm_PersonDuplicateFinder]') AND type in (N'P', N'PC'))
-        /// DROP PROCEDURE [dbo].[spCrm_PersonDuplicateFinder]
-        /// GO
-        /// &lt;doc&gt;
+        ///   Looks up a localized string similar to 
+        ///
+        ///&lt;doc&gt;
         /// &lt;summary&gt;
-        /// This stored procedure detects potential duplicate person records and stores the results in [PersonDuplicate]
+        ///   This stored procedure detects potential duplicate person records and stores the results in [PersonDuplicate]
         /// &lt;/summary&gt;
-        /// &lt;remarks&gt;
-        /// Uses the following constants:
-        /// * Group Type - Family: '790E3215-3B10-442B-AF69-616C0DCB998E'
-        /// * Location Type - Home: '8C52E53C-2A66-435A-AE [rest of string was truncated]";.
+        /// 
+        /// &lt;remarks&gt; 
+        ///  Uses the following constants:
+        ///   * Group Type - Family: &apos;790E3215-3B10-442B-AF69-616C0DCB998E&apos;
+        ///            * Location Type - Home: &apos;8C52E53C-2A66-435A-AE6E-5EE307D9A0DC&apos;
+        ///            * Phone Type - Home: &apos;AA8732FB-2CEA-4C76-8D6D-6AAA2C6A4303&apos;
+        ///            * Phone Type - Cell: &apos;407E7E45-7B2E-4FCD-9605-ECB1339F2453&apos;
+        /// &lt;/remarks&gt;
+        /// &lt;code&gt;
+        ///   [rest of string was truncated]&quot;;.
         /// </summary>
-        /// <value>
-        /// The 050 migration rollups for v7 4 sp CRM person duplicate finder.
-        /// </value>
         public static string _050_MigrationRollupsForV7_4_spCrm_PersonDuplicateFinder {
             get {
                 return ResourceManager.GetString("_050_MigrationRollupsForV7_4_spCrm_PersonDuplicateFinder", resourceCulture);
@@ -404,6 +408,391 @@ namespace Rock.Plugin.HotFixes {
         public static string _050_MigrationRollupsForV7_4_spCrm_PersonMerge {
             get {
                 return ResourceManager.GetString("_050_MigrationRollupsForV7_4_spCrm_PersonMerge", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///    &lt;doc&gt;
+        ///	    &lt;summary&gt;
+        /// 		    This stored procedure updates several attributes related to a person&apos;s
+        ///		    giving.
+        ///	    &lt;/summary&gt;
+        ///	
+        ///	    &lt;remarks&gt;	
+        ///		    For eRA we only consider adults for the critieria.
+        ///	    &lt;/remarks&gt;
+        ///	    &lt;code&gt;
+        ///		    EXEC [dbo].[spCrm_FamilyAnalyticsGiving] 
+        ///	    &lt;/code&gt;
+        ///    &lt;/doc&gt;
+        ///    */
+        ///
+        ///    ALTER PROCEDURE [dbo].[spCrm_FamilyAnalyticsGiving]
+        ///	
+        ///    AS
+        ///    BEGIN
+        ///	
+        ///	    -- configuration of the duration in weeks
+        ///	    DECLARE @GivingDurationLongWeeks int = 52        /// [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _052_MigrationRollupsForV8_1_spCrm_FamilyAnalyticsGiving {
+            get {
+                return ResourceManager.GetString("_052_MigrationRollupsForV8_1_spCrm_FamilyAnalyticsGiving", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        /// 		This function returns either the FullName of the specified Person or a list of names of family members
+        ///        In the case of a group (family), it will return the names of the adults of the family. If there are no adults in the family, the names of the non-adults will be listed
+        ///        Example1 (specific person): Bob Smith 
+        ///        Example2 (family with kids): Bill and Sally Jones
+        ///        Example3 (different lastnames): Jim Jackson and Betty Sanders
+        ///        Example4 (just kids [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _052_MigrationRollupsForV8_1_ufnCrm_GetFamilyTitle {
+            get {
+                return ResourceManager.GetString("_052_MigrationRollupsForV8_1_ufnCrm_GetFamilyTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        /// 		This function returns either the FullName of the specified Person or a list of names of family members
+        ///        In the case of a group (family), it will return the names of the adults of the family. If there are no adults in the family, the names of the non-adults will be listed
+        ///        Example1 (specific person): Bob Smith 
+        ///        Example2 (family with kids): Bill and Sally Jones
+        ///        Example3 (different lastnames): Jim Jackson and Betty Sanders
+        ///        Example4 (just kids [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _052_MigrationRollupsForV8_1_ufnCrm_GetFamilyTitleIncludeInactive {
+            get {
+                return ResourceManager.GetString("_052_MigrationRollupsForV8_1_ufnCrm_GetFamilyTitleIncludeInactive", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        /// 		This stored procedure returns a data set used by the Rock eRA job to add/remove
+        ///		people from being an eRA. It should not be modified as it will be updated in the
+        ///		future to meet additional requirements.
+        ///
+        ///		The goal of the query is to return both those that meet the eRA requirements as well
+        ///		as those that are marked as already being an eRA and the criteria to ensure that
+        ///		they still should be an era.
+        ///	&lt;/summary&gt;
+        ///	
+        ///	&lt;remarks&gt;	
+        ///		For eRA we only consider adults for the c [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _056_MigrationRollupsForV8_4_spCrm_FamilyAnalyticsEraDataset {
+            get {
+                return ResourceManager.GetString("_056_MigrationRollupsForV8_4_spCrm_FamilyAnalyticsEraDataset", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to IF ( SELECT COUNT([Id]) FROM BinaryFile WHERE [Guid] = &apos;106A393A-6D98-4348-8658-E0F4573477B8&apos; ) = 0
+        ///BEGIN
+        ///
+        ///    INSERT INTO BinaryFile(
+        ///	      [IsTemporary]
+        ///	    , [IsSystem]
+        ///	    , [BinaryFileTypeId]
+        ///	    , [FileName]
+        ///	    , [MimeType]
+        ///	    , [Description]
+        ///	    , [StorageEntityTypeId]
+        ///	    , [Guid]
+        ///	    , [StorageEntitySettings]
+        ///	    , [Path]
+        ///	    , [FileSize]
+        ///    )
+        ///    VALUES (
+        ///	      0 --[IsTemporary]
+        ///	    , 0 --[IsSystem]
+        ///	    , (SELECT [Id] FROM [BinaryFileType] WHERE [Guid] = &apos;DE0E5C [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _057_MigrationRollupsForV8_5_AddCheck_inLabelToInstallIconFont {
+            get {
+                return ResourceManager.GetString("_057_MigrationRollupsForV8_5_AddCheck_inLabelToInstallIconFont", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        /// 		This function returns the attendance data needed for the Attendance Badge. If no family role (adult/child)
+        ///		is given it is looked up.  If the individual is an adult it will return family attendance if it&apos;s a child
+        ///		it will return the individual&apos;s attendance. If a person is in two families once as a child once as an
+        ///		adult it will pick the first role it finds.
+        ///	&lt;/summary&gt;
+        ///
+        ///	&lt;returns&gt;
+        ///		* AttendanceCount
+        ///		* SundaysInMonth
+        ///		* Month
+        ///		* Year
+        ///	&lt;/returns&gt;
+        ///	&lt;param name=&quot;P [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _057_MigrationRollupsForV8_5_spCheckin_BadgeAttendance {
+            get {
+                return ResourceManager.GetString("_057_MigrationRollupsForV8_5_spCheckin_BadgeAttendance", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        /// 		This stored procedure attempts to update an indivdiual&apos;s first and second visit
+        ///		attributes. Below are a few points of interest on the logic.
+        ///
+        ///		+ A child&apos;s date will only be calculated looking at their check-in data.
+        ///		+ An adult&apos;s date will be calculated looking at the check-in data of all the children.
+        ///
+        ///		+ When calculating a first-visit date it will only write the date if the first checkin date
+        ///		  is within 14 days of the record being created. This helps eliminate bad  [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _057_MigrationRollupsForV8_5_spCrm_FamilyAnalyticsFirstVisitsAttributeUpdate {
+            get {
+                return ResourceManager.GetString("_057_MigrationRollupsForV8_5_spCrm_FamilyAnalyticsFirstVisitsAttributeUpdate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        /// 		This function returns any person ids for people that have attended previously but who have not attended since the beginning date
+        ///	&lt;/summary&gt;
+        ///
+        ///	&lt;returns&gt;
+        ///		* PersonId 
+        ///		* SundayDate - Last time attended
+        ///	&lt;/returns&gt;
+        ///	&lt;param name=&apos;GroupTypeIds&apos; datatype=&apos;varchar(max)&apos;&gt;The Group Type Ids (only attendance for these group types will be included&lt;/param&gt;
+        ///	&lt;param name=&apos;StartDateTime&apos; datatype=&apos;datetime&apos;&gt;Beginning date range filter&lt;/param&gt;
+        ///	&lt;param name=&apos;GroupIds&apos; datatype=&apos;varchar( [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _059_MigrationRollupsForV8_5_2_spCheckin_AttendanceAnalyticsQuery_NonAttendees {
+            get {
+                return ResourceManager.GetString("_059_MigrationRollupsForV8_5_2_spCheckin_AttendanceAnalyticsQuery_NonAttendees", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to UPDATE [LavaShortCode] 
+        ///SET [Markup] = &apos;{% javascript url:&apos;&apos;~/Scripts/moment.min.js&apos;&apos; id:&apos;&apos;moment&apos;&apos;%}{% endjavascript %}
+        ///{% javascript url:&apos;&apos;~/Scripts/Chartjs/Chart.min.js&apos;&apos; id:&apos;&apos;chartjs&apos;&apos;%}{% endjavascript %}
+        ///
+        ///{% assign id = uniqueid %}
+        ///{% assign curvedlines = curvedlines | AsBoolean %}
+        ///
+        ///{% assign dataitemCount = dataitems | Size -%}
+        ///{% if dataitemCount &gt; 0 -%}
+        ///    {% assign fillColors = dataitems | Map:&apos;&apos;fillcolor&apos;&apos; | Join:&apos;&apos;&quot;, &quot;&apos;&apos; | Prepend:&apos;&apos;[&quot;&apos;&apos; | Append:&apos;&apos;&quot;]&apos;&apos; %}
+        ///    {% assign borderColors = [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _060_MigrationRollupsForV8_6_FixChartShortcode {
+            get {
+                return ResourceManager.GetString("_060_MigrationRollupsForV8_6_FixChartShortcode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        ///		This stored procedure returns data used by the pledge analytics block
+        ///	&lt;/summary&gt;
+        ///&lt;/doc&gt;
+        ///*/
+        ///ALTER PROCEDURE [dbo].[spFinance_PledgeAnalyticsQuery]
+        ///	  @AccountId int
+        ///	, @StartDate datetime = NULL
+        ///	, @EndDate datetime = NULL
+        ///	, @MinAmountPledged decimal(18,2) = NULL
+        ///	, @MaxAmountPledged decimal(18,2) = NULL
+        ///	, @MinComplete decimal(18,2) = NULL
+        ///	, @MaxComplete decimal(18,2) = NULL
+        ///	, @MinAmountGiven decimal(18,2) = NULL
+        ///	, @MaxAmountGiven decimal(18,2) = NULL
+        ///	, @IncludeP [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _060_MigrationRollupsForV8_6_spFinance_PledgeAnalyticsQuery_Down {
+            get {
+                return ResourceManager.GetString("_060_MigrationRollupsForV8_6_spFinance_PledgeAnalyticsQuery_Down", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        ///		This stored procedure returns data used by the pledge analytics block
+        ///	&lt;/summary&gt;
+        ///&lt;/doc&gt;
+        ///*/
+        ///ALTER PROCEDURE [dbo].[spFinance_PledgeAnalyticsQuery]
+        ///	  @AccountId int
+        ///	, @StartDate datetime = NULL
+        ///	, @EndDate datetime = NULL
+        ///	, @MinAmountPledged decimal(18,2) = NULL
+        ///	, @MaxAmountPledged decimal(18,2) = NULL
+        ///	, @MinComplete decimal(18,2) = NULL
+        ///	, @MaxComplete decimal(18,2) = NULL
+        ///	, @MinAmountGiven decimal(18,2) = NULL
+        ///	, @MaxAmountGiven decimal(18,2) = NULL
+        ///	, @IncludeP [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _060_MigrationRollupsForV8_6_spFinance_PledgeAnalyticsQuery_Up {
+            get {
+                return ResourceManager.GetString("_060_MigrationRollupsForV8_6_spFinance_PledgeAnalyticsQuery_Up", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to UPDATE [LavaShortcode] SET [Parameters]=N&apos;fillcolor^rgba(5,155,255,.6)|bordercolor^#059BFF|borderwidth^0|legendposition^bottom|legendshow^false|chartheight^400px|chartwidth^100%|tooltipshow^true|fontcolor^#777|fontfamily^sans-serif|tooltipbackgroundcolor^#000|type^bar|pointradius^3|pointcolor^#059BFF|pointbordercolor^#059BFF|pointborderwidth^0|pointhovercolor^rgba(5,155,255,.6)|pointhoverbordercolor^rgba(5,155,255,.6)|borderdash^|curvedlines^true|filllinearea^false|labels^|tooltipfontcolor^#fff|pointhoverra [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _096_MigrationRollupsForV9_5_chartjsfix {
+            get {
+                return ResourceManager.GetString("_096_MigrationRollupsForV9_5_chartjsfix", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        /// 		This stored procedure returns a data set used by the Rock eRA job to add/remove
+        ///		people from being an eRA. It should not be modified as it will be updated in the
+        ///		future to meet additional requirements.
+        ///
+        ///		The goal of the query is to return both those that meet the eRA requirements as well
+        ///		as those that are marked as already being an eRA and the criteria to ensure that
+        ///		they still should be an era.
+        ///	&lt;/summary&gt;
+        ///	
+        ///	&lt;remarks&gt;	
+        ///		For eRA we only consider adults for the c [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _097_FamilyAnalyticsProcChange_spCrm_FamilyAnalyticsEraDataset {
+            get {
+                return ResourceManager.GetString("_097_FamilyAnalyticsProcChange_spCrm_FamilyAnalyticsEraDataset", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        ///        This function return people who attended based on selected filter criteria and the first 5 dates they ever attended the selected group type
+        ///	&lt;/summary&gt;
+        ///
+        ///	&lt;returns&gt;
+        ///		* PersonId
+        ///		* TimeAttending
+        ///		* SundayDate
+        ///	&lt;/returns&gt;
+        ///	&lt;param name=&apos;GroupTypeId&apos; datatype=&apos;int&apos;&gt;The Check-in Area Group Type Id (only attendance for this are will be included&lt;/param&gt;
+        ///	&lt;param name=&apos;StartDate&apos; datatype=&apos;datetime&apos;&gt;Beginning date range filter&lt;/param&gt;
+        ///	&lt;param name=&apos;EndDate&apos; datatype=&apos;dateti [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _104_MigrationRollupsFor10_3_0_spCheckin_AttendanceAnalyticsQuery_AttendeeLastAttendance {
+            get {
+                return ResourceManager.GetString("_104_MigrationRollupsFor10_3_0_spCheckin_AttendanceAnalyticsQuery_AttendeeLastAtt" +
+                        "endance", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///    &lt;summary&gt;
+        ///         This function returns any person ids for people that have attended previously but who have not attended since the beginning date
+        ///    &lt;/summary&gt;
+        ///
+        ///    &lt;returns&gt;
+        ///        * PersonId 
+        ///        * SundayDate - Last time attended
+        ///    &lt;/returns&gt;
+        ///    &lt;param name=&apos;GroupTypeIds&apos; datatype=&apos;varchar(max)&apos;&gt;The Group Type Ids (only attendance for these group types will be included&lt;/param&gt;
+        ///    &lt;param name=&apos;StartDateTime&apos; datatype=&apos;datetime&apos;&gt;Beginning date range filter&lt;/param&gt;
+        ///    &lt;p [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _104_MigrationRollupsFor10_3_0_spCheckin_AttendanceAnalyticsQuery_NonAttendees {
+            get {
+                return ResourceManager.GetString("_104_MigrationRollupsFor10_3_0_spCheckin_AttendanceAnalyticsQuery_NonAttendees", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        ///		This stored procedure returns data used by the pledge analytics block
+        ///	&lt;/summary&gt;
+        ///&lt;/doc&gt;
+        ///*/
+        ///ALTER PROCEDURE [dbo].[spFinance_PledgeAnalyticsQuery]
+        ///	  @AccountId int
+        ///	, @StartDate datetime = NULL
+        ///	, @EndDate datetime = NULL
+        ///	, @MinAmountPledged decimal(18,2) = NULL
+        ///	, @MaxAmountPledged decimal(18,2) = NULL
+        ///	, @MinComplete decimal(18,2) = NULL
+        ///	, @MaxComplete decimal(18,2) = NULL
+        ///	, @MinAmountGiven decimal(18,2) = NULL
+        ///	, @MaxAmountGiven decimal(18,2) = NULL
+        ///	, @IncludeP [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _104_MigrationRollupsFor10_3_0_spFinance_PledgeAnalyticsQuery {
+            get {
+                return ResourceManager.GetString("_104_MigrationRollupsFor10_3_0_spFinance_PledgeAnalyticsQuery", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to UPDATE [LavaShortcode] SET [Description]=N&apos;Adding dynamic charts to a page can be difficult, even for an experienced Javascript developer. The chart shortcode allows anyone to create charts with just a few lines of Lava.&apos;, [Documentation]=N&apos;&lt;p&gt;
+        ///    Adding dynamic charts to a page can be difficult, even for an experienced Javascript developer. The 
+        ///    chart shortcode allows anyone to create charts with just a few lines of Lava. There are two modes for 
+        ///    creating a chart. The first ‘simple’ mode create [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _113_MigrationRollupsFor10_3_2_FixChartYAxisShortcode {
+            get {
+                return ResourceManager.GetString("_113_MigrationRollupsFor10_3_2_FixChartYAxisShortcode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to /*
+        ///&lt;doc&gt;
+        ///	&lt;summary&gt;
+        ///		This procedure merges the data from the non-primary person to the primary person.  It
+        ///		is used when merging people in Rock and should never be used outside of that process. 
+        ///	&lt;/summary&gt;
+        ///
+        ///	&lt;returns&gt;
+        ///	&lt;/returns&gt;
+        ///	&lt;param name=&quot;Old Id&quot; datatype=&quot;int&quot;&gt;The person id of the non-primary Person being merged&lt;/param&gt;
+        ///	&lt;param name=&quot;New Id&quot; datatype=&quot;int&quot;&gt;The person id of the primary Person being merged&lt;/param&gt;
+        ///	&lt;remarks&gt;	
+        ///		Uses the following constants:
+        ///			* Group Type - Family: 790E [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string _134_AddDocumentsToPersonMerge_spCrm_PersonMerge {
+            get {
+                return ResourceManager.GetString("_134_AddDocumentsToPersonMerge_spCrm_PersonMerge", resourceCulture);
             }
         }
     }

@@ -56,13 +56,13 @@ namespace Rock.Workflow.Action
             if ( !guid.IsEmpty() )
             {
                 // Get the attribute
-                var attribute = AttributeCache.Read( guid, rockContext );
+                var attribute = AttributeCache.Get( guid, rockContext );
                 if ( attribute != null )
                 {
-                    if ( attribute.FieldTypeId == FieldTypeCache.Read( SystemGuid.FieldType.PERSON.AsGuid(), rockContext ).Id )
+                    if ( attribute.FieldTypeId == FieldTypeCache.Get( SystemGuid.FieldType.PERSON.AsGuid(), rockContext ).Id )
                     {
                         // If attribute type is a person, value should be person alias id
-                        Guid? personAliasGuid = action.GetWorklowAttributeValue( guid ).AsGuidOrNull();
+                        Guid? personAliasGuid = action.GetWorkflowAttributeValue( guid ).AsGuidOrNull();
                         if ( personAliasGuid.HasValue )
                         {
                             var personAlias = new PersonAliasService( rockContext ).Queryable( "Person" )

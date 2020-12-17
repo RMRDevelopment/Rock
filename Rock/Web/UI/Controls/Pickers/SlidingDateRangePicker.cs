@@ -25,9 +25,9 @@ using System.Web.UI.WebControls;
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select a sliding date range
     /// </summary>
-    public class SlidingDateRangePicker : CompositeControl, IRockControlAdditionalRendering
+    public class SlidingDateRangePicker : CompositeControl, IRockControlAdditionalRendering, IRockChangeHandlerControl
     {
         #region IRockControl implementation
 
@@ -294,16 +294,19 @@ namespace Rock.Web.UI.Controls
         {
             EnsureChildControls();
 
-            if ( SelectedDateRangeChanged != null )
-            {
-                SelectedDateRangeChanged( this, e );
-            }
+            SelectedDateRangeChanged?.Invoke( this, e );
+            ValueChanged?.Invoke( this, e );
         }
 
         /// <summary>
         /// Occurs when [selected date range changed].
         /// </summary>
         public event EventHandler SelectedDateRangeChanged;
+
+        /// <summary>
+        /// Occurs when the selected value has changed
+        /// </summary>
+        public event EventHandler ValueChanged;
 
         /// <summary>
         /// Populates the drop downs.
@@ -487,7 +490,7 @@ namespace Rock.Web.UI.Controls
             _ddlTimeUnitTypePlural.Style[HtmlTextWriterStyle.Display] = ( isLast || isPrevious ) ? "block" : "none";
             _drpDateRange.Style[HtmlTextWriterStyle.Display] = ( isDateRange ) ? "block" : "none";
 
-            bool needsAutoPostBack = SelectedDateRangeChanged != null;
+            bool needsAutoPostBack = SelectedDateRangeChanged != null || ValueChanged != null;
             _ddlLastCurrent.AutoPostBack = needsAutoPostBack;
             _ddlTimeUnitTypeSingular.AutoPostBack = needsAutoPostBack;
             _ddlTimeUnitTypePlural.AutoPostBack = needsAutoPostBack;
@@ -575,6 +578,8 @@ namespace Rock.Web.UI.Controls
             set
             {
                 ViewState["EnabledSlidingDateRangeTypes"] = value;
+                EnsureChildControls();
+                PopulateDropDowns();
             }
         }
 
@@ -623,6 +628,12 @@ namespace Rock.Web.UI.Controls
             set
             {
                 EnsureChildControls();
+
+                if ( !EnabledSlidingDateRangeUnits.Contains( value ) )
+                {
+                    throw new Exception( "Specified TimeUnitType is invalid for this SlidingDateRangePicker control." );
+                }
+
                 _ddlTimeUnitTypePlural.SelectedValue = value.ConvertToInt().ToString();
                 _ddlTimeUnitTypeSingular.SelectedValue = value.ConvertToInt().ToString();
             }
@@ -728,11 +739,13 @@ namespace Rock.Web.UI.Controls
             set
             {
                 string[] splitValues = ( value ?? string.Empty ).Split( '|' );
+                var defaultTimeUnit = this.EnabledSlidingDateRangeUnits.First();
+
                 if ( splitValues.Length == 5 )
                 {
                     this.SlidingDateRangeMode = splitValues[0].ConvertToEnum<SlidingDateRangeType>();
                     this.NumberOfTimeUnits = splitValues[1].AsIntegerOrNull() ?? 1;
-                    this.TimeUnit = splitValues[2].ConvertToEnumOrNull<TimeUnitType>() ?? TimeUnitType.Day;
+                    this.TimeUnit = splitValues[2].ConvertToEnumOrNull<TimeUnitType>() ?? defaultTimeUnit;
                     this.DateRangeModeStart = splitValues[3].AsDateTime();
                     this.DateRangeModeEnd = splitValues[4].AsDateTime();
                 }
@@ -740,7 +753,7 @@ namespace Rock.Web.UI.Controls
                 {
                     this.SlidingDateRangeMode = SlidingDateRangeType.All;
                     this.NumberOfTimeUnits = 1;
-                    this.TimeUnit = TimeUnitType.Hour;
+                    this.TimeUnit = defaultTimeUnit;
                     this.DateRangeModeStart = null;
                     this.DateRangeModeEnd = null;
                 }
@@ -781,6 +794,20 @@ namespace Rock.Web.UI.Controls
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Gets the selected date range.
+        /// </summary>
+        /// <value>
+        /// The selected date range.
+        /// </value>
+        public DateRange SelectedDateRange
+        {
+            get
+            {
+                return CalculateDateRangeFromDelimitedValues( this.DelimitedValues );
+            }
         }
 
         /// <summary>
@@ -952,10 +979,12 @@ namespace Rock.Web.UI.Controls
                     }
                 }
 
-                // If time unit is days, weeks, months or years subtract a second from time so that end time is with same period
+                // To avoid confusion about the day or hour of the end of the date range, subtract a microsecond off our 'less than' end date
+                // for example, if our end date is 2019-11-7, we actually want all the data less than 2019-11-8, but if a developer does EndDate.DayOfWeek, they would want 2019-11-7 and not 2019-11-8
+                // So, to make sure we include all the data for 2019-11-7, but avoid the confusion about what DayOfWeek of the end, we'll compromise by subtracting a millisecond from the end date
                 if ( result.End.HasValue && timeUnit != TimeUnitType.Hour )
                 {
-                    result.End = result.End.Value.AddSeconds( -1 );
+                    result.End = result.End.Value.AddMilliseconds( -1 );
                 }
 
             }

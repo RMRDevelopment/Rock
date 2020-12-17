@@ -17,6 +17,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
+
 using Rock.Data;
 
 namespace Rock.Model
@@ -72,7 +73,7 @@ namespace Rock.Model
         /// <summary>
         /// This is the FamilyKey (AnalyticsDimFamilyCurrent.Id) of the family of the Authorized Person that did this transaction
         /// Note that this is the family that the person was in at the time of the transaction
-        /// To see what GivingGroup they were part of when the Transaction occured, see GivingUnitKey
+        /// To see what GivingGroup they were part of when the Transaction occurred, see GivingUnitKey
         /// </summary>
         /// <value>
         /// The authorized family key.
@@ -83,7 +84,7 @@ namespace Rock.Model
         /// <summary>
         /// This is the FamilyKey (AnalyticsDimFamilyCurrent.Id) of the family of the Authorized Person that did this transaction
         /// Note that this is the family that the person is in now
-        /// To see what GivingGroup they were part of when the Transaction occured, see GivingUnitKey
+        /// To see what GivingGroup they were part of when the Transaction occurred, see GivingUnitKey
         /// </summary>
         /// <value>
         /// The authorized family key.

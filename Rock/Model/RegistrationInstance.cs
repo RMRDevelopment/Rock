@@ -19,11 +19,14 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
+using System.Data.Entity.Infrastructure;
 using System.Data.Entity.ModelConfiguration;
+using System.Linq;
 using System.Runtime.Serialization;
 
 using Newtonsoft.Json;
-
+using Rock.Communication;
 using Rock.Data;
 using Rock.Security;
 
@@ -112,9 +115,8 @@ namespace Rock.Model
         /// <value>
         /// The maximum attendees.
         /// </value>
-        [Required]
         [DataMember]
-        public int MaxAttendees { get; set; }
+        public int? MaxAttendees { get; set; }
 
         /// <summary>
         /// Gets or sets the account identifier.
@@ -126,7 +128,7 @@ namespace Rock.Model
         public int? AccountId { get; set; }
 
         /// <summary>
-        /// Gets or sets the cost (if template is configured to allow cost on instance).
+        /// Gets or sets the cost (if <see cref="RegistrationTemplate.SetCostOnInstance"/> == true).
         /// </summary>
         /// <value>
         /// The cost.
@@ -135,7 +137,7 @@ namespace Rock.Model
         public decimal? Cost { get; set; }
 
         /// <summary>
-        /// Gets or sets the minimum initial payment (if template is configured to allow cost on instance).
+        /// Gets or sets the minimum initial payment (if <see cref="RegistrationTemplate.SetCostOnInstance"/> == true).
         /// </summary>
         /// <value>
         /// The minimum initial payment.
@@ -144,18 +146,23 @@ namespace Rock.Model
         public decimal? MinimumInitialPayment { get; set; }
 
         /// <summary>
+        /// Gets or sets the default amount to pay per registrant (if <see cref="RegistrationTemplate.SetCostOnInstance"/> == true).
+        /// If this is null, the default payment will be the <see cref="Cost"/>
+        /// </summary>
+        /// <value>
+        /// The default payment.
+        /// </value>
+        [DataMember]
+        public decimal? DefaultPayment { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether this instance is active.
         /// </summary>
         /// <value>
         ///   <c>true</c> if this instance is active; otherwise, <c>false</c>.
         /// </value>
         [DataMember]
-        public bool IsActive
-        {
-            get { return _isActive; }
-            set { _isActive = value; }
-        }
-        private bool _isActive = true;
+        public bool IsActive { get; set; } = true;
 
         /// <summary>
         /// Gets or sets the name of the contact.
@@ -203,6 +210,15 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public string AdditionalConfirmationDetails { get; set; }
+
+        /// <summary>
+        /// Gets or sets the registration instructions.
+        /// </summary>
+        /// <value>
+        /// The registration instructions.
+        /// </value>
+        [DataMember]
+        public string RegistrationInstructions { get; set; }
 
         /// <summary>
         /// Optional workflow type to launch at end of registration
@@ -298,6 +314,43 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Gets the contact recipient as either an email to the person that registered, or as an anonymous email to the specified contact email if it is different than the person's email.
+        /// </summary>
+        /// <param name="mergeObjects">The merge objects.</param>
+        /// <returns></returns>
+        public RockMessageRecipient GetContactRecipient( Dictionary<string, object> mergeObjects )
+        {
+            var person = this.ContactPersonAlias?.Person;
+            string personEmail = person?.Email;
+
+            var contactEmail = this.ContactEmail;
+            if ( personEmail == contactEmail )
+            {
+                return new RockEmailMessageRecipient( person, mergeObjects );
+            }
+            else
+            {
+                return RockEmailMessageRecipient.CreateAnonymous( contactEmail, mergeObjects );
+            }
+        }
+
+        /// <summary>
+        /// Method that will be called on an entity immediately before the item is saved by context
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        /// <param name="entry">The entry.</param>
+        /// <param name="state">The state.</param>
+        public override void PreSaveChanges( Data.DbContext dbContext, DbEntityEntry entry, EntityState state )
+        {
+            if ( state == EntityState.Deleted )
+            {
+                new RegistrationInstanceService( dbContext as RockContext ).RelatedEntities.DeleteRelatedEntities( this );
+            }
+
+            base.PreSaveChanges( dbContext, entry, state );
+        }
+
+        /// <summary>
         /// Returns a <see cref="string"/> that represents this instance.
         /// </summary>
         /// <returns>
@@ -309,7 +362,6 @@ namespace Rock.Model
         }
 
         #endregion
-
     }
 
     #region Entity Configuration

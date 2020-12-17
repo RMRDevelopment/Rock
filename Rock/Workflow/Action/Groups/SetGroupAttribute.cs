@@ -19,13 +19,11 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Linq;
-using System.Data.Entity;
 
 using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
-using Rock.Web.Cache;
 
 namespace Rock.Workflow.Action
 {
@@ -66,7 +64,7 @@ namespace Rock.Workflow.Action
 
             if ( !groupAttributeGuid.IsEmpty() )
             {
-                groupGuid = action.GetWorklowAttributeValue( groupAttributeGuid ).AsGuidOrNull();
+                groupGuid = action.GetWorkflowAttributeValue( groupAttributeGuid ).AsGuidOrNull();
 
                 if ( !groupGuid.HasValue )
                 {
@@ -83,7 +81,7 @@ namespace Rock.Workflow.Action
             }
             else
             {
-                var workflowAttributeValue = action.GetWorklowAttributeValue( guid );
+                var workflowAttributeValue = action.GetWorkflowAttributeValue( guid );
 
                 if ( workflowAttributeValue != null )
                 {

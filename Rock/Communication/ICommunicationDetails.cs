@@ -14,10 +14,8 @@
 // limitations under the License.
 // </copyright>
 //
-
-using System;
 using System.Collections.Generic;
-using Rock.Model;
+using Rock.Utility;
 
 namespace Rock.Communication
 {
@@ -147,6 +145,38 @@ namespace Rock.Communication
         /// From number.
         /// </value>
         string PushSound { get; set; }
+
+        /// <summary>
+        /// Gets or sets the push image binary file identifier.
+        /// </summary>
+        /// <value>
+        /// The push image binary file identifier.
+        /// </value>
+        int? PushImageBinaryFileId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the push open action.
+        /// </summary>
+        /// <value>
+        /// The push open action.
+        /// </value>
+        PushOpenAction? PushOpenAction { get; set; }
+
+        /// <summary>
+        /// Gets or sets the push open message.
+        /// </summary>
+        /// <value>
+        /// The push open message.
+        /// </value>
+        string PushOpenMessage { get; set; }
+
+        /// <summary>
+        /// Gets or sets the push data.
+        /// </summary>
+        /// <value>
+        /// The push data.
+        /// </value>
+        string PushData { get; set; }
 
         /// <summary>
         /// Gets or sets the SMS attachment binary file ids.

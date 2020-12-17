@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Entity;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
@@ -39,6 +40,8 @@ namespace RockWeb.Blocks.Fundraising
     [LinkedPage( "Transaction Entry Page", "The Transaction Entry page to navigate to after prompting for the Fundraising Specific inputs", required: true, order: 1 )]
     [BooleanField( "Show First Name Only", "Only show the First Name of each participant instead of Full Name", defaultValue: false, order: 2 )]
     [BooleanField( "Allow Automatic Selection", "If enabled and there is only one participant and registrations are not enabled then that participant will automatically be selected and this page will get bypassed.", defaultValue: false, order: 3 )]
+    [GroupField( "Root Group", "Select the group that will be used as the base of the list.", required: false, order: 4 )]
+   
     public partial class FundraisingDonationEntry : RockBlock
     {
         #region Base Control Methods
@@ -118,13 +121,13 @@ namespace RockWeb.Blocks.Fundraising
                 //
                 if ( GetAttributeValue( "AllowAutomaticSelection" ).AsBoolean( false ) && groupMember == null )
                 {
-                    var members = group.Members.Where( m => m.GroupRole.Guid == "F82DF077-9664-4DA8-A3D9-7379B690124D".AsGuid() ).ToList();
+                    var members = group.Members.Where( m => ! m.GroupRole.IsLeader ).ToList();
                     if ( members.Count == 1 && members[0].GroupMemberStatus == GroupMemberStatus.Active )
                     {
                         group.LoadAttributes( rockContext );
                         if ( string.IsNullOrWhiteSpace( group.GetAttributeValue( "RegistrationInstance" ) ) )
                         {
-                            groupMember = group.Members.First();
+                            groupMember = members.First();
                         }
                     }
                 }
@@ -138,14 +141,44 @@ namespace RockWeb.Blocks.Fundraising
             }
         }
 
+        private IEnumerable<int> GetChildGroupIds( Guid? rootGroupGuid, RockContext context )
+        {
+
+            var service = new GroupService( context );
+            var groupIds = new List<int>();
+
+            var baseGroup = service.Get( rootGroupGuid ?? Guid.Empty );
+
+            if ( baseGroup != null )
+            {
+                groupIds.Add( baseGroup.Id );
+                groupIds.AddRange( service.GetAllDescendentGroupIds( baseGroup.Id, false ) );
+            }
+
+            return groupIds;
+
+        }
+
         /// <summary>
         /// Populates the group drop down.
         /// </summary>
         protected void PopulateGroupDropDown()
         {
             var rockContext = new RockContext();
-            Guid groupTypeFundraisingOpportunity = "4BE7FC44-332D-40A8-978E-47B7035D7A0C".AsGuid();
-            var fundraisingOpportunityList = new GroupService( rockContext ).Queryable().Where( a => a.GroupType.Guid == groupTypeFundraisingOpportunity && a.IsActive && a.Members.Any() ).OrderBy( a => a.Order ).ThenBy( a => a.Name ).ToList();
+            var groupTypeIdFundraising = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_FUNDRAISINGOPPORTUNITY.AsGuid() ).Id;
+
+            Guid? rootGroup = GetAttributeValue( "RootGroup" ).AsGuidOrNull();
+
+            var groupQuery = new GroupService( rockContext ).Queryable().Where( a => ( a.GroupTypeId == groupTypeIdFundraising || a.GroupType.InheritedGroupTypeId == groupTypeIdFundraising ) && a.IsActive && a.Members.Any() );
+
+            if ( rootGroup.HasValue )
+            {
+                var groupIds = GetChildGroupIds( rootGroup, rockContext );
+
+                groupQuery = groupQuery.Where( g => groupIds.Contains( g.Id ) );
+            }
+
+            var fundraisingOpportunityList = groupQuery.OrderBy( a => a.Order ).ThenBy( a => a.Name ).ToList();
             ddlFundraisingOpportunity.Items.Clear();
             ddlFundraisingOpportunity.Items.Add( new ListItem() );
 
@@ -153,7 +186,9 @@ namespace RockWeb.Blocks.Fundraising
             {
                 fundraisingOpportunity.LoadAttributes( rockContext );
                 var dateRange = DateRangePicker.CalculateDateRangeFromDelimitedValues( fundraisingOpportunity.GetAttributeValue( "OpportunityDateRange" ) );
-                if ( RockDateTime.Now <= ( dateRange.End ?? DateTime.MaxValue ) )
+                var allowDonationsUntil = fundraisingOpportunity.GetAttributeValue( "AllowDonationsUntil" ).AsDateTime();
+                var untilDate = allowDonationsUntil ?? dateRange.End ?? DateTime.MaxValue;
+                if ( RockDateTime.Now <= untilDate )
                 {
                     var listItem = new ListItem( fundraisingOpportunity.GetAttributeValue( "OpportunityTitle" ), fundraisingOpportunity.Id.ToString() );
                     if ( listItem.Text.IsNullOrWhiteSpace() )

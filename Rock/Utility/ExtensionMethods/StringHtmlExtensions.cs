@@ -15,9 +15,10 @@
 // </copyright>
 //
 using System;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
-using CommonMark;
+
 using HtmlAgilityPack;
 
 namespace Rock
@@ -37,26 +38,14 @@ namespace Rock
             if ( !string.IsNullOrWhiteSpace( str ) )
             {
                 // Remove any HTML
-                string encodedStr = HttpUtility.HtmlEncode( str );
-
-                // split first word from rest of string
-                int endOfFirstWord = encodedStr.IndexOf( " " );
-
-                if ( endOfFirstWord != -1 )
-                {
-                    return "<span class='first-word'>" + encodedStr.Substring( 0, endOfFirstWord ) + " </span> " + encodedStr.Substring( endOfFirstWord, encodedStr.Length - endOfFirstWord );
-                }
-                else
-                {
-                    return "<span class='first-word'>" + encodedStr + " </span>";
-                }
+                return HttpUtility.HtmlEncode( str );
             }
 
             return string.Empty;
         }
 
         /// <summary>
-        /// Converts CR (carriage return) LF (line feed) to non-encoded html breaks (br).
+        /// Converts line endings ( CRLF or just LF ) to non-encoded html breaks &lt;br&gt;
         /// </summary>
         /// <param name="str">a string that contains CR LF</param>
         /// <returns>a string with CRLF replaced with html <code>br</code></returns>
@@ -67,7 +56,10 @@ namespace Rock
                 return string.Empty;
             }
 
-            return str.Replace( Environment.NewLine, "<br/>" ).Replace( "\x0A", "<br/>" );
+            // normalize line breaks so this works with either CRLF or LF lind endings
+            var result = str.Replace( "\r\n", "\n" );
+
+            return result.Replace( "\n", "<br>" );
         }
 
         /// <summary>
@@ -96,6 +88,59 @@ namespace Rock
         }
 
         /// <summary>
+        /// Turns a string into a properly XML Encoded string.
+        /// </summary>
+        /// <param name="str">Plain text to convert to XML Encoded string</param>
+        /// <param name="isAttribute">If <c>true</c> then additional encoding is done to ensure proper use in an XML attribute value.</param>
+        /// <returns>XML encoded string</returns>
+        public static string EncodeXml( this string str, bool isAttribute = false )
+        {
+            var sb = new StringBuilder( str.Length );
+
+            foreach ( var chr in str )
+            {
+                if ( chr == '<' )
+                {
+                    sb.Append( "&lt;" );
+                }
+                else if ( chr == '>' )
+                {
+                    sb.Append( "&gt;" );
+                }
+                else if ( chr == '&' )
+                {
+                    sb.Append( "&amp;" );
+                }
+                else if ( isAttribute && chr == '\"' )
+                {
+                    sb.Append( "&quot;" );
+                }
+                else if ( isAttribute && chr == '\'' )
+                {
+                    sb.Append( "&apos;" );
+                }
+                else if ( chr == '\n' )
+                {
+                    sb.Append( isAttribute ? "&#xA;" : "\n" );
+                }
+                else if ( chr == '\r' )
+                {
+                    sb.Append( isAttribute ? "&#xD;" : "\r" );
+                }
+                else if ( chr == '\t' )
+                {
+                    sb.Append( isAttribute ? "&#x9;" : "\t" );
+                }
+                else
+                {
+                    sb.Append( chr );
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// URLs the encode.
         /// </summary>
         /// <param name="str">The string.</param>
@@ -107,12 +152,19 @@ namespace Rock
 
         /// <summary>
         /// Sanitizes the HTML by removing tags.  If strict is true, all html tags will be removed, if false, only a blacklist of specific XSS dangerous tags and attribute values are removed.
+        /// NOTE: This method will do things like strip the less-than symbol from strings like <![CDATA['in math 6 < 7.']]>
         /// </summary>
         /// <param name="html">The HTML.</param>
         /// <param name="strict">if set to <c>true</c> [strict].</param>
         /// <returns></returns>
         public static string SanitizeHtml( this string html, bool strict = true )
         {
+            // Don't choke on nulls
+            if ( string.IsNullOrWhiteSpace( html ) )
+            {
+                return string.Empty;
+            }
+
             if ( strict )
             {
                 // from http://stackoverflow.com/a/18154152/
@@ -124,6 +176,31 @@ namespace Rock
             {
                 return Rock.Web.Utilities.HtmlSanitizer.SanitizeHtml( html );
             }
+        }
+
+        /// <summary>
+        /// Removes all lava markup from the string including short codes.
+        /// </summary>
+        /// <param name="lava">The lava.</param>
+        /// <returns></returns>
+        public static string SanitizeLava( this string lava )
+        {
+            // Don't choke on nulls
+            if ( string.IsNullOrWhiteSpace( lava ) )
+            {
+                return string.Empty;
+            }
+
+            var doubleBracesRegex = new Regex( @"\{\{([^\}]+)\}\}" );
+            lava = doubleBracesRegex.Replace( lava, string.Empty );
+
+            var bracePercentRegex = new Regex( @"\{%([^\}]+)%\}" );
+            lava = bracePercentRegex.Replace( lava, string.Empty );
+
+            var bracBracketRegex = new Regex( @"\{\[([^\}]+)\]\}" );
+            lava = bracBracketRegex.Replace( lava, string.Empty );
+
+            return lava;
         }
 
         /// <summary>
@@ -144,29 +221,29 @@ namespace Rock
             // pass through the Sanitizer.
             str = str.Replace( Environment.NewLine, "\u00A7" ).Replace( "\x0A", "\u00A7" );
 
-            // Now we pass it to sanitizer and then convert those section-symbols to <br/>
-            return str.SanitizeHtml().Replace( "\u00A7", "<br/>" );
+            // Now we pass it to sanitizer and then convert those section-symbols to <br>
+            return str.SanitizeHtml().Replace( "\u00A7", "<br>" );
         }
 
         /// <summary>
-        /// Scrubs the HTML but retains "&lt;br/&gt;",changes "&lt;/p&gt;" to "&lt;br/>&lt;br/&gt;", and "\r\n" to "&lt;br/&gt;".
+        /// Scrubs the HTML but retains "&lt;br/&gt;",changes "&lt;/p/&gt;" to "&lt;br//&gt;&lt;br/&gt;", and "\r\n" to "&lt;br/&gt;".
         /// </summary>
         /// <param name="str">The string.</param>
         /// <returns></returns>
         public static string ScrubHtmlForGridDisplay( this string str )
         {
-            if ( string.IsNullOrWhiteSpace(str) )
+            if ( string.IsNullOrWhiteSpace( str ) )
             {
                 return string.Empty;
             }
 
             // Note: \u00A7 is the section symbol, \u00A6 is the broken bar symbol
             // First convert HTML breaks to a character that can pass through the Sanitizer.
-            str = str.Replace( "<br/>", "\u00A7" ).Replace( "<br />", "\u00A7" );
+            str = str.Replace( "<br/>", "\u00A7" ).Replace( "<br />", "\u00A7" ).Replace( "<br>", "\u00A7" );
             str = str.Replace( "</p>", "\u00A6" );
 
             // Now sanitize and convert the symbols to breaks
-            str = str.SanitizeHtml().Replace( "\u00A7", "<br/>" ).Replace( "\u00A6", "<br/><br/>" ).Replace( "\r\n", "<br/>" );
+            str = str.SanitizeHtml().Replace( "\u00A7", "<br>" ).Replace( "\u00A6", "<br><br>" ).Replace( "\r\n", "<br>" );
             return str;
         }
 
@@ -212,11 +289,20 @@ namespace Rock
             var settings = CommonMark.CommonMarkSettings.Default.Clone();
             settings.RenderSoftLineBreaksAsLineBreaks = renderSoftLineBreaksAsLineBreaks;
 
-            return CommonMark.CommonMarkConverter.Convert( markdown, settings );
+            /*
+	            6/9/2020 - JME 
+	            Added the .Trim() to the return below. Without it CommonMark was converting strings
+                like 'Test' to '<p>Test</p>/r/n/r/n'. The adding of two line breaks was causing issues
+                when other filters were being applied in Lava to make line breaks '<br>'.
+
+                Reason: Notes Lava was having extra <br>'s at the end.
+            */
+            
+            return CommonMark.CommonMarkConverter.Convert( markdown, settings ).Trim();
         }
 
         /// <summary>
-        /// Moves the CSS inline using PreMailer.Net, which moves any stylesheets to inline style attributes, for maximum compatibility with E-mail clients
+        /// Moves the CSS inline using PreMailer.Net, which moves any stylesheets to inline style attributes, for maximum compatibility with email clients
         /// </summary>
         /// <param name="html">The HTML.</param>
         /// <returns></returns>

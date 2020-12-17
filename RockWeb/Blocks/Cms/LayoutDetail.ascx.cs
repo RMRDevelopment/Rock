@@ -65,7 +65,7 @@ namespace RockWeb.Blocks.Crm
 
             if ( !Page.IsPostBack )
             {
-                ShowDetail( PageParameter( "layoutId" ).AsInteger(), PageParameter( "siteId" ).AsIntegerOrNull() );
+                ShowDetail( PageParameter( "LayoutId" ).AsInteger(), PageParameter( "SiteId" ).AsIntegerOrNull() );
             }
         }
 
@@ -80,7 +80,7 @@ namespace RockWeb.Blocks.Crm
         {
             var breadCrumbs = new List<BreadCrumb>();
 
-            int? layoutId = PageParameter(pageReference, "layoutId" ).AsIntegerOrNull();
+            int? layoutId = PageParameter(pageReference, "LayoutId" ).AsIntegerOrNull();
             if ( layoutId != null )
             {
                 Layout layout = new LayoutService( new RockContext() ).Get( layoutId.Value );
@@ -159,10 +159,8 @@ namespace RockWeb.Blocks.Crm
 
                 rockContext.SaveChanges();
 
-                LayoutCache.Flush( layout.Id );
-
                 Dictionary<string, string> qryParams = new Dictionary<string, string>();
-                qryParams["layoutId"] = layout.Id.ToString();
+                qryParams["LayoutId"] = layout.Id.ToString();
                 NavigateToPage( RockPage.Guid, qryParams );
             }
         }
@@ -178,7 +176,7 @@ namespace RockWeb.Blocks.Crm
             {
                 // Cancelling on Add
                 Dictionary<string, string> qryString = new Dictionary<string, string>();
-                qryString["siteId"] = hfSiteId.Value;
+                qryString["SiteId"] = hfSiteId.Value;
                 NavigateToParentPage( qryString );
             }
             else
@@ -219,7 +217,7 @@ namespace RockWeb.Blocks.Crm
 
             if (layout == null && siteId.HasValue)
             {
-                var site = SiteCache.Read( siteId.Value );
+                var site = SiteCache.Get( siteId.Value );
                 if ( site != null )
                 {
                     layout = new Layout { Id = 0 };
@@ -335,7 +333,7 @@ namespace RockWeb.Blocks.Crm
             ddlLayout.Items.Clear();
             ddlLayout.Items.Add( new ListItem( string.Empty, None.IdValue ) );
 
-            var site = SiteCache.Read( hfSiteId.ValueAsInt() );
+            var site = SiteCache.Get( hfSiteId.ValueAsInt() );
             if ( site != null )
             {
                 string virtualFolder = string.Format( "~/Themes/{0}/Layouts", site.Theme );

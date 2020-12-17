@@ -19,7 +19,6 @@ using System.Linq;
 
 using Newtonsoft.Json;
 
-using Rock.Model;
 using Rock.Utility;
 using Rock.Web.Cache;
 
@@ -39,7 +38,7 @@ namespace Rock.Web.UI.Controls
             ChartStyle chartStyle = null;
             if ( chartStyleDefinedValueGuid.HasValue )
             {
-                var definedValue = DefinedValueCache.Read( chartStyleDefinedValueGuid.Value );
+                var definedValue = DefinedValueCache.Get( chartStyleDefinedValueGuid.Value );
                 if ( definedValue != null )
                 {
                     chartStyle = ChartStyle.CreateFromJson( definedValue.Value, definedValue.GetAttributeValue( "ChartStyle" ) );
@@ -85,6 +84,8 @@ function (val, axis) {
 
   return formattedValue;
 }".Trim();
+
+            this.series = this.series ?? new SeriesOptions( false, true, false );
 
             SetFlotLinesPointsBarsStyle( chartStyle, this.series.lines );
             SetFlotLinesPointsBarsStyle( chartStyle, this.series.bars );
@@ -334,7 +335,7 @@ function (val, axis) {
         public string tickColor { get; set; }
 
         /// <summary>
-        /// Gets or sets the tick formatter which can be null or a custom javascipt function.
+        /// Gets or sets the tick formatter which can be null or a custom javascript function.
         /// Example: tickFormatter = function (val, axis) {
         ///    if (val > 1000000)
         ///        return (val / 1000000).toFixed(axis.tickDecimals) + " MB";

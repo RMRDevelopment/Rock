@@ -9,7 +9,7 @@
 
             <asp:Panel ID="pnlFilter" runat="server">
                 <div class="panel panel-block margin-t-md">
-                    <div class="panel-heading clearfix">
+                    <div class="panel-heading">
                         <h1 class="panel-title pull-left">
                             <asp:Literal ID="lFilterIconCssClass" runat="server" />
                             <asp:Literal ID="lFilterTitle" runat="server" />
@@ -17,7 +17,7 @@
                     </div>
                     <div class="panel-body">
                         <Rock:NotificationBox ID="nbFiltersError" runat="server" NotificationBoxType="Danger" Visible="false" />
-                        
+
                         <div class="filter-list">
                             <asp:PlaceHolder ID="phFilters" runat="server" />
                         </div>
@@ -31,7 +31,7 @@
             </asp:Panel>
 
             <div class="panel panel-block margin-t-md">
-                <div class="panel-heading clearfix">
+                <div class="panel-heading">
                     <h1 class="panel-title pull-left">
                         <asp:Literal ID="lResultsIconCssClass" runat="server" />
                         <asp:Literal ID="lResultsTitle" runat="server" />
@@ -56,7 +56,7 @@
                     <Rock:RockTextBox ID="txtFilterIconCssClass" runat="server" Label="Filter Icon CSS Class" />
                     <Rock:RockTextBox ID="txtFilterTitle" runat="server" Label="Filter Title" />
 
-                    <Rock:RockDropDownList ID="ddlReport" runat="server" Label="Report" Help="Select the report to present to the user. Then set which of the report's dataview's filters to show." Required="false" ValidationGroup="vgConfigure" OnSelectedIndexChanged="ddlReport_SelectedIndexChanged" AutoPostBack="true" EnhanceForLongLists="true" />
+                    <Rock:ReportPicker ID="rpReport" runat="server" Label="Report" Help="Select the report to present to the user. Then set which of the report's dataview's filters to show." Required="false" ValidationGroup="vgConfigure" OnSelectItem="rpReport_SelectItem" />
                     <Rock:RockDropDownList ID="ddlPersonIdField" runat="server" Label="PersonID Field" Help="If this report has a field for the PersonId, what is the name of that field" />
 
                     <Rock:RockControlWrapper ID="rcwDataFilters" runat="server" Label="Filters" Help="<p>Select which filters that will be visible to the user.</p><p>If Configurable is selected for a visible filter, the user will be able to change the filter, otherwise, the filter will presented as checkbox where user can choose to use the filter or not. Select 'Toggle Filter' to present a checkbox with the configurable filter.</p>" >
@@ -78,9 +78,9 @@
                                     </div>
                                 </div>
                             </ItemTemplate>
-                        </asp:Repeater>    
+                        </asp:Repeater>
                     </Rock:RockControlWrapper>
-                    
+
                 </Content>
             </Rock:ModalDialog>
         </asp:Panel>
@@ -93,13 +93,13 @@
                 var $tbLabel = row.find('.js-settings-label-html');
                 var $tbPreHtml = row.find('.js-settings-pre-html');
                 var $tbPostHtml = row.find('.js-settings-post-html');
-                
+
                 if ($cbShowAsFilter.is(':checked')) {
                     $cbConfigurable.removeAttr('disabled');
                     $tbLabel.removeAttr('disabled');
                     $tbPreHtml.removeAttr('disabled');
                     $tbPostHtml.removeAttr('disabled');
-                    
+
                     if ($cbConfigurable.is(':checked')) {
                         // if showfilter and configurable, let them choose whether to show the filter checkbox
                         $cbTogglable.removeAttr('disabled');

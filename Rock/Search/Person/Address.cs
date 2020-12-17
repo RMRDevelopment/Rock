@@ -19,8 +19,10 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Linq;
+
 using Rock.Data;
 using Rock.Model;
+using Rock.Web.Cache;
 
 namespace Rock.Search.Person
 {
@@ -59,7 +61,7 @@ namespace Rock.Search.Person
 
             Guid groupTypefamilyGuid = new Guid( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY );
             Guid homeAddressTypeGuid = new Guid( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME );
-            var homeAddressTypeValueId = Rock.Web.Cache.DefinedValueCache.Read( homeAddressTypeGuid, rockContext ).Id;
+            var homeAddressTypeValueId = DefinedValueCache.Get( homeAddressTypeGuid, rockContext ).Id;
 
             var service = new GroupMemberService( rockContext );
             return service.Queryable()

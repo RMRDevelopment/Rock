@@ -17,6 +17,7 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
+
 using Rock.Data;
 
 namespace Rock.Model
@@ -53,7 +54,7 @@ namespace Rock.Model
         #region Entity Properties
 
         /// <summary>
-        /// This is the FamilyKey (AnalyticsDimFamilyCurrent.Id) of the family of the Person that attendend
+        /// This is the FamilyKey (AnalyticsDimFamilyCurrent.Id) of the family of the Person that attended
         /// Note that this is the family that the person was in at the time of the attendance
         /// </summary>
         /// <value>
@@ -63,7 +64,7 @@ namespace Rock.Model
         public int? FamilyKey { get; set; }
 
         /// <summary>
-        /// This is the FamilyKey (AnalyticsDimFamilyCurrent.Id) of the family of the Person that attendend
+        /// This is the FamilyKey (AnalyticsDimFamilyCurrent.Id) of the family of the Person that attended
         /// Note that this is the family that the person is in now
         /// </summary>
         /// <value>

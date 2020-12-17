@@ -21,7 +21,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
+
 using EntityFramework.Utilities;
+
 using Rock.Data;
 
 namespace Rock.Model
@@ -45,6 +47,7 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         [Key, DatabaseGenerated( DatabaseGeneratedOption.None )]
+        [FieldType( Rock.SystemGuid.FieldType.DATE )]
         public int DateKey { get; set; }
 
         /// <summary>
@@ -213,10 +216,10 @@ namespace Rock.Model
         public string CalendarMonthName { get; set; }
 
         /// <summary>
-        /// Gets or sets the calendar in month name abbrevated. Format: "MMM"
+        /// Gets or sets the calendar in month name abbreviated. Format: "MMM"
         /// </summary>
         /// <value>
-        /// The calendar in month name abbrevated.
+        /// The calendar in month name abbreviated.
         /// </value>
         [DataMember]
         [MaxLength( 450 )]
@@ -300,10 +303,10 @@ namespace Rock.Model
         public string FiscalMonth { get; set; }
 
         /// <summary>
-        /// Gets or sets the fiscal month abbrevated.
+        /// Gets or sets the fiscal month abbreviated.
         /// </summary>
         /// <value>
-        /// The fiscal month abbrevated.
+        /// The fiscal month abbreviated.
         /// </value>
         [DataMember]
         [MaxLength( 450 )]
@@ -709,6 +712,8 @@ namespace Rock.Model
 
             // New Year's Day            Jan 1
             holidayList.Add( new Holiday( "NewYears", new DateTime( vYear, 1, 1 ) ) );
+
+            // NOTE: DayOfWeek.Monday is used since these Holidays occur on Mondays ( it has nothing to do with RockDateTime.FirstDayOfWeek)
 
             // Martin Luther King, Jr. third Mon in Jan
             holidayList.Add( new Holiday( "MLK", GetNthDayOfNthWeek( new DateTime( vYear, 1, 1 ), DayOfWeek.Monday, ThirdWeek ) ) );

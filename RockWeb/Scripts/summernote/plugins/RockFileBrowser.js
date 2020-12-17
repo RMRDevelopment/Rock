@@ -11,6 +11,7 @@
             iframeUrl += "?rootFolder=" + encodeURIComponent(context.options.rockFileBrowserOptions.documentFolderRoot);
             iframeUrl += "&browserMode=doc";
             iframeUrl += "&fileTypeBlackList=" + encodeURIComponent(context.options.rockFileBrowserOptions.fileTypeBlackList);
+            iframeUrl += "&fileTypeWhiteList=" + encodeURIComponent(context.options.rockFileBrowserOptions.fileTypeWhiteList);
             iframeUrl += "&theme=" + context.options.rockTheme;
             iframeUrl += "&modalMode=1";
             iframeUrl += "&title=Select%20File";
@@ -34,9 +35,11 @@
                         context.invoke('editor.restoreRange');
                         context.invoke('editor.createLink', {
                             text: resultParts[1],
-                            url: Rock.settings.get('baseUrl') + resultParts[0],
+                            url: encodeURI(Rock.settings.get('baseUrl') + resultParts[0]),
                             newWindow: false
                         });
+
+                        context.invoke('triggerEvent', 'change');
                     }
                 });
 

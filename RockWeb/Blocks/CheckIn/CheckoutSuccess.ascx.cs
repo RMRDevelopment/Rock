@@ -29,6 +29,7 @@ using Rock.Attribute;
 using Rock.CheckIn;
 using Rock.Data;
 using Rock.Model;
+using Rock.Utility;
 using Rock.Web.UI;
 
 namespace RockWeb.Blocks.CheckIn
@@ -54,7 +55,6 @@ namespace RockWeb.Blocks.CheckIn
         {
             base.OnInit( e );
 
-            RockPage.AddScriptLink( "~/Scripts/CheckinClient/cordova-2.4.0.js", false );
             RockPage.AddScriptLink( "~/Scripts/CheckinClient/ZebraPrint.js" );
             RockPage.AddScriptLink( "~/Scripts/CheckinClient/checkin-core.js" );
 
@@ -92,8 +92,6 @@ namespace RockWeb.Blocks.CheckIn
                         {
                             var attendanceService = new AttendanceService( rockContext );
 
-                            var now = RockDateTime.Now;
-
                             // Print the labels
                             foreach ( var family in CurrentCheckInState.CheckIn.Families.Where( f => f.Selected ) )
                             {
@@ -103,15 +101,18 @@ namespace RockWeb.Blocks.CheckIn
                                         .Where( a => person.AttendanceIds.Contains( a.Id ) )
                                         .ToList() )
                                     {
-                                        attendance.EndDateTime = now;
+                                        var now = attendance.Campus != null ? attendance.Campus.CurrentDateTime : RockDateTime.Now;
 
-                                        if ( attendance.Group != null &&
-                                            attendance.Location != null &&
-                                            attendance.Schedule != null )
+                                        attendance.EndDateTime = now;
+                                        attendance.CheckedOutByPersonAliasId = GetCheckoutPersonAliasId();
+
+                                        if ( attendance.Occurrence.Group != null &&
+                                            attendance.Occurrence.Location != null &&
+                                            attendance.Occurrence.Schedule != null )
                                         {
                                             var li = new HtmlGenericControl( "li" );
                                             li.InnerText = string.Format( GetAttributeValue( "DetailMessage" ),
-                                                person.ToString(), attendance.Group.ToString(), attendance.Location.ToString(), attendance.Schedule.Name );
+                                                person.ToString(), attendance.Occurrence.Group.ToString(), attendance.Occurrence.Location.Name, attendance.Occurrence.Schedule.Name );
 
                                             phResults.Controls.Add( li );
                                         }
@@ -142,68 +143,11 @@ namespace RockWeb.Blocks.CheckIn
 
                         if ( printFromServer.Any() )
                         {
-                            Socket socket = null;
-                            string currentIp = string.Empty;
+                            var messages = ZebraPrint.PrintLabels( printFromServer );
 
-                            foreach ( var label in printFromServer
-                                .OrderBy( l => l.PersonId )
-                                .ThenBy( l => l.Order ) )
+                            foreach ( var message in messages )
                             {
-                                var labelCache = KioskLabel.Read( label.FileGuid );
-                                if ( labelCache != null )
-                                {
-                                    if ( !string.IsNullOrWhiteSpace( label.PrinterAddress ) )
-                                    {
-                                        if ( label.PrinterAddress != currentIp )
-                                        {
-                                            if ( socket != null && socket.Connected )
-                                            {
-                                                socket.Shutdown( SocketShutdown.Both );
-                                                socket.Close();
-                                            }
-
-                                            currentIp = label.PrinterAddress;
-                                            var printerIp = new IPEndPoint( IPAddress.Parse( currentIp ), 9100 );
-
-                                            socket = new Socket( AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp );
-                                            IAsyncResult result = socket.BeginConnect( printerIp, null, null );
-                                            bool success = result.AsyncWaitHandle.WaitOne( 5000, true );
-                                        }
-
-                                        string printContent = labelCache.FileContent;
-                                        foreach ( var mergeField in label.MergeFields )
-                                        {
-                                            if ( !string.IsNullOrWhiteSpace( mergeField.Value ) )
-                                            {
-                                                printContent = Regex.Replace( printContent, string.Format( @"(?<=\^FD){0}(?=\^FS)", mergeField.Key ), ZebraFormatString( mergeField.Value ) );
-                                            }
-                                            else
-                                            {
-                                                // Remove the box preceding merge field
-                                                printContent = Regex.Replace( printContent, string.Format( @"\^FO.*\^FS\s*(?=\^FT.*\^FD{0}\^FS)", mergeField.Key ), string.Empty );
-                                                // Remove the merge field
-                                                printContent = Regex.Replace( printContent, string.Format( @"\^FD{0}\^FS", mergeField.Key ), "^FD^FS" );
-                                            }
-                                        }
-
-                                        if ( socket.Connected )
-                                        {
-                                            var ns = new NetworkStream( socket );
-                                            byte[] toSend = System.Text.Encoding.ASCII.GetBytes( printContent );
-                                            ns.Write( toSend, 0, toSend.Length );
-                                        }
-                                        else
-                                        {
-                                            phResults.Controls.Add( new LiteralControl( "<br/>NOTE: Could not connect to printer!" ) );
-                                        }
-                                    }
-                                }
-                            }
-
-                            if ( socket != null && socket.Connected )
-                            {
-                                socket.Shutdown( SocketShutdown.Both );
-                                socket.Close();
+                                phResults.Controls.Add( new LiteralControl( string.Format( "<br/>{0}", message ) ) );
                             }
                         }
 
@@ -226,18 +170,6 @@ namespace RockWeb.Blocks.CheckIn
             NavigateToHomePage();
         }
 
-        private string ZebraFormatString( string input, bool isJson = false )
-        {
-            if ( isJson )
-            {
-                return input.Replace( "é", @"\\82" );  // fix acute e
-            }
-            else
-            {
-                return input.Replace( "é", @"\82" );  // fix acute e
-            }
-        }
-
         /// <summary>
         /// Adds the label script.
         /// </summary>
@@ -247,7 +179,7 @@ namespace RockWeb.Blocks.CheckIn
             string script = string.Format( @"
 
         // setup deviceready event to wait for cordova
-	    if (navigator.userAgent.match(/(iPhone|iPod|iPad)/)) {{
+	    if (navigator.userAgent.match(/(iPhone|iPod|iPad)/) && typeof window.RockCheckinNative === 'undefined') {{
             document.addEventListener('deviceready', onDeviceReady, false);
         }} else {{
             $( document ).ready(function() {{
@@ -267,10 +199,6 @@ namespace RockWeb.Blocks.CheckIn
             }}
 		}}
 		
-		function alertDismissed() {{
-		    // do something
-		}}
-		
 		function printLabels() {{
 		    ZebraPrintPlugin.printTags(
             	JSON.stringify(labelData), 
@@ -282,17 +210,41 @@ namespace RockWeb.Blocks.CheckIn
 				    // error[0] is the error message
 				    // error[1] determines if a re-print is possible (in the case where the JSON is good, but the printer was not connected)
 			        console.log('An error occurred: ' + error[0]);
-                    navigator.notification.alert(
-                        'An error occurred while printing the labels.' + error[0],  // message
-                        alertDismissed,         // callback
-                        'Error',            // title
-                        'Ok'                  // buttonName
-                    );
+                    alert('An error occurred while printing the labels. ' + error[0]);
 			    }}
             );
 	    }}
-", ZebraFormatString( jsonObject, true ) );
+", jsonObject );
             ScriptManager.RegisterStartupScript( this, this.GetType(), "addLabelScript", script, true );
+        }
+
+        private int? GetCheckoutPersonAliasId()
+        {
+            if ( CurrentCheckInState.CheckIn.CheckedInByPersonAliasId.HasValue )
+            {
+                return CurrentCheckInState.CheckIn.CheckedInByPersonAliasId;
+            }
+
+            int? personAliasId = null;
+            if ( Request.Cookies[Rock.Security.Authorization.COOKIE_UNSECURED_PERSON_IDENTIFIER] != null )
+            {
+                var personAliasGuid = Request.Cookies[Rock.Security.Authorization.COOKIE_UNSECURED_PERSON_IDENTIFIER].Value.AsGuidOrNull();
+                if ( personAliasGuid.HasValue )
+                {
+                    var personAlias = new PersonAliasService( new RockContext() ).GetByAliasGuid( personAliasGuid.Value );
+                    if ( personAlias != null )
+                    {
+                        personAliasId = personAlias.Id;
+                    }
+                }
+            }
+
+            if ( !personAliasId.HasValue )
+            {
+                personAliasId = CurrentPersonAliasId;
+            }
+
+            return personAliasId;
         }
 
     }

@@ -33,7 +33,12 @@ namespace RockWeb.Blocks.Communication
     /// <summary>
     /// User control for editing a system email
     /// </summary>
-    [DisplayName( "System Email Detail" )]
+#pragma warning disable 0618
+    [Obsolete( "Use SystemCommunicationDetail instead." )]
+#pragma warning restore 0618
+    [RockObsolete( "1.10" )]
+
+    [DisplayName( "System Email Detail (Obsolete. Use SystemCommunicationDetail instead)" )]
     [Category( "Communication" )]
     [Description( "Allows the administration of a system email." )]
     public partial class SystemEmailDetail : RockBlock
@@ -154,7 +159,7 @@ namespace RockWeb.Blocks.Communication
         /// <param name="emailTemplateId">The email template id.</param>
         protected void ShowEdit( int emailTemplateId )
         {
-            var globalAttributes = GlobalAttributesCache.Read();
+            var globalAttributes = GlobalAttributesCache.Get();
             
             string globalFromName = globalAttributes.GetValue( "OrganizationName" );
             tbFromName.Help = string.Format( "If a From Name value is not entered the 'Organization Name' Global Attribute value of '{0}' will be used when this template is sent. <small><span class='tip tip-lava'></span></small>", globalFromName );
@@ -169,6 +174,9 @@ namespace RockWeb.Blocks.Communication
 
             if ( emailTemplate != null )
             {
+                pdAuditDetails.Visible = true;
+                pdAuditDetails.SetEntity( emailTemplate, ResolveRockUrl( "~" ) );
+
                 lActionTitle.Text = ActionTitle.Edit( SystemEmail.FriendlyTypeName ).FormatAsHtmlTitle();
                 hfEmailTemplateId.Value = emailTemplate.Id.ToString();
 
@@ -184,6 +192,7 @@ namespace RockWeb.Blocks.Communication
             }
             else
             {
+                pdAuditDetails.Visible = false;
                 lActionTitle.Text = ActionTitle.Add( SystemEmail.FriendlyTypeName ).FormatAsHtmlTitle();
                 hfEmailTemplateId.Value = 0.ToString();
 

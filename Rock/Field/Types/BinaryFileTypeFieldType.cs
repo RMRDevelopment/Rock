@@ -16,6 +16,8 @@
 //
 using System;
 using System.Collections.Generic;
+using System.Data.Entity;
+using System.Linq;
 using System.Web.UI;
 
 using Rock.Data;
@@ -28,7 +30,7 @@ namespace Rock.Field.Types
     /// Field Type used to display a dropdown list of binary file types
     /// </summary>
     [Serializable]
-    public class BinaryFileTypeFieldType : FieldType
+    public class BinaryFileTypeFieldType : FieldType, IEntityFieldType
     {
 
         #region Formatting
@@ -50,7 +52,7 @@ namespace Rock.Field.Types
             {
                 using ( var rockContext = new RockContext() )
                 {
-                    var binaryFiletype = new BinaryFileTypeService( rockContext ).Get( binaryFileTypeGuid.Value );
+                    var binaryFiletype = new BinaryFileTypeService( rockContext ).GetNoTracking( binaryFileTypeGuid.Value );
                     if ( binaryFiletype != null )
                     {
                         formattedValue = binaryFiletype.Name;
@@ -76,7 +78,7 @@ namespace Rock.Field.Types
         /// </returns>
         public override Control EditControl( Dictionary<string, ConfigurationValue> configurationValues, string id )
         {
-            return new BinaryFileTypePicker { ID = id }; 
+            return new BinaryFileTypePicker { ID = id };
         }
 
         /// <summary>
@@ -87,21 +89,22 @@ namespace Rock.Field.Types
         /// <returns></returns>
         public override string GetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues )
         {
-            if ( control != null && control is BinaryFileTypePicker )
+            var picker = control as BinaryFileTypePicker;
+            if ( picker != null )
             {
-                int id = int.MinValue;
-                if ( Int32.TryParse( ( (BinaryFileTypePicker)control ).SelectedValue, out id ) )
+                int? itemId = picker.SelectedValue.AsIntegerOrNull();
+                Guid? itemGuid = null;
+                if ( itemId.HasValue )
                 {
                     using ( var rockContext = new RockContext() )
                     {
-                        var binaryFiletype = new BinaryFileTypeService( rockContext ).Get( id );
-                        if ( binaryFiletype != null )
-                        {
-                            return binaryFiletype.Guid.ToString();
-                        }
+                        itemGuid = new BinaryFileTypeService( rockContext ).Queryable().AsNoTracking().Where( a => a.Id == itemId.Value ).Select( a => ( Guid? ) a.Guid ).FirstOrDefault();
                     }
                 }
+
+                return itemGuid?.ToString() ?? string.Empty;
             }
+
             return null;
         }
 
@@ -113,24 +116,79 @@ namespace Rock.Field.Types
         /// <param name="value">The value.</param>
         public override void SetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
-            Guid binaryFileTypeGuid = Guid.Empty;
-            if (Guid.TryParse( value, out binaryFileTypeGuid ))
+            var picker = control as BinaryFileTypePicker;
+            if ( picker != null )
             {
-                if ( control != null && control is BinaryFileTypePicker )
+                int? itemId = null;
+                Guid? itemGuid = value.AsGuidOrNull();
+                if ( itemGuid.HasValue )
                 {
                     using ( var rockContext = new RockContext() )
                     {
-                        var binaryFiletype = new BinaryFileTypeService( rockContext ).Get( binaryFileTypeGuid );
-                        if ( binaryFiletype != null )
-                        {
-                            ( (BinaryFileTypePicker)control ).SetValue( binaryFiletype.Id.ToString() );
-                        }
+                        itemId = new BinaryFileTypeService( rockContext ).Queryable().Where( a => a.Guid == itemGuid.Value ).Select( a => ( int? ) a.Id ).FirstOrDefault();
                     }
                 }
+
+                picker.SetValue( itemId );
             }
         }
 
         #endregion
 
+        #region IEntityFieldType
+        /// <summary>
+        /// Gets the edit value as the IEntity.Id
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <returns></returns>
+        public int? GetEditValueAsEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues )
+        {
+            var guid = GetEditValue( control, configurationValues ).AsGuid();
+            var item = new BinaryFileTypeService( new RockContext() ).Get( guid );
+            return item != null ? item.Id : ( int? ) null;
+        }
+
+        /// <summary>
+        /// Sets the edit value from IEntity.Id value
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <param name="id">The identifier.</param>
+        public void SetEditValueFromEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues, int? id )
+        {
+            var item = new BinaryFileTypeService( new RockContext() ).Get( id ?? 0 );
+            var guidValue = item != null ? item.Guid.ToString() : string.Empty;
+            SetEditValue( control, configurationValues, guidValue );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value )
+        {
+            return GetEntity( value, null );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value, RockContext rockContext )
+        {
+            var guid = value.AsGuidOrNull();
+            if ( guid.HasValue )
+            {
+                rockContext = rockContext ?? new RockContext();
+                return new BinaryFileTypeService( rockContext ).Get( guid.Value );
+            }
+
+            return null;
+        }
+        #endregion
     }
 }

@@ -14,19 +14,13 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.Caching;
 using System.Text;
 using System.Web.UI;
-using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using Rock;
-using Rock.Data;
-using Rock.Field;
-using Rock.Model;
+
 using Rock.Web.Cache;
 
 namespace Rock.Web.UI
@@ -105,8 +99,8 @@ namespace Rock.Web.UI
                 if ( preHtml.HasMergeFields() || postHtml.HasMergeFields() )
                 {
                     var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( _rockBlock.RockPage );
-                    preHtml = preHtml.ResolveMergeFields( mergeFields );
-                    postHtml = postHtml.ResolveMergeFields( mergeFields );
+                    preHtml = preHtml.ResolveMergeFields( mergeFields, "All" );
+                    postHtml = postHtml.ResolveMergeFields( mergeFields, "All" );
                 }
             }
 
@@ -129,7 +123,7 @@ namespace Rock.Web.UI
                 blockTypeCss = parts[parts.Length - 1].Trim();
             }
             blockTypeCss = blockTypeCss.Replace( ' ', '-' ).ToLower();
-            string blockInstanceCss = "block-instance " +
+            string blockInstanceCss = "block-instance js-block-instance " +
                 blockTypeCss +
                 ( string.IsNullOrWhiteSpace( blockCache.CssClass ) ? "" : " " + blockCache.CssClass.Trim() ) +
                 ( _rockBlock.UserCanEdit || _rockBlock.UserCanAdministrate ? " can-configure " : "" );
@@ -198,12 +192,9 @@ namespace Rock.Web.UI
                 twOutput.RenderEndTag();  // block-instance
                 twOutput.Write( postHtml );
 
-                CacheItemPolicy cacheDuration = new CacheItemPolicy();
-                cacheDuration.AbsoluteExpiration = DateTimeOffset.Now.AddSeconds( blockCache.OutputCacheDuration );
-
-                RockMemoryCache cache = RockMemoryCache.Default;
+                var expiration  = RockDateTime.Now.AddSeconds( blockCache.OutputCacheDuration );
                 string _blockCacheKey = string.Format( "Rock:BlockOutput:{0}", blockCache.Id );
-                cache.Set( _blockCacheKey, sbOutput.ToString(), cacheDuration );
+                RockCache.AddOrUpdate( _blockCacheKey, sbOutput.ToString(), expiration );
             }
         }
     }

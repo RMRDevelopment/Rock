@@ -97,6 +97,7 @@ namespace Rock.Model
             target.ContactPersonAliasId = source.ContactPersonAliasId;
             target.ContactPhone = source.ContactPhone;
             target.Cost = source.Cost;
+            target.DefaultPayment = source.DefaultPayment;
             target.Details = source.Details;
             target.EndDateTime = source.EndDateTime;
             target.ForeignGuid = source.ForeignGuid;
@@ -105,6 +106,7 @@ namespace Rock.Model
             target.MaxAttendees = source.MaxAttendees;
             target.MinimumInitialPayment = source.MinimumInitialPayment;
             target.Name = source.Name;
+            target.RegistrationInstructions = source.RegistrationInstructions;
             target.RegistrationTemplateId = source.RegistrationTemplateId;
             target.RegistrationWorkflowTypeId = source.RegistrationWorkflowTypeId;
             target.ReminderSent = source.ReminderSent;

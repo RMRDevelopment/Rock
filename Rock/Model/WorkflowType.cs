@@ -18,12 +18,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Linq;
 using System.Runtime.Serialization;
 
-using Rock.Security;
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -39,7 +40,8 @@ namespace Rock.Model
     [RockDomain( "Workflow" )]
     [Table( "WorkflowType" )]
     [DataContract]
-    public partial class WorkflowType : Model<WorkflowType>, IOrdered, ICategorized
+    public partial class WorkflowType : Model<WorkflowType>, IOrdered, ICategorized, IHasActiveFlag, ICacheable
+
     {
 
         #region Entity Properties
@@ -60,7 +62,24 @@ namespace Rock.Model
         /// A <see cref="System.Boolean"/> that is <c>true</c> if the WorkflowType is active; otherwise <c>false</c>.
         /// </value>
         [DataMember]
-        public bool? IsActive { get; set; }
+        public bool? IsActive
+        {
+            get { return _isActive; }
+            set { _isActive = value ?? false; }
+        }
+        private bool _isActive = true;
+
+        /// <summary>
+        /// Gets or sets a flag indicating if this item is active or not.
+        /// </summary>
+        /// <value>
+        /// Active.
+        /// </value>
+        bool IHasActiveFlag.IsActive
+        {
+            get { return _isActive; }
+            set { _isActive = value; }
+        }
 
         /// <summary>
         /// Gets or sets the workflow identifier prefix.
@@ -175,10 +194,10 @@ namespace Rock.Model
         public int? LogRetentionPeriod { get; set; }
 
         /// <summary>
-        /// Gets or sets the completed workflow rention period in days.
+        /// Gets or sets the completed workflow retention period in days.
         /// </summary>
         /// <value>
-        /// The completed workflow rention period in days.
+        /// The completed workflow retention period in days.
         /// </value>
         [DataMember]
         public int? CompletedWorkflowRetentionPeriod { get; set; }
@@ -277,12 +296,14 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext">The database context.</param>
         /// <param name="state">The state.</param>
-        public override void PreSaveChanges( Rock.Data.DbContext dbContext, System.Data.Entity.EntityState state )
+        public override void PreSaveChanges( Rock.Data.DbContext dbContext, EntityState state )
         {
-            if ( state == System.Data.Entity.EntityState.Deleted )
+            if ( state == EntityState.Deleted )
             {
+                var rockContext = dbContext as RockContext;
+
                 // manually clear any registrations using this workflow type
-                foreach ( var template in new RegistrationTemplateService( dbContext as RockContext )
+                foreach ( var template in new RegistrationTemplateService( rockContext )
                     .Queryable()
                     .Where( r =>
                         r.RegistrationWorkflowTypeId.HasValue &&
@@ -291,13 +312,34 @@ namespace Rock.Model
                     template.RegistrationWorkflowTypeId = null;
                 }
 
-                foreach ( var instance in new RegistrationInstanceService( dbContext as RockContext )
+                foreach ( var instance in new RegistrationInstanceService( rockContext )
                     .Queryable()
                     .Where( r =>
                         r.RegistrationWorkflowTypeId.HasValue &&
                         r.RegistrationWorkflowTypeId.Value == this.Id ) )
                 {
                     instance.RegistrationWorkflowTypeId = null;
+                }
+
+                /*
+                    7/6/2020 - JH
+                    The deletion of the Workflow object graph is accomplished by a combination of SQL cascade deletes and
+                    PreSaveChanges() implementations.
+
+                    When a WorkflowType is deleted, any child Workflows will be cascade-deleted. Most children of the deleted
+                    Workflows will also be cascade-deleted, with the exception of any ConnectionRequestWorkflow records. Therefore,
+                    we need to manually delete those here in order to prevent foreign key violations within the database.
+
+                    Reason: GitHub Issue #4068
+                    https://github.com/SparkDevNetwork/Rock/issues/4068#issuecomment-648908315
+                */
+                var connectionRequestWorkflows = new ConnectionRequestWorkflowService( rockContext )
+                    .Queryable()
+                    .Where( c => c.Workflow.WorkflowTypeId == this.Id );
+
+                if ( connectionRequestWorkflows.Any() )
+                {
+                    dbContext.BulkDelete( connectionRequestWorkflows );
                 }
             }
 
@@ -317,6 +359,28 @@ namespace Rock.Model
 
         #endregion
 
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return WorkflowTypeCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            WorkflowTypeCache.UpdateCachedEntity( this.Id, entityState );
+        }
+
+        #endregion
     }
 
     #region Entity Configuration

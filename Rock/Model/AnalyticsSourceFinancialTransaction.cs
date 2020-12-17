@@ -19,6 +19,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
+
 using Rock.Data;
 
 namespace Rock.Model
@@ -67,6 +68,7 @@ namespace Rock.Model
         /// The transaction date key.
         /// </value>
         [DataMember]
+        [FieldType( Rock.SystemGuid.FieldType.DATE )]
         public int TransactionDateKey { get; set; }
 
         /// <summary>
@@ -109,7 +111,7 @@ namespace Rock.Model
         /// <summary>
         /// This is the GroupId of the family of the Authorized Person that did this transaction
         /// Note that this is the current family that the person is in. 
-        /// To see what GivingGroup they were part of when the Transaction occured, see GivingUnitId
+        /// To see what GivingGroup they were part of when the Transaction occurred, see GivingUnitId
         /// </summary>
         /// <value>
         /// The authorized family identifier.

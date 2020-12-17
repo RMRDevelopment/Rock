@@ -15,6 +15,7 @@
 // </copyright>
 //
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Web.UI;
@@ -35,9 +36,21 @@ namespace RockWeb.Blocks.Administration
     [Category( "Core" )]
     [Description( "Lists all scheduled jobs." )]
 
-    [LinkedPage("Detail Page")]
+    [LinkedPage( "Detail Page",
+        Key = AttributeKey.DetailPage )]
+
+    [LinkedPage( "History Page",
+        Description = "The page to display group history.",
+        Key = AttributeKey.HistoryPage )]
+
     public partial class ScheduledJobList : RockBlock, ICustomGridColumns
     {
+        public static class AttributeKey
+        {
+            public const string DetailPage = "DetailPage";
+            public const string HistoryPage = "HistoryPage";
+        }
+
         #region Control Methods
 
         /// <summary>
@@ -87,18 +100,27 @@ namespace RockWeb.Blocks.Administration
             var site = RockPage.Site;
             if ( e.Row.RowType == DataControlRowType.DataRow )
             {
-                // Remove the "Run Now" option from the Job Pulse job
-                Guid? jobGuid = e.Row.DataItem.GetPropertyValue( "Guid" ).ToString().AsGuidOrNull();
-                if ( jobGuid.HasValue && jobGuid.Value.Equals( Rock.SystemGuid.ServiceJob.JOB_PULSE.AsGuid() ))
+                ServiceJob serviceJob = e.Row.DataItem as ServiceJob;
+                if ( serviceJob == null )
+                {
+                    return;
+                }
+
+                // Remove the "Run Now" option and "History" button from the Job Pulse job
+                Guid? jobGuid = serviceJob.Guid;
+                if ( jobGuid.HasValue && jobGuid.Value.Equals( Rock.SystemGuid.ServiceJob.JOB_PULSE.AsGuid() ) )
                 {
                     var runNowColumn = gScheduledJobs.ColumnsOfType<EditField>().Where( a => a.HeaderText == "Run Now" ).FirstOrDefault();
-                    e.Row.Cells[gScheduledJobs.Columns.IndexOf(runNowColumn)].Text = string.Empty;
+                    e.Row.Cells[gScheduledJobs.GetColumnIndex( runNowColumn )].Text = string.Empty;
+
+                    var historyColumn = gScheduledJobs.ColumnsOfType<LinkButtonField>().Where( a => a.HeaderText == "History" ).FirstOrDefault();
+                    e.Row.Cells[gScheduledJobs.GetColumnIndex( historyColumn )].Text = string.Empty;
                 }
-                
+
                 // format duration
-                if ( e.Row.DataItem.GetPropertyValue( "LastRunDurationSeconds" ) != null )
+                if ( serviceJob.LastRunDurationSeconds.HasValue )
                 {
-                    int durationSeconds = e.Row.DataItem.GetPropertyValue( "LastRunDurationSeconds" ).ToString().AsIntegerOrNull() ?? 0;
+                    int durationSeconds = serviceJob.LastRunDurationSeconds.Value;
                     TimeSpan duration = TimeSpan.FromSeconds( durationSeconds );
 
                     var lLastRunDurationSeconds = e.Row.FindControl( "lLastRunDurationSeconds" ) as Literal;
@@ -125,16 +147,16 @@ namespace RockWeb.Blocks.Administration
                 }
 
                 // format inactive jobs
-                if ( ! e.Row.DataItem.GetPropertyValue( "IsActive" ).ToStringSafe().AsBoolean( false ) )
+                if ( serviceJob.IsActive == false )
                 {
                     e.Row.AddCssClass( "inactive" );
                 }
 
                 // format last status
                 var lLastStatus = e.Row.FindControl( "lLastStatus" ) as Literal;
-                if ( e.Row.DataItem.GetPropertyValue( "LastStatus" ) != null && lLastStatus != null)
+                if ( serviceJob.LastStatus.IsNotNullOrWhiteSpace() )
                 {
-                    string lastStatus = e.Row.DataItem.GetPropertyValue( "LastStatus" ).ToString();
+                    string lastStatus = serviceJob.LastStatus;
 
                     switch ( lastStatus )
                     {
@@ -147,6 +169,9 @@ namespace RockWeb.Blocks.Administration
                         case "Exception":
                             lLastStatus.Text = "<span class='label label-danger'>Failed</span>";
                             break;
+                        case "Warning":
+                            lLastStatus.Text = "<span class='label label-warning'>Warning</span>";
+                            break;
                         case "":
                             lLastStatus.Text = "";
                             break;
@@ -155,9 +180,14 @@ namespace RockWeb.Blocks.Administration
                             break;
                     }
                 }
+
+                var lLastStatusMessageAsHtml = e.Row.FindControl( "lLastStatusMessageAsHtml" ) as Literal;
+                if ( lLastStatusMessageAsHtml != null )
+                {
+                    lLastStatusMessageAsHtml.Text = serviceJob.LastStatusMessageAsHtml;
+                }
             }
         }
-
 
         /// <summary>
         /// Handles the Add event of the gScheduledJobs control.
@@ -166,7 +196,7 @@ namespace RockWeb.Blocks.Administration
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void gScheduledJobs_Add( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "serviceJobId", 0 );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "ServiceJobId", 0 );
         }
 
         /// <summary>
@@ -176,7 +206,7 @@ namespace RockWeb.Blocks.Administration
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gScheduledJobs_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "serviceJobId", e.RowKeyId );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "ServiceJobId", e.RowKeyId );
         }
 
         /// <summary>
@@ -197,7 +227,7 @@ namespace RockWeb.Blocks.Administration
                 mdGridWarning.Show( string.Format( "The '{0}' job has been started.", job.Name ), ModalAlertType.Information );
 
                 // wait a split second for the job to start so that the grid will show the status (if it changed)
-                System.Threading.Thread.Sleep( 250 );
+                System.Threading.Tasks.Task.Delay( 250 ).Wait();
             }
 
             BindGrid();
@@ -237,6 +267,19 @@ namespace RockWeb.Blocks.Administration
             BindGrid();
         }
 
+        /// <summary>
+        /// Handles the History event of the gScheduledJobs control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
+        protected void gScheduledJobs_History( object sender, RowEventArgs e )
+        {
+            var pageParams = new Dictionary<string, string>();
+            pageParams.Add( "ScheduledJobId", e.RowKeyId.ToString() );
+            string groupHistoryUrl = LinkedPageUrl( AttributeKey.HistoryPage, pageParams );
+            Response.Redirect( groupHistoryUrl, false );
+            Context.ApplicationInstance.CompleteRequest();
+        }
         #endregion
 
         #region Internal Methods
@@ -257,10 +300,10 @@ namespace RockWeb.Blocks.Administration
             {
                 gScheduledJobs.DataSource = jobService.GetAllJobs().OrderByDescending( a => a.LastRunDateTime ).ThenBy( a => a.Name ).ToList();
             }
-            
+
             gScheduledJobs.DataBind();
         }
 
         #endregion
-}
+    }
 }

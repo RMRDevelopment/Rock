@@ -34,7 +34,7 @@ namespace RockWeb.Blocks.Security
     /// </summary>
     [DisplayName( "Person Viewed" )]
     [Category( "Security" )]
-    [Description( "Block for displaying people who have viewed this person's profile and whose profile's this person has viewed. A block level attribute determines which view is displayed." )]
+    [Description( "Block for displaying people who have viewed this person's profile and whose profiles this person has viewed. A block level attribute determines which view is displayed." )]
 
     [BooleanField( "See Profiles Viewed", "Flag indicating whether this block will show you a list of people this person has viewed or a list of people who have viewed this person (this is the default).", false )]
     [ContextAware( typeof( Person ) )]
@@ -113,9 +113,9 @@ namespace RockWeb.Blocks.Security
         protected void gViewed_RowSelected( object sender, RowEventArgs e )
         {
             Dictionary<string, string> queryParams = new Dictionary<string, string>();
-            queryParams.Add( "targetId", e.RowKeyValue.ToString() );
-            queryParams.Add( "viewerId", personId.ToString() );
-            queryParams.Add( "viewedBy", "false" );
+            queryParams.Add( "TargetId", e.RowKeyValue.ToString() );
+            queryParams.Add( "ViewerId", personId.ToString() );
+            queryParams.Add( "ViewedBy", "false" );
             NavigateToLinkedPage( "DetailPage", queryParams );
         }
 
@@ -127,9 +127,9 @@ namespace RockWeb.Blocks.Security
         protected void gViewedBy_RowSelected( object sender, RowEventArgs e )
         {
             Dictionary<string, string> queryParams = new Dictionary<string, string>();
-            queryParams.Add( "viewerId", e.RowKeyValue.ToString() );
-            queryParams.Add( "targetId", personId.ToString() );
-            queryParams.Add( "viewedBy", "true" );
+            queryParams.Add( "ViewerId", e.RowKeyValue.ToString() );
+            queryParams.Add( "TargetId", personId.ToString() );
+            queryParams.Add( "ViewedBy", "true" );
             NavigateToLinkedPage( "DetailPage", queryParams );
         }
 
@@ -190,7 +190,7 @@ namespace RockWeb.Blocks.Security
                         qry = qry.OrderByDescending( q => q.LastViewedDate );
                     }
 
-                    gViewed.EntityTypeId = EntityTypeCache.Read<PersonViewed>().Id;
+                    gViewed.EntityTypeId = EntityTypeCache.Get<PersonViewed>().Id;
                     gViewed.DataSource = qry.ToList();
                     gViewed.DataBind();
                 }
@@ -238,7 +238,7 @@ namespace RockWeb.Blocks.Security
                         qry = qry.OrderByDescending( q => q.LastViewedDate );
                     }
 
-                    gViewedBy.EntityTypeId = EntityTypeCache.Read<Person>().Id;
+                    gViewedBy.EntityTypeId = EntityTypeCache.Get<Person>().Id;
                     gViewedBy.DataSource = qry.ToList();
                     gViewedBy.DataBind();
                 }

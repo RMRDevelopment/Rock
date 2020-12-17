@@ -51,25 +51,35 @@ namespace RockWeb.Blocks.Reporting
 </ul>
 
 Example: 
-<code><pre>
--- get top 25 viewed pages from the last 30 days (excluding Home)
-select top 25  * from (
-    select 
-        distinct
-        pv.PageTitle [SeriesName], 
-        convert(date, pv.DateTimeViewed) [DateTime], 
-        count(*) [YValue] 
-    from 
-        PageView pv
-    where PageTitle is not null    
-    group by pv.PageTitle, convert(date, pv.DateTimeViewed)
-    ) x where SeriesID != 'Home' 
-and DateTime > DateAdd(day, -30, SysDateTime())
-order by YValue desc
-</pre>
+<code>
+    <pre>
+        -- Get Exception count per day for the last 10 days.
+        WITH [Last10Days]
+        AS
+        (
+            SELECT CONVERT(date, GETDATE()) [Date]
+            UNION ALL
+            SELECT DATEADD(day, -1, [Date])
+            FROM [Last10Days]
+            WHERE ([Date] > GETDATE() - 9)
+        )
+        SELECT 'Exception Count' [SeriesName]
+            , d.[Date] [DateTime]
+            , CASE WHEN exceptions.[ExceptionCount] IS NOT NULL THEN exceptions.[ExceptionCount] ELSE 0 END [YValue]
+        FROM [Last10Days] d
+        LEFT OUTER JOIN
+        (
+            SELECT CONVERT(date, [CreatedDateTime]) [Date]
+                , COUNT(*) [ExceptionCount]
+            FROM [ExceptionLog]
+            GROUP BY CONVERT(date, [CreatedDateTime])
+        ) exceptions
+            ON d.[Date] = exceptions.[Date]
+        ORDER BY d.[Date];
+    </pre>
 </code>",
               CodeEditorMode.Sql )]
-    [TextField( "Query Params", "The parameters that the stored procedure expects in the format of 'param1=value;param2=value'. Any parameter with the same name as a page parameter (i.e. querystring, form, or page route) will have it's value replaced with the page's current value. A parameter with the name of 'CurrentPersonId' will have it's value replaced with the currently logged in person's id.", false, "" )]
+    [TextField( "Query Params", "The parameters that the stored procedure expects in the format of 'param1=value;param2=value'. Any parameter with the same name as a page parameter (i.e. querystring, form, or page route) will have its value replaced with the page's current value. A parameter with the name of 'CurrentPersonId' will have its value replaced with the currently logged in person's id.", false, "" )]
     [IntegerField( "Chart Height", "", false, 200 )]
     [DefinedValueField( Rock.SystemGuid.DefinedType.CHART_STYLES, "Chart Style", order: 3 )]
 
@@ -100,21 +110,22 @@ order by YValue desc
             pageReference.QueryString.Add( "TimeStamp", RockDateTime.Now.ToJavascriptMilliseconds().ToString() );
             lcLineChart.DataSourceUrl = pageReference.BuildUrl();
             lcLineChart.ChartHeight = this.GetAttributeValue( "ChartHeight" ).AsIntegerOrNull() ?? 200;
-            lcLineChart.Options.SetChartStyle( this.GetAttributeValue( "ChartStyle" ).AsGuidOrNull() );
             lcLineChart.Options.legend = lcLineChart.Options.legend ?? new Legend();
             lcLineChart.Options.legend.show = this.GetAttributeValue( "ShowLegend" ).AsBooleanOrNull();
             lcLineChart.Options.legend.position = this.GetAttributeValue( "LegendPosition" );
+            // Set chart style after setting options so they are not overwritten.
+            lcLineChart.Options.SetChartStyle( this.GetAttributeValue( "ChartStyle" ).AsGuidOrNull() );
 
             bcBarChart.DataSourceUrl = pageReference.BuildUrl();
             bcBarChart.ChartHeight = this.GetAttributeValue( "ChartHeight" ).AsIntegerOrNull() ?? 200;
-            bcBarChart.Options.SetChartStyle( this.GetAttributeValue( "ChartStyle" ).AsGuidOrNull() );
             bcBarChart.Options.xaxis = new AxisOptions { mode = AxisMode.categories, tickLength = 0 };
             bcBarChart.Options.series.bars.barWidth = 0.6;
             bcBarChart.Options.series.bars.align = "center";
-
             bcBarChart.Options.legend = lcLineChart.Options.legend ?? new Legend();
             bcBarChart.Options.legend.show = this.GetAttributeValue( "ShowLegend" ).AsBooleanOrNull();
             bcBarChart.Options.legend.position = this.GetAttributeValue( "LegendPosition" );
+            // Set chart style after setting options so they are not overwritten.
+            bcBarChart.Options.SetChartStyle( this.GetAttributeValue( "ChartStyle" ).AsGuidOrNull() );
 
             pcPieChart.DataSourceUrl = pageReference.BuildUrl();
             pcPieChart.ChartHeight = this.GetAttributeValue( "ChartHeight" ).AsIntegerOrNull() ?? 200;
@@ -214,16 +225,6 @@ function labelFormatter(label, series) {
             /// The y value.
             /// </value>
             public decimal? YValueTotal { get; set; }
-
-            /// <summary>
-            /// Gets the series identifier (obsolete)
-            /// NOTE: Use MetricValuePartitionEntityIds if you are populating this with a EntityTypeId|EntityId list, or use SeriesName for a static series name
-            /// </summary>
-            /// <value>
-            /// The series identifier.
-            /// </value>
-            [Obsolete( "Use MetricValuePartitionEntityIds if you are populating this with a EntityTypeId|EntityId list, or use SeriesName for a static series name" )]
-            public string SeriesId { get; set; }
 
             /// <summary>
             /// Gets or sets the name of the series. This will be the default name of the series if MetricValuePartitionEntityIds can't be resolved

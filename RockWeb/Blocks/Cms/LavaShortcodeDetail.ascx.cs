@@ -29,6 +29,8 @@ using Rock.Security;
 using Rock.Web;
 using Rock.Web.Cache;
 using Rock.Web.UI;
+using System.Collections.Generic;
+using System.Web;
 
 namespace RockWeb.Blocks.Core
 {
@@ -49,7 +51,7 @@ namespace RockWeb.Blocks.Core
 
             if ( !Page.IsPostBack )
             {
-                ShowDetail( PageParameter( "lavaShortcodeId" ).AsInteger() );
+                ShowDetail( PageParameter( "LavaShortcodeId" ).AsInteger() );
             }
         }
 
@@ -89,14 +91,14 @@ namespace RockWeb.Blocks.Core
             var rockContext = new RockContext();
             var lavaShortCodeService = new LavaShortcodeService( rockContext );
 
-            if ( lavaShortCodeService.Queryable().Any( a => a.TagName == tbTagName.Text ) && hfOriginalTagName.Value != tbTagName.Text )
+            int lavaShortCode = hfLavaShortcodeId.ValueAsInt();
+
+            if ( lavaShortCodeService.Queryable().Any( a => a.TagName == tbTagName.Text && a.Id != lavaShortCode ) )
             {
                 Page.ModelState.AddModelError( "DuplicateTag", "Tag with the same name is already in use." );
                 return;
             }
-
-            int lavaShortCode = hfLavaShortcodeId.ValueAsInt();
-
+            
             if ( lavaShortCode == 0 )
             {
                 lavaShortcode = new LavaShortcode();
@@ -120,13 +122,13 @@ namespace RockWeb.Blocks.Core
             rockContext.SaveChanges();
 
             // unregister shortcode
-            if ( hfOriginalTagName.Value.IsNotNullOrWhitespace() )
+            if ( hfOriginalTagName.Value.IsNotNullOrWhiteSpace() )
             {
                 Template.UnregisterShortcode( hfOriginalTagName.Value );
             }
 
             // register shortcode
-            if (lavaShortcode.TagType == TagType.Block )
+            if ( lavaShortcode.TagType == TagType.Block )
             {
                 Template.RegisterShortcode<DynamicShortcodeBlock>( lavaShortcode.TagName );
             }
@@ -134,8 +136,10 @@ namespace RockWeb.Blocks.Core
             {
                 Template.RegisterShortcode<DynamicShortcodeInline>( lavaShortcode.TagName );
             }
-                        
-            LavaShortcodeCache.Flush( lavaShortcode.Id );
+
+            // (bug fix) Now we have to clear the entire LavaTemplateCache because it's possible that some other
+            // usage of this shortcode is cached with a key we can't predict.
+            LavaTemplateCache.Clear();
 
             NavigateToParentPage();
         }
@@ -175,13 +179,13 @@ namespace RockWeb.Blocks.Core
             if ( !IsUserAuthorized( Authorization.EDIT ) )
             {
                 readOnly = true;
-                nbEditModeMessage.Text = EditModeMessage.ReadOnlyEditActionNotAllowed( Campus.FriendlyTypeName );
+                nbEditModeMessage.Text = EditModeMessage.ReadOnlyEditActionNotAllowed( LavaShortcode.FriendlyTypeName );
             }
 
             if ( lavaShortcode.IsSystem )
             {
                 readOnly = true;
-                nbEditModeMessage.Text = EditModeMessage.ReadOnlySystem( Campus.FriendlyTypeName );
+                nbEditModeMessage.Text = string.Format( "<strong>Note</strong> This is a system {0} and is not able to be edited.", LavaShortcode.FriendlyTypeName.ToLower() );
             }
 
             if ( readOnly )
@@ -206,12 +210,43 @@ namespace RockWeb.Blocks.Core
             hlInactive.Visible = !lavaShortcode.IsActive;
 
             lLayoutDescription.Text = lavaShortcode.Description;
+            var list = lavaShortcode.Markup.ToKeyValuePairList();
 
-            DescriptionList descriptionList = new DescriptionList();
-            descriptionList.Add( "System", lavaShortcode.IsSystem.ToYesNo() );
-            descriptionList.Add( "Tag Name", lavaShortcode.TagName );
-            descriptionList.Add( "Tag Type", lavaShortcode.TagType );
-            lblMainDetails.Text = descriptionList.Html;
+            DescriptionList headerMarkup = new DescriptionList();
+            headerMarkup.Add( "System", lavaShortcode.IsSystem.ToYesNo() );
+            headerMarkup.Add( "Tag Name", lavaShortcode.TagName );
+            headerMarkup.Add( "Tag Type", lavaShortcode.TagType );
+
+            lblHeaderFields.Text = headerMarkup.Html;
+
+            ceView.Text = lavaShortcode.Markup;
+
+            if ( !string.IsNullOrEmpty( lavaShortcode.Parameters ) )
+            {
+                var values = new List<string>();
+                string[] nameValues = lavaShortcode.Parameters.Split( new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries );
+
+                foreach ( string nameValue in nameValues )
+                {
+                    string[] nameAndValue = nameValue.Split( new char[] { '^' } );
+
+                    // url decode array items just in case they were UrlEncoded (in the KeyValueList controls)
+                    nameAndValue = nameAndValue.Select( s => HttpUtility.UrlDecode( s ) ).ToArray();
+
+                    if ( nameAndValue.Length == 2 )
+                    {
+                        values.Add( string.Format( "<strong>{0}:</strong> {1}", nameAndValue[0], nameAndValue[1] ) );
+                    }
+                    else
+                    {
+                        values.Add( nameValue );
+                    }
+                }
+
+                lblParameters.Text = string.Join( "<br/>", values );
+            }
+
+            lblEnabledCommands.Text = lavaShortcode.EnabledLavaCommands;
         }
 
         /// <summary>
@@ -241,7 +276,7 @@ namespace RockWeb.Blocks.Core
             kvlParameters.Value = lavaShortcode.Parameters;
             hfOriginalTagName.Value = lavaShortcode.TagName;
 
-            if ( lavaShortcode.EnabledLavaCommands.IsNotNullOrWhitespace() )
+            if ( lavaShortcode.EnabledLavaCommands.IsNotNullOrWhiteSpace() )
             {
                 lcpLavaCommands.SetValues( lavaShortcode.EnabledLavaCommands.Split( ',' ).ToList() );
             }

@@ -21,8 +21,9 @@ using System.Linq;
 using System.Text;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Newtonsoft.Json;
-using Rock.Chart;
+
 using Rock.Model;
 
 namespace Rock.Web.UI.Controls
@@ -119,30 +120,6 @@ namespace Rock.Web.UI.Controls
                 ViewState["MetricValuePartitionEntityIds"] = value;
             }
         }
-
-        /// <summary>
-        /// Gets or sets the entity identifier.
-        /// </summary>
-        /// <value>
-        /// The entity identifier.
-        /// </value>
-        [Obsolete("use MetricValuePartitionEntityIds instead")]
-        public int? EntityId
-        {
-            get
-            {
-                legacyEntityId = ViewState["EntityId"] as int?;
-                return legacyEntityId;
-            }
-
-            set
-            {
-                legacyEntityId = value;
-                ViewState["EntityId"] = legacyEntityId;
-            }
-        }
-        private int? legacyEntityId;
-
 
         /// <summary>
         /// Gets a value indicating whether to combine values with different EntityId values into one series vs. showing each in its own series
@@ -370,32 +347,20 @@ namespace Rock.Web.UI.Controls
         {
             get
             {
-                return ViewState["DataSourceUrl"] as string ?? "~/api/MetricValues/GetByMetricId/";
+                if ( string.IsNullOrWhiteSpace( this.ChartData ) )
+                {
+                    return ViewState["DataSourceUrl"] as string ?? "~/api/MetricValues/GetByMetricId/";
+                }
+                else
+                {
+                    // Chart data has been set manually, so return an empty URL rather than the default.
+                    return string.Empty;
+                }
             }
 
             set
             {
                 ViewState["DataSourceUrl"] = value;
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the series name URL.
-        /// </summary>
-        /// <value>
-        /// The series name URL.
-        /// </value>
-        [Obsolete]
-        public string SeriesNameUrl
-        {
-            get
-            {
-                return SeriesPartitionNameUrl;
-            }
-
-            set
-            {
-                SeriesPartitionNameUrl = value;
             }
         }
 
@@ -760,12 +725,6 @@ namespace Rock.Web.UI.Controls
                     
                     position++;
                 }
-            }
-            else if ( this.legacyEntityId.HasValue )
-            {
-                
-                int partitionId = metric.MetricPartitions.OrderBy( a => a.Order ).First().Id;
-                filterParams.Add( string.Format( "MetricValuePartitions/any(metricValuePartition: metricValuePartition/EntityId eq {0} and metricValuePartition/MetricPartitionId eq {1})", this.legacyEntityId, partitionId ) );
             }
 
             if ( filterParams.Count > 0 )

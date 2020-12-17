@@ -59,7 +59,7 @@ namespace Rock.Workflow.Action
             Guid? valueGuid = updateValue.AsGuidOrNull();
             if ( valueGuid.HasValue )
             {
-                updateValue = action.GetWorklowAttributeValue( valueGuid.Value );
+                updateValue = action.GetWorkflowAttributeValue( valueGuid.Value );
 
                 // if the value is null no workflow attribute was found for that guid so use the actual guid as the value 
                 if (updateValue == null )
@@ -77,17 +77,17 @@ namespace Rock.Workflow.Action
             Guid guid = personAttribute.AsGuid();
             if (!guid.IsEmpty())
             {
-                var attribute = AttributeCache.Read( guid, rockContext );
+                var attribute = AttributeCache.Get( guid, rockContext );
                 if ( attribute != null )
                 {
                     string value = GetAttributeValue( action, "Person" );
                     guid = value.AsGuid();
                     if ( !guid.IsEmpty() )
                     {
-                        var attributePerson = AttributeCache.Read( guid, rockContext );
+                        var attributePerson = AttributeCache.Get( guid, rockContext );
                         if ( attributePerson != null )
                         {
-                            string attributePersonValue = action.GetWorklowAttributeValue( guid );
+                            string attributePersonValue = action.GetWorkflowAttributeValue( guid );
                             if ( !string.IsNullOrWhiteSpace( attributePersonValue ) )
                             {
                                 if ( attributePerson.FieldType.Class == "Rock.Field.Types.PersonFieldType" )

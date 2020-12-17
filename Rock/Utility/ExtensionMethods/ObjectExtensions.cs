@@ -15,9 +15,9 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+
 using Rock.Web.Cache;
 
 namespace Rock
@@ -28,6 +28,35 @@ namespace Rock
     public static partial class ExtensionMethods
     {
         #region Object Extensions
+
+        /// <summary>
+        /// Determines whether the specified value is not null.
+        /// </summary>
+        /// <typeparam name="T">The value type.</typeparam>
+        /// <param name="value">The value.</param>
+        /// <returns>
+        ///   <c>true</c> if the specified value is not null; otherwise, <c>false</c>.
+        /// </returns>
+        /// https://github.com/aljazsim/defensive-programming-framework-for-net
+        public static bool IsNotNull<T>( this T value )
+            where T : class
+        {
+            return !value.IsNull();
+        }
+
+        /// <summary>
+        /// Determines whether the specified value is null.
+        /// </summary>
+        /// <typeparam name="T">The value type.</typeparam>
+        /// <param name="value">The value.</param>
+        /// <returns>
+        ///   <c>true</c> if the specified value is null; otherwise, <c>false</c>.
+        /// </returns>
+        /// https://github.com/aljazsim/defensive-programming-framework-for-net
+        public static bool IsNull<T>( this T value ) where T : class
+        {
+            return value == null;
+        }
 
         /// <summary>
         /// Gets the property Value of the object's property as specified by propertyPathName.
@@ -111,11 +140,32 @@ namespace Rock
             {
                 return obj.ToString();
             }
-            return String.Empty;
+            return string.Empty;
         }
 
         /// <summary>
-        /// Gets the data annotaion attribute from. http://stackoverflow.com/questions/7027613/how-to-retrieve-data-annotations-from-code-programmatically
+        /// Returns a string representation of the object or a default value.
+        /// </summary>
+        /// <param name="obj">an object</param>
+        /// <param name="defaultValue"></param>
+        /// <returns>A string representation of the object, or the default value if the representation is null or whitespace.</returns>
+        public static string ToStringOrDefault( this object obj, string defaultValue )
+        {
+            if ( obj != null )
+            {
+                var stringValue = obj.ToString();
+
+                if ( !string.IsNullOrWhiteSpace( stringValue ) )
+                { 
+                    return stringValue;
+                }
+            }
+
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// Gets the data annotation attribute from. http://stackoverflow.com/questions/7027613/how-to-retrieve-data-annotations-from-code-programmatically
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="instance">The instance.</param>

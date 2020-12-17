@@ -15,12 +15,12 @@
 // </copyright>
 //
 using System;
+using System.Linq;
 
+using Rock;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
-using System.Linq;
-using Rock;
 
 namespace Rock.Pbx
 {
@@ -107,14 +107,14 @@ namespace Rock.Pbx
 
             // give preference to people with the phone in the mobile phone type
             // first look for a person with the phone number as a mobile phone order by family role then age
-            var mobilePhoneType = DefinedValueCache.Read( Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE );
-            var familyGroupType = GroupTypeCache.Read( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY );
+            var mobilePhoneType = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE );
+            var familyGroupType = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY );
 
             // Get all people phone number
             var peopleWithMobileNumber = personService.Queryable()
                 .Where( p =>
                     p.PhoneNumbers.Any( n =>
-                        ( n.CountryCode + n.Number ) == phoneNumber.Replace( "+", "" ) &&
+                        ( n.FullNumber ) == phoneNumber.Replace( "+", "" ) &&
                         n.NumberTypeValueId == mobilePhoneType.Id )
                     )
                 .Select( p => p.Id );
@@ -135,7 +135,7 @@ namespace Rock.Pbx
                 var peopleWithAnyNumber = personService.Queryable()
                     .Where( p =>
                         p.PhoneNumbers.Any( n =>
-                            ( n.CountryCode + n.Number ) == phoneNumber.Replace( "+", "" ) &&
+                            n.FullNumber == phoneNumber.Replace( "+", "" ) &&
                             n.NumberTypeValueId == mobilePhoneType.Id )
                         )
                     .Select( p => p.Id );
@@ -164,17 +164,17 @@ namespace Rock.Pbx
     public enum CdrDirection
     {
         /// <summary>
-        /// The incoming
+        /// Incoming
         /// </summary>
         Incoming,
 
         /// <summary>
-        /// The outgoing
+        /// Outgoing
         /// </summary>
         Outgoing,
 
         /// <summary>
-        /// The unknown
+        /// Unknown
         /// </summary>
         Unknown
     }

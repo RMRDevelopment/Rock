@@ -99,11 +99,16 @@ namespace Rock.Model
             target.DeviceVersion = source.DeviceVersion;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
+            target.IsActive = source.IsActive;
             target.MACAddress = source.MACAddress;
+            target.Manufacturer = source.Manufacturer;
+            target.Model = source.Model;
+            target.Name = source.Name;
             target.NotificationsEnabled = source.NotificationsEnabled;
             target.PersonalDeviceTypeValueId = source.PersonalDeviceTypeValueId;
             target.PersonAliasId = source.PersonAliasId;
             target.PlatformValueId = source.PlatformValueId;
+            target.SiteId = source.SiteId;
             target.CreatedDateTime = source.CreatedDateTime;
             target.ModifiedDateTime = source.ModifiedDateTime;
             target.CreatedByPersonAliasId = source.CreatedByPersonAliasId;

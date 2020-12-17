@@ -149,6 +149,23 @@ namespace Rock.Model
         [DataMember]
         public int? InitiatorPersonAliasId { get; set; }
 
+        /// <summary>
+        /// Gets or sets the Entity Id.
+        /// </summary>
+        /// <value>
+        /// The Entity Id.
+        /// </value>
+        [DataMember]
+        public int? EntityId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the Entity Type Id.
+        /// </summary>
+        /// <value>
+        /// The Entity Type Id.
+        /// </value>
+        [DataMember]
+        public int? EntityTypeId { get; set; }
         #endregion
 
         #region Virtual Properties
@@ -175,11 +192,11 @@ namespace Rock.Model
             {
                 if ( WorkflowTypeId > 0 )
                 {
-                    return WorkflowTypeCache.Read( WorkflowTypeId );
+                    return WorkflowTypeCache.Get( WorkflowTypeId );
                 }
                 else if ( WorkflowType != null )
                 {
-                    return WorkflowTypeCache.Read( WorkflowType.Id );
+                    return WorkflowTypeCache.Get( WorkflowType.Id );
                 }
                 return null;
             }
@@ -536,33 +553,37 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext">The database context.</param>
         /// <param name="state">The state.</param>
-        public override void PreSaveChanges( Rock.Data.DbContext dbContext, System.Data.Entity.EntityState state )
+        public override void PreSaveChanges( Rock.Data.DbContext dbContext, EntityState state )
         {
-            if ( _logEntries != null )
+            var rockContext = dbContext as RockContext;
+            if ( rockContext != null )
             {
-                if ( _logEntries.Any() )
+                if ( _logEntries?.Any() == true )
                 {
-                    if ( dbContext is RockContext )
+                    var workflowLogs = rockContext.WorkflowLogs;
+
+                    foreach ( var logEntry in _logEntries )
                     {
-                        var workflowLogService = new WorkflowLogService( ( dbContext as RockContext ) );
-                        foreach ( var logEntry in _logEntries )
-                        {
-                            workflowLogService.Add( new WorkflowLog { LogDateTime = logEntry.LogDateTime, LogText = logEntry.LogText, WorkflowId = this.Id } );
-                        }
-
-                        _logEntries.Clear();
+                        workflowLogs.Add( new WorkflowLog { LogDateTime = logEntry.LogDateTime, LogText = logEntry.LogText, WorkflowId = this.Id } );
                     }
-                }
-            }
 
-            // Set the workflow number
-            if ( state == System.Data.Entity.EntityState.Added )
-            {
-                int maxNumber = new WorkflowService( dbContext as RockContext )
-                    .Queryable().AsNoTracking()
-                    .Where( w => w.WorkflowTypeId == this.WorkflowTypeId )
-                    .Max( w => (int?)w.WorkflowIdNumber ) ?? 0;
-                this.WorkflowIdNumber = maxNumber + 1;
+                    _logEntries.Clear();
+                }
+
+                // Set the workflow number
+                if ( state == EntityState.Added )
+                {
+                    int maxNumber = new WorkflowService( rockContext )
+                        .Queryable().AsNoTracking()
+                        .Where( w => w.WorkflowTypeId == this.WorkflowTypeId )
+                        .Max( w => (int?)w.WorkflowIdNumber ) ?? 0;
+                    this.WorkflowIdNumber = maxNumber + 1;
+                }
+
+                if ( state == EntityState.Deleted )
+                {
+                    DeleteConnectionRequestWorkflows( rockContext );
+                }
             }
 
             base.PreSaveChanges( dbContext, state );
@@ -607,50 +628,24 @@ namespace Rock.Model
             return false;
         }
 
+        /// <summary>
+        /// Deletes any connection request workflows tied to this workflow.
+        /// </summary>
+        /// <param name="rockContext">The rock context.</param>
+        private void DeleteConnectionRequestWorkflows( RockContext rockContext )
+        {
+            var connectionRequestWorkflowService = new ConnectionRequestWorkflowService( rockContext );
+            var connectionRequestWorkflows = connectionRequestWorkflowService.Queryable().Where( c => c.WorkflowId == this.Id );
+
+            if ( connectionRequestWorkflows.Any() )
+            {
+                rockContext.BulkDelete( connectionRequestWorkflows );
+            }
+        }
+
         #endregion
 
         #region Static Methods
-
-        /// <summary>
-        /// Activates the specified <see cref="Rock.Model.WorkflowType"/>.
-        /// </summary>
-        /// <param name="workflowType">The <see cref="Rock.Model.WorkflowType"/>  being activated.</param>
-        /// <param name="name">A <see cref="System.String"/> representing the name of the <see cref="Rock.Model.Workflow"/> instance.</param>
-        /// <returns>The <see cref="Rock.Model.Workflow"/> instance.</returns>
-        [Obsolete( "For improved performance, use the Activate method that takes a WorkflowTypeCache parameter instead. IMPORTANT NOTE: When using the new method, the Workflow object that is returned by that method will not have the WorkflowType property set. If you are referencing the WorkflowType property on a Workflow returned by that method, you will get a Null Reference Exception! You should use the new WorkflowTypeCache property on the workflow instead." )]
-        public static Workflow Activate( WorkflowType workflowType, string name )
-        {
-            using ( var rockContext = new RockContext() )
-            {
-                return Activate( workflowType, name, rockContext );
-            }
-        }
-
-        /// <summary>
-        /// Activates the specified <see cref="Rock.Model.WorkflowType" />.
-        /// </summary>
-        /// <param name="workflowType">The <see cref="Rock.Model.WorkflowType" />  being activated.</param>
-        /// <param name="name">A <see cref="System.String" /> representing the name of the <see cref="Rock.Model.Workflow" /> instance.</param>
-        /// <param name="rockContext">The rock context.</param>
-        /// <returns>
-        /// The <see cref="Rock.Model.Workflow" /> instance.
-        /// </returns>
-        [Obsolete( "For improved performance, use the Activate method that takes a WorkflowTypeCache parameter instead. IMPORTANT NOTE: When using the new method, the Workflow object that is returned by that method will not have the WorkflowType property set. If you are referencing the WorkflowType property on a Workflow returned by that method, you will get a Null Reference Exception! You should use the new WorkflowTypeCache property on the workflow instead." )]
-        public static Workflow Activate( WorkflowType workflowType, string name, RockContext rockContext )
-        {
-            if ( workflowType != null )
-            {
-                var workflowTypeCache = WorkflowTypeCache.Read( workflowType.Id );
-                var workflow = Activate( workflowTypeCache, name, rockContext );
-                if ( workflow != null )
-                {
-                    workflow.WorkflowType = workflowType;
-                }
-                return workflow;
-            }
-
-            return null;
-        }
 
         /// <summary>
         /// Activates the specified workflow type cache.

@@ -22,9 +22,9 @@ using System.Web.UI.WebControls;
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select month and day
     /// </summary>
-    public class MonthDayPicker : CompositeControl, IRockControl
+    public class MonthDayPicker : CompositeControl, IRockControl, IRockChangeHandlerControl
     {
         #region IRockControl implementation
 
@@ -256,16 +256,19 @@ namespace Rock.Web.UI.Controls
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void monthDayDropDownList_SelectedIndexChanged( object sender, EventArgs e )
         {
-            if ( SelectedMonthDayChanged != null )
-            {
-                SelectedMonthDayChanged( this, e );
-            }
+            SelectedMonthDayChanged?.Invoke( this, e );
+            ValueChanged?.Invoke( this, e );
         }
 
         /// <summary>
         /// Occurs when [selected month day changed].
         /// </summary>
         public event EventHandler SelectedMonthDayChanged;
+
+        /// <summary>
+        /// Occurs when the selected value has changed
+        /// </summary>
+        public event EventHandler ValueChanged;
 
         /// <summary>
         /// Populates the drop downs.

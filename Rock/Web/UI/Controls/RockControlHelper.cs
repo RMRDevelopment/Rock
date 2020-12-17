@@ -21,7 +21,7 @@ using System.Web.UI.WebControls;
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// Helper class to intialize and render rock controls with Bootstrap html elements
+    /// Helper class to initialize and render rock controls with Bootstrap html elements
     /// </summary>
     public static class RockControlHelper
     {
@@ -37,7 +37,7 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary> 
-        /// Creates the child controls and handles adding the required field validator control.
+        /// Creates the standard RockControl child controls (RequiredFieldValidator, HelpBlock, WarningBlock) and handles adding the required field validator control.
         /// </summary>
         /// <param name="rockControl">The rock control.</param>
         /// <param name="controls">The controls.</param>
@@ -77,6 +77,13 @@ namespace Rock.Web.UI.Controls
             bool renderLabel = ( !string.IsNullOrEmpty( rockControl.Label ) );
             bool renderHelp = ( rockControl.HelpBlock != null && !string.IsNullOrWhiteSpace( rockControl.Help ) );
             bool renderWarning = ( rockControl.WarningBlock != null && !string.IsNullOrWhiteSpace( rockControl.Warning ) );
+
+            /* 2020-02-11 MDP
+             * If renderLabel is false (the label is blank), required inputs won't get highlighted if they are blank. 
+             * This is due to the lack of form-group around input that don't have label.
+             * There isn't a fix for this yet. Adding a form-group div around these would cause styling and javascript hook problems (since the dom is different)
+             * In the meantime, you could manually add a form-group div around these required inputs, but be careful so it doesn't break styling (even on custom themes)
+             */
 
             if ( renderLabel )
             {
@@ -181,8 +188,20 @@ namespace Rock.Web.UI.Controls
                     rockControl.RequiredFieldValidator.Enabled = true;
                     if ( string.IsNullOrWhiteSpace( rockControl.RequiredFieldValidator.ErrorMessage ) )
                     {
-                        rockControl.RequiredFieldValidator.ErrorMessage = rockControl.Label + " is Required.";
+                        // if the control is a Label, use that. Otherwise, if the control has PlaceHolder, use that.
+                        string requiredName = string.Empty;
+                        if ( rockControl.Label.IsNotNullOrWhiteSpace() )
+                        {
+                            requiredName = rockControl.Label;
+                        }
+                        else if ( rockControl is RockTextBox )
+                        {
+                            requiredName = ( rockControl as RockTextBox ).Placeholder;
+                        }
+
+                        rockControl.RequiredFieldValidator.ErrorMessage = requiredName + " is required.";
                     }
+
                     rockControl.RequiredFieldValidator.RenderControl( writer );
                 }
                 else

@@ -17,10 +17,13 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
+using System.Linq;
 using System.Runtime.Serialization;
 
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -33,10 +36,10 @@ namespace Rock.Model
     /// for each defined value/lookup that you want to create.  In the case of attributes these can be created as the need arises without having to change the core base or add a plug-in just to 
     /// provide additional lookup data.
     /// </remarks>
-    [RockDomain("Core")]
+    [RockDomain( "Core" )]
     [Table( "DefinedType" )]
     [DataContract]
-    public partial class DefinedType : Model<DefinedType>, IOrdered
+    public partial class DefinedType : Model<DefinedType>, IOrdered, ICacheable
     {
 
         #region Entity Properties
@@ -61,7 +64,7 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public int? FieldTypeId { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the display order of this DefinedType.  The lower the number the higher the display priority.  This property is required.
         /// </summary>
@@ -80,7 +83,7 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public int? CategoryId { get; set; }
-        
+
         /// <summary>
         /// Gets or sets the Name of the DefinedType.
         /// </summary>
@@ -91,7 +94,7 @@ namespace Rock.Model
         [MaxLength( 100 )]
         [DataMember( IsRequired = true )]
         public string Name { get; set; }
-        
+
         /// <summary>
         /// Gets or sets a user defined description of the DefinedType.
         /// </summary>
@@ -109,6 +112,16 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public string HelpText { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether this Defined Type is active.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this instance is active; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember( IsRequired = true )]
+        [Required]
+        public bool IsActive { get; set; } = true;
 
         #endregion 
 
@@ -155,6 +168,38 @@ namespace Rock.Model
         public override string ToString()
         {
             return this.Name;
+        }
+
+        #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return DefinedTypeCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            var cachedDefinedValues = DefinedTypeCache.Get( this.Id, (RockContext)dbContext )?.DefinedValues;
+            if ( cachedDefinedValues?.Any() == true )
+            {
+                foreach ( var cachedDefinedValue in cachedDefinedValues )
+                {
+                    DefinedValueCache.UpdateCachedEntity( cachedDefinedValue.Id, EntityState.Detached );
+                }
+            }
+
+            DefinedTypeCache.UpdateCachedEntity( this.Id, entityState );
         }
 
         #endregion

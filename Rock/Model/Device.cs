@@ -18,11 +18,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
-using System.Linq;
 using System.Runtime.Serialization;
 
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -33,7 +34,7 @@ namespace Rock.Model
     [RockDomain( "Core" )]
     [Table("Device")]
     [DataContract]
-    public partial class Device : Model<Device>
+    public partial class Device : Model<Device>, ICacheable
     {
         #region Entity Properties
 
@@ -118,6 +119,38 @@ namespace Rock.Model
         [DataMember]
         public PrintTo PrintToOverride { get; set; }
 
+        /// <summary>
+        /// Gets or sets a value indicating whether this instance is active.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this instance is active; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool IsActive
+        {
+            get { return _isActive; }
+            set { _isActive = value; }
+        }
+        private bool _isActive = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether this instance has camera.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this instance has camera; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool HasCamera { get; set; }
+
+        /// <summary>
+        /// Gets or sets the camera barcode configuration.
+        /// </summary>
+        /// <value>
+        /// The type of the camera barcode configuration.
+        /// </value>
+        [DataMember]
+        public CameraBarcodeConfiguration? CameraBarcodeConfigurationType { get; set; }
+
         #endregion
 
         #region Virtual Properties
@@ -184,10 +217,34 @@ namespace Rock.Model
 
         #endregion
 
+        #region ICacheable
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Data.DbContext dbContext )
+        {
+            Rock.CheckIn.KioskDevice.FlushItem( this.Id );
+        }
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            // doesn't apply
+            return null;
+        }
+
+        #endregion ICacheable
+
     }
 
     #region Entity Configuration
-    
+
     /// <summary>
     /// File Configuration class.
     /// </summary>
@@ -244,6 +301,29 @@ namespace Rock.Model
         /// The label will be printed by the server.
         /// </summary>
         Server = 1
+    }
+
+    /// <summary>
+    /// The Camera barcode configuration values.
+    /// </summary>
+    public enum CameraBarcodeConfiguration
+    {
+        /// <summary>
+        /// Off
+        /// </summary>
+        Off = 0,
+        /// <summary>
+        /// Available
+        /// </summary>
+        Available = 1,
+        /// <summary>
+        /// Always on
+        /// </summary>
+        AlwaysOn = 2,
+        /// <summary>
+        /// Passive
+        /// </summary>
+        Passive = 3
     }
 
     #endregion

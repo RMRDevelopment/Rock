@@ -16,21 +16,22 @@
 //
 using System;
 using System.Collections.Generic;
-using System.Web;
-
+using System.ComponentModel;
 using Quartz;
 
-using Rock;
 using Rock.Attribute;
 using Rock.Data;
-using Rock.Model;
+using Rock.Web.Cache;
 using Rock.Web.UI;
 
 namespace Rock.Jobs
 {
     /// <summary>
-    /// Job to launch a workflow
+    /// This job launches the specified workflow.
     /// </summary>
+    [DisplayName( "Launch Workflow" )]
+    [Description( "This job launches the specified workflow." )]
+
     [WorkflowTypeField( "Workflow", "The workflow this job should activate." )]
     [DisallowConcurrentExecution]
     public class LaunchWorkflow : RockBlock, IJob
@@ -68,7 +69,7 @@ namespace Rock.Jobs
             Guid workflowTypeGuid = Guid.NewGuid();
             if ( Guid.TryParse( workflowName, out workflowTypeGuid ) )
             {
-                var workflowType = Web.Cache.WorkflowTypeCache.Read( workflowTypeGuid );
+                var workflowType = WorkflowTypeCache.Get( workflowTypeGuid );
                 if ( workflowType != null && ( workflowType.IsActive ?? true ) )
                 {
                     var workflow = Rock.Model.Workflow.Activate( workflowType, workflowName );

@@ -42,97 +42,88 @@ namespace Rock.Reporting.DataSelect.GroupMember
     public class GroupMemberAttributeSelect : DataSelectComponent
     {
         #region Private Methods
-
-        private List<EntityField> _GroupMemberAttributes = null;
-
         /// <summary>
         /// Gets the Attributes for a Group Member of a specific Group Type.
         /// </summary>
         /// <returns></returns>
-        private List<EntityField> GetGroupMemberAttributes()
+        private List<EntityField> GetGroupMemberAttributeEntityFields()
         {
-            if (_GroupMemberAttributes == null)
+            var entityAttributeFields = new Dictionary<string, EntityField>();
+            var context = new RockContext();
+
+            var attributeService = new AttributeService( context );
+            var groupTypeService = new GroupTypeService( context );
+
+            var groupMemberEntityTypeId = EntityTypeCache.GetId( typeof( Model.GroupMember ) );
+
+            var groupMemberAttributes = attributeService.Queryable()
+                                                        .AsNoTracking()
+                                                        .Where( a => a.EntityTypeId == groupMemberEntityTypeId )
+                                                        .Join( groupTypeService.Queryable(), a => a.EntityTypeQualifierValue, gt => gt.Id.ToString(),
+                                                               ( a, gt ) =>
+                                                               new
+                                                               {
+                                                                   Attribute = a,
+                                                                   AttributeKey = a.Key,
+                                                                   FieldTypeName = a.FieldType.Name,
+                                                                   a.FieldTypeId,
+                                                                   AttributeName = a.Name,
+                                                                   GroupTypeName = gt.Name
+                                                               } )
+                                                        .GroupBy( x => x.AttributeName )
+                                                        .ToList();
+
+            foreach ( var attributesByName in groupMemberAttributes )
             {
-                var entityAttributeFields = new Dictionary<string, EntityField>();
-                var context = new RockContext();
+                var attributeNameAndTypeGroups = attributesByName.GroupBy( x => x.FieldTypeId ).ToList();
 
-                var attributeService = new AttributeService( context );
-                var groupTypeService = new GroupTypeService( context );
+                bool requiresTypeQualifier = ( attributeNameAndTypeGroups.Count > 1 );
 
-                var groupMemberEntityTypeId = EntityTypeCache.GetId( typeof(Model.GroupMember) );
-
-                var groupMemberAttributes = attributeService.Queryable()
-                                                            .AsNoTracking()
-                                                            .Where( a => a.EntityTypeId == groupMemberEntityTypeId )
-                                                            .Join( groupTypeService.Queryable(), a => a.EntityTypeQualifierValue, gt => gt.Id.ToString(),
-                                                                   ( a, gt ) =>
-                                                                   new
-                                                                   {
-                                                                       Attribute = a,
-                                                                       AttributeKey = a.Key,
-                                                                       FieldTypeName = a.FieldType.Name,
-                                                                       a.FieldTypeId,
-                                                                       AttributeName = a.Name,
-                                                                       GroupTypeName = gt.Name
-                                                                   } )
-                                                            .GroupBy( x => x.AttributeName )
-                                                            .ToList();
-
-                foreach (var attributesByName in groupMemberAttributes)
+                foreach ( var attributeNameAndTypeGroup in attributeNameAndTypeGroups )
                 {
-                    var attributeNameAndTypeGroups = attributesByName.GroupBy( x => x.FieldTypeId ).ToList();
-
-                    bool requiresTypeQualifier = ( attributeNameAndTypeGroups.Count > 1 );
-
-                    foreach (var attributeNameAndTypeGroup in attributeNameAndTypeGroups)
+                    foreach ( var attribute in attributeNameAndTypeGroup )
                     {
-                        foreach (var attribute in attributeNameAndTypeGroup)
+                        string fieldKey;
+                        string fieldName;
+
+                        if ( requiresTypeQualifier )
                         {
-                            string fieldKey;
-                            string fieldName;
+                            fieldKey = attribute.AttributeName + "_" + attribute.FieldTypeId;
 
-                            if (requiresTypeQualifier)
-                            {
-                                fieldKey = attribute.AttributeName + "_" + attribute.FieldTypeId;
-
-                                fieldName = string.Format( "{0} [{1}]", attribute.AttributeName, attribute.FieldTypeName );
-                            }
-                            else
-                            {
-                                fieldName = attribute.AttributeName;
-                                fieldKey = attribute.AttributeName;
-                            }
-
-                            if (entityAttributeFields.ContainsKey( fieldKey ))
-                            {
-                                continue;
-                            }
-
-                            var attributeCache = AttributeCache.Read( attribute.Attribute );
-
-                            var entityField = EntityHelper.GetEntityFieldForAttribute( attributeCache );
-
-                            entityField.Title = fieldName;
-                            entityField.AttributeGuid = null;
-
-                            entityAttributeFields.Add( fieldKey, entityField );
+                            fieldName = string.Format( "{0} [{1}]", attribute.AttributeName, attribute.FieldTypeName );
                         }
+                        else
+                        {
+                            fieldName = attribute.AttributeName;
+                            fieldKey = attribute.AttributeName;
+                        }
+
+                        if ( entityAttributeFields.ContainsKey( fieldKey ) )
+                        {
+                            continue;
+                        }
+
+                        var attributeCache = AttributeCache.Get( attribute.Attribute );
+
+                        var entityField = EntityHelper.GetEntityFieldForAttribute( attributeCache );
+
+                        entityField.Title = fieldName;
+
+                        entityAttributeFields.Add( fieldKey, entityField );
                     }
                 }
-
-                int index = 0;
-                var sortedFields = new List<EntityField>();
-                foreach (var entityProperty in entityAttributeFields.Values.OrderBy( p => p.Title ).ThenBy( p => p.Name ))
-                {
-                    entityProperty.Index = index;
-                    index++;
-                    sortedFields.Add( entityProperty );
-                }
-
-                _GroupMemberAttributes = sortedFields;
             }
 
-            return _GroupMemberAttributes;
+            int index = 0;
+            var sortedFields = new List<EntityField>();
+            foreach ( var entityProperty in entityAttributeFields.Values.OrderBy( p => p.Title ).ThenBy( p => p.Name ) )
+            {
+                entityProperty.Index = index;
+                index++;
+                sortedFields.Add( entityProperty );
+            }
+
+            return sortedFields;
         }
 
         #endregion
@@ -265,10 +256,35 @@ namespace Rock.Reporting.DataSelect.GroupMember
             // Add empty selection as first item.
             ddlProperty.Items.Add( new ListItem() );
 
-            foreach ( var entityField in GetGroupMemberAttributes() )
+            var rockBlock = parentControl.RockBlock();
+
+            foreach ( var entityField in GetGroupMemberAttributeEntityFields() )
             {
-                // Add the field to the dropdown of available fields
-                ddlProperty.Items.Add( new ListItem( entityField.Title, entityField.UniqueName ) );
+                bool includeField = true;
+                bool isAuthorized = true;
+
+                if ( entityField.FieldKind == FieldKind.Attribute )
+                {
+                    var attribute = AttributeCache.Get( entityField.AttributeGuid.Value );
+
+                    // Don't include the attribute if it isn't active
+                    if ( attribute.IsActive == false )
+                    {
+                        includeField = false;
+                    }
+
+                    if ( includeField && attribute != null && rockBlock != null )
+                    {
+                        // only show the Attribute field in the drop down if they have VIEW Auth to it
+                        isAuthorized = attribute.IsAuthorized( Rock.Security.Authorization.VIEW, rockBlock.CurrentPerson );
+                    }
+                }
+
+                if ( isAuthorized && includeField )
+                {
+                    // Add the field to the dropdown of available fields
+                    ddlProperty.Items.Add( new ListItem( entityField.Title, entityField.UniqueName ) );
+                }
             }
 
             return new Control[] { pnlGroupAttributeFilterControls };
@@ -334,7 +350,7 @@ namespace Rock.Reporting.DataSelect.GroupMember
         {
             var settings = new SelectSettings( selection );
 
-            var entityFields = GetGroupMemberAttributes();
+            var entityFields = GetGroupMemberAttributeEntityFields();
             var entityField = entityFields.FirstOrDefault( f => f.Name == settings.AttributeKey );
             if ( entityField == null )
             {
@@ -371,14 +387,14 @@ namespace Rock.Reporting.DataSelect.GroupMember
 
             var settings = new SelectSettings( selection );
 
-            var entityFields = GetGroupMemberAttributes();
+            var entityFields = GetGroupMemberAttributeEntityFields();
             var entityField = entityFields.FirstOrDefault( f => f.Name == settings.AttributeKey );
 
             if ( entityField == null )
             {
                 return null;
             }
-            
+
             if ( entityField.FieldType.Guid.Equals( Rock.SystemGuid.FieldType.BOOLEAN.AsGuid() ) )
             {
                 boundField = new BoolField();

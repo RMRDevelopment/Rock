@@ -2,7 +2,7 @@
 
 <script type="text/javascript">
     Sys.Application.add_load(function () {
-        $('a.btn-checkin-select').click(function () {
+        $('a.btn-checkin-select').on('click', function () {
             $(this).siblings().attr('onclick', 'return false;');
         });
     });
@@ -18,7 +18,7 @@
         </div>
 
         <div class="checkin-body">
-            
+
             <div class="checkin-scroll-panel">
                 <div class="scroller">
 
@@ -28,7 +28,7 @@
                             <asp:Panel ID="pnlNoOptions" runat="server" Visible="false">
                                 <h4><asp:Literal ID="lNoOptions" runat="server" /></h4>
                                 <div class="actions">
-                                    <asp:LinkButton CssClass="btn btn-primary btn-checkin" ID="btnNoOptionOk" runat="server" OnClick="btnNoOptionOk_Click" Text="Ok" />
+                                    <asp:LinkButton CssClass="btn btn-primary btn-checkin btn-footer" ID="btnNoOptionOk" runat="server" OnClick="btnNoOptionOk_Click" Text="Ok" />
                                 </div>
                             </asp:Panel>
                             <asp:Repeater ID="rSelection" runat="server" OnItemCommand="rSelection_ItemCommand">
@@ -46,8 +46,8 @@
 
         <div class="checkin-footer">
             <div class="checkin-actions">
-                <asp:LinkButton CssClass="btn btn-default" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
-                <asp:LinkButton CssClass="btn btn-default" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
+                <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
+                <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
             </div>
         </div>
 

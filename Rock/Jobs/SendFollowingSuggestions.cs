@@ -16,12 +16,13 @@
 //
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
+
 using Quartz;
+
 using Rock.Attribute;
 using Rock.Communication;
 using Rock.Data;
@@ -34,7 +35,10 @@ namespace Rock.Jobs
     /// <summary>
     /// Calculates, saves, and notifies followers of all the active following suggestions
     /// </summary>
-    [SystemEmailField( "Following Suggestion Notification Email Template", required: true, order: 0, key: "EmailTemplate" )]
+    [DisplayName( "Send Following Suggestion Notification" )]
+    [Description( "Calculates and sends any following suggestions to those people that are eligible for following." )]
+
+    [SystemCommunicationField( "Following Suggestion Notification Email Template", required: true, order: 0, key: "EmailTemplate" )]
     [SecurityRoleField( "Eligible Followers", "The group that contains individuals who should receive following suggestions", true, order: 1 )]
     [DisallowConcurrentExecution]
     public class SendFollowingSuggestions : IJob
@@ -79,7 +83,9 @@ namespace Rock.Jobs
                             m.GroupMemberStatus == GroupMemberStatus.Active &&
                             m.Person != null &&
                             m.Person.Email != null &&
-                            m.Person.Email != "" )
+                            m.Person.Email != string.Empty &&
+                            m.Person.EmailPreference != EmailPreference.DoNotEmail &&
+                            m.Person.IsEmailActive )
                         .Select( m => m.PersonId )
                         .Distinct();
 
@@ -138,7 +144,7 @@ namespace Rock.Jobs
                                     components.Add( suggestionType.Id, suggestionComponent );
 
                                     // Get the entitytype for this suggestion type
-                                    var suggestionEntityType = EntityTypeCache.Read( suggestionComponent.FollowedType );
+                                    var suggestionEntityType = EntityTypeCache.Get( suggestionComponent.FollowedType );
                                     if ( suggestionEntityType != null )
                                     {
                                         var entityIds = new List<int>();
@@ -287,8 +293,6 @@ namespace Rock.Jobs
                             .Distinct()
                             .ToList();
 
-                        var appRoot = Rock.Web.Cache.GlobalAttributesCache.Read( rockContext ).GetValue( "PublicApplicationRoot" );
-
                         foreach ( var person in new PersonService( rockContext )
                             .Queryable().AsNoTracking()
                             .Where( p => suggestionPersonIds.Contains( p.Id ) )
@@ -340,8 +344,10 @@ namespace Rock.Jobs
                                     mergeFields.Add( "Suggestions", personSuggestionNotices.OrderBy( s => s.SuggestionType.Order ).ToList() );
 
                                     var emailMessage = new RockEmailMessage( systemEmailGuid.Value );
-                                    emailMessage.AddRecipient( new RecipientData( person.Email, mergeFields ) );
-                                    emailMessage.Send();
+                                    emailMessage.AddRecipient( new RockEmailMessageRecipient( person, mergeFields ) );
+                                    var errors = new List<string>();
+                                    emailMessage.Send(out errors);
+                                    exceptionMsgs.AddRange( errors );
 
                                     followingSuggestionsEmailsSent += 1;
                                     followingSuggestionsSuggestionsTotal += personSuggestionNotices.Count();

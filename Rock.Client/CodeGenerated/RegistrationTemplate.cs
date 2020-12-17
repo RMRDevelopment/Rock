@@ -35,12 +35,14 @@ namespace Rock.Client
         public int Id { get; set; }
 
         /// <summary />
-        public bool AddPersonNote { get; set; }
+        public bool AddPersonNote { get; set; } = true;
 
         /// <summary />
-        public bool AllowExternalRegistrationUpdates { get; set; }
+        public bool AllowExternalRegistrationUpdates { get; set; } = true;
 
         /// <summary />
+        // Made Obsolete in Rock "1.10"
+        [Obsolete( "No longer used. Replaced by Group Placement feature (RegistrationTemplatePlacement, etc)", false )]
         public bool AllowGroupPlacement { get; set; }
 
         /// <summary />
@@ -68,6 +70,12 @@ namespace Rock.Client
         public decimal Cost { get; set; }
 
         /// <summary />
+        public decimal? DefaultPayment { get; set; }
+
+        /// <summary />
+        public string Description { get; set; }
+
+        /// <summary />
         public string DiscountCodeTerm { get; set; }
 
         /// <summary />
@@ -92,13 +100,13 @@ namespace Rock.Client
         public int? GroupTypeId { get; set; }
 
         /// <summary />
-        public bool IsActive { get; set; }
+        public bool IsActive { get; set; } = true;
 
         /// <summary />
         public bool LoginRequired { get; set; }
 
         /// <summary />
-        public int MaxRegistrants { get; set; }
+        public int? MaxRegistrants { get; set; }
 
         /// <summary />
         public decimal? MinimumInitialPayment { get; set; }
@@ -134,6 +142,18 @@ namespace Rock.Client
 
         /// <summary />
         public string RegistrantTerm { get; set; }
+
+        /// <summary />
+        public Rock.Client.Enums.RegistrarOption RegistrarOption { get; set; }
+
+        /// <summary />
+        public string RegistrationAttributeTitleEnd { get; set; }
+
+        /// <summary />
+        public string RegistrationAttributeTitleStart { get; set; }
+
+        /// <summary />
+        public string RegistrationInstructions { get; set; }
 
         /// <summary />
         public string RegistrationTerm { get; set; }
@@ -224,7 +244,9 @@ namespace Rock.Client
             this.Id = source.Id;
             this.AddPersonNote = source.AddPersonNote;
             this.AllowExternalRegistrationUpdates = source.AllowExternalRegistrationUpdates;
+            #pragma warning disable 612, 618
             this.AllowGroupPlacement = source.AllowGroupPlacement;
+            #pragma warning restore 612, 618
             this.AllowMultipleRegistrants = source.AllowMultipleRegistrants;
             this.BatchNamePrefix = source.BatchNamePrefix;
             this.CategoryId = source.CategoryId;
@@ -233,6 +255,8 @@ namespace Rock.Client
             this.ConfirmationFromName = source.ConfirmationFromName;
             this.ConfirmationSubject = source.ConfirmationSubject;
             this.Cost = source.Cost;
+            this.DefaultPayment = source.DefaultPayment;
+            this.Description = source.Description;
             this.DiscountCodeTerm = source.DiscountCodeTerm;
             this.FeeTerm = source.FeeTerm;
             this.FinancialGatewayId = source.FinancialGatewayId;
@@ -255,6 +279,10 @@ namespace Rock.Client
             this.PaymentReminderTimeSpan = source.PaymentReminderTimeSpan;
             this.RegistrantsSameFamily = source.RegistrantsSameFamily;
             this.RegistrantTerm = source.RegistrantTerm;
+            this.RegistrarOption = source.RegistrarOption;
+            this.RegistrationAttributeTitleEnd = source.RegistrationAttributeTitleEnd;
+            this.RegistrationAttributeTitleStart = source.RegistrationAttributeTitleStart;
+            this.RegistrationInstructions = source.RegistrationInstructions;
             this.RegistrationTerm = source.RegistrationTerm;
             this.RegistrationWorkflowTypeId = source.RegistrationWorkflowTypeId;
             this.ReminderEmailTemplate = source.ReminderEmailTemplate;
@@ -299,6 +327,9 @@ namespace Rock.Client
 
         /// <summary />
         public ICollection<RegistrationTemplateForm> Forms { get; set; }
+
+        /// <summary />
+        public ICollection<RegistrationTemplatePlacement> Placements { get; set; }
 
         /// <summary />
         public WorkflowType RegistrationWorkflowType { get; set; }

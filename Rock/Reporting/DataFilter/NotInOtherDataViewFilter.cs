@@ -55,9 +55,8 @@ namespace Rock.Reporting.DataFilter
         /// </value>
         public override string GetClientFormatSelection( Type entityType )
         {
-            return "'Not Included in ' + " +
-                "'\\'' + $('select:first', $content).find(':selected').text() + '\\' ' + " +
-                "'Data View'";
+            var title = "Not Included In Data View:";
+            return $@"Rock.reporting.formatFilterForOtherDataViewFilter('{title}', $content)";
         }
 
         /// <summary>
@@ -68,19 +67,25 @@ namespace Rock.Reporting.DataFilter
         /// <returns></returns>
         public override string FormatSelection( Type entityType, string selection )
         {
-            string s = "Not In Another Data View";
+            var selectionConfig = SelectionConfig.Parse( selection );
 
-            int? dataviewId = selection.AsIntegerOrNull();
-            if ( dataviewId.HasValue )
+            int? dataviewId = selectionConfig.DataViewId;
+            if ( dataviewId.HasValue && dataviewId > 0 )
             {
-                var dataView = new DataViewService( new RockContext() ).Get( dataviewId.Value );
+                var dataView = new DataViewService( new RockContext() ).GetNoTracking( dataviewId.Value );
                 if ( dataView != null )
                 {
-                    return string.Format( "Not Included in '{0}' Data View", dataView.Name );
+                    return $"Not Included in '{dataView.Name}' Data View";
+                }
+                else
+                {
+                    // a DataView id was specified, but we couldn't find it. So we have a problem.
+                    return $"Error. DataView not found for DataViewId: {dataviewId }";
                 }
             }
 
-            return s;
+            // no dataview was specified, so let's show...
+            return "Not In Another Data View";
         }
 
         /// <summary>
@@ -104,7 +109,7 @@ namespace Rock.Reporting.DataFilter
         /// <param name="serviceInstance">The service instance.</param>
         /// <param name="parameterExpression">The parameter expression.</param>
         /// <param name="dataViewFilterOverrides">The data view filter overrides.</param>
-        /// <param name="selection">The selection.</param>
+        /// <param name="selection">A formatted string representing the filter settings: FieldName, <see cref="ComparisonType">Comparison Type</see>, (optional) Comparison Value(s)</param>
         /// <returns></returns>
         /// <exception cref="System.Exception">Filter issue(s): " + errorMessages.AsDelimited( "; " )</exception>
         public new Expression GetExpressionWithOverrides( Type entityType, IService serviceInstance, ParameterExpression parameterExpression, DataViewFilterOverrides dataViewFilterOverrides, string selection )

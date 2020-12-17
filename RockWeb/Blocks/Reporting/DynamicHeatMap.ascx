@@ -4,6 +4,7 @@
     <ContentTemplate>
 
         <Rock:NotificationBox ID="nbConfigurationWarning" runat="server" NotificationBoxType="Warning" Visible="false" />
+        <Rock:NotificationBox ID="nbErrorMessage" runat="server" NotificationBoxType="Danger" Visible="false" />
 
         <div class="panel panel-block">
             <div class="panel-heading">
@@ -15,7 +16,7 @@
                     <div class="col-md-6">
                         <Rock:RockDropDownList ID="ddlUserDataView" runat="server" Label="Dataview" Help="Select the dataview to use to filter the results." Required="true" />
                         <Rock:CampusesPicker ID="cpCampuses" runat="server" Label="Campus Filter" Help="Select the campuses to narrow the results down to families with that home campus." Required="false" />
-                        <Rock:GroupPicker ID="gpGroupToMap" runat="server" Label="Geo-fencing Group" Help="Select a Group to show the geofences for that group and it's child groups" />
+                        <Rock:GroupPicker ID="gpGroupToMap" runat="server" Label="Geo-fencing Group" Help="Select a Group to show the geofences for that group and its child groups" />
                     </div>
                     <div class="col-md-6">
                         <Rock:RockCheckBox ID="cbShowCampusLocations" runat="server" Label="Show Campus Locations On Map" Checked="true" />
@@ -74,9 +75,9 @@
             function toggleOptions() {
                 $('.js-options').slideToggle();
             }
-            
+
             Sys.Application.add_load(function () {
-                
+
                 // if this is an async postback, the map is already created, so just break out
                 if ($('#map_canvas').data("googleMap"))
                 {
@@ -99,7 +100,7 @@
                     SelectedPieCuts: [],
                     CurrentPieSlices: []
                 };
-                
+
                 var map;
 
                 var heatMap;
@@ -118,7 +119,7 @@
                     var centerLatLng = new google.maps.LatLng(lat,long );
 
                     polygonColors = $('#<%=hfPolygonColors.ClientID%>').val().split(',');
-                    
+
                     // Set default map options
                     var mapOptions = {
                         mapTypeId: 'roadmap'
@@ -170,16 +171,17 @@
 
                     var campusMarkersData = [
 <%=this.CampusMarkersData%>]
-                    
-                    var pinImage = new google.maps.MarkerImage('//chart.googleapis.com/chart?chst=d_map_pin_letter&chld=%E2%80%A2|' + 'FE7569',
-                        new google.maps.Size(21, 34),
-                        new google.maps.Point(0,0),
-                        new google.maps.Point(10, 34));
 
-                    var pinShadow = new google.maps.MarkerImage('//chart.googleapis.com/chart?chst=d_map_pin_shadow',
-                        new google.maps.Size(40, 37),
-                        new google.maps.Point(0, 0),
-                        new google.maps.Point(12, 35));
+                    var pinImage = {
+                        path: 'M 0,0 C -2,-20 -10,-22 -10,-30 A 10,10 0 1,1 10,-30 C 10,-22 2,-20 0,0 z',
+                        fillColor: '#FE7569',
+                        fillOpacity: 1,
+                        strokeColor: '#000',
+                        strokeWeight: 1,
+                        scale: 1,
+                        labelOrigin: new google.maps.Point(0,-28)
+
+                    };
 
                     campusMarkersData.forEach( function (c) {
                         marker = new google.maps.Marker({
@@ -187,7 +189,7 @@
                             map: map,
                             title: c.campusName,
                             icon: pinImage,
-                            shadow: pinShadow
+                            label: String.fromCharCode(9679)
                         });
                     });
 
@@ -223,7 +225,7 @@
 
                     map.DeleteShape = function(shape) {
                         var allShapesIndex = map.AllShapes.indexOf(shape);
-                                    
+
                         if (allShapesIndex > -1)
                         {
                             map.AllShapes.splice(allShapesIndex, 1);
@@ -232,14 +234,14 @@
                                 $('.js-deleteshape').hide();
                             }
                         }
-                                    
+
                         shape.setMap(null);
                         shape.mapCountLabel.setMap(null);
                         if (shape == map.SelectedShape)
                         {
                             map.SelectedShape = null;
                         }
-                        
+
                         shape = null;
                     };
 
@@ -257,7 +259,7 @@
 
                     map.AddUpdateShape = function AddUpdateShape(shape, justUpdate) {
                         map.SelectedShape = shape;
-                        
+
                         if (!justUpdate) {
                             google.maps.event.addListener(shape, 'click', function () {
 
@@ -269,7 +271,7 @@
                                         s.mapCountLabel.changed('text');
                                     }
                                 });
-                                
+
                                 map.SelectedShape.mapCountLabel.text = '*' + map.SelectedShape.mapCountLabel.text;
                                 map.SelectedShape.mapCountLabel.changed('text');
                             });
@@ -289,7 +291,7 @@
                             map.AllShapes.push(shape);
                             $('.js-deleteshape').show();
                         }
-                        
+
                         // NOTE: bounds is the rectangle bounds of the shape (not the actual shape)
                         var selectedBounds = shape.getBounds();
 
@@ -304,7 +306,7 @@
                         {
                             shapeCenter = selectedBounds.getCenter();
                         }
-                        
+
                         heatmapDataArray = heatmap.data.getArray();
                         for (var i = 0, len = heatmap.data.length; i < len; i++) {
                             var latLng = heatmapDataArray[i];
@@ -429,19 +431,19 @@
                     });
                 }
 
-                $('.js-deleteshape').click(function () {
+                $('.js-deleteshape').on('click', function () {
                     if (map.SelectedShape) {
                         map.DeleteShape(map.SelectedShape);
                     }
                 });
 
-                $('.js-saveshape').click(function () {
+                $('.js-saveshape').on('click', function () {
 
                     if (map.SelectedShape) {
-                        
+
                         var geoFencePath;
                         if (typeof(map.SelectedShape.getPaths) != 'undefined') {
-                            
+
                             var coordinates = new Array();
                             var vertices = map.SelectedShape.getPaths().getAt(0);
                             // Iterate over the vertices of the shape's path
@@ -471,12 +473,12 @@
                         }
 
                         $('#<%=hfLocationSavePath.ClientID%>').val(geoFencePath);
-                        
+
                         Rock.controls.modal.showModalDialog($('#<%=mdSaveLocation.ClientID%>').find('.rock-modal'), '#<%=upSaveLocation.ClientID%>');
                     }
                 });
 
-                $('.js-createpieshape').click(function () {
+                $('.js-createpieshape').on('click', function () {
 
                     // make sure drawing manager mode is the hand so that 'mousemove' will fire
                     drawingManager.setDrawingMode(null);
@@ -504,7 +506,7 @@
                                     pieSlicerState.CurrentPieSlices.forEach(function(ps){
                                         pieSlicerState.SelectedPieCuts.push(ps.startArc);
                                     })
-                                    
+
                                     map.SelectedShape.isPieDrawing = false;
                                     map.SelectedShape.deleteOnFirstSlice = false;
                                     map.pieMouseMoveListener.remove();
@@ -512,7 +514,7 @@
                                 }
                             });
                         }
-                        
+
                         // when the move moves over the map, draw the pie shapes in realtime based on the mouse position relative to the center of the orig circle
                         if (!map.pieMouseMoveListener) {
                             map.pieMouseMoveListener = google.maps.event.addListener(map, 'mousemove', function (event) {
@@ -545,11 +547,11 @@
                                     if (map.SelectedShape && (map.SelectedShape.isPieDrawing || map.SelectedShape.overlayType == 'circle')){
                                         map.DeleteShape(map.SelectedShape);
                                     }
-                                    
+
                                     currentPieCuts.forEach(function(pc, i) {
                                         var centerPt = pieSlicerState.SelectedCenterPt;
                                         var radiusMeters = pieSlicerState.SelectedRadius;
-                                        
+
                                         var pieSlicePath = Array();
 
                                         var nextRadialPoint = pc;
@@ -571,17 +573,17 @@
                                         if (nextRadialPoint >= lastRadialPoint){
                                             nextRadialPoint -= 360;
                                         }
-                                    
+
                                         // create a Google Map Path as an array of all the lines from the center to the outer radius for every full degree to make it look like a pie slice
                                         while (nextRadialPoint < lastRadialPoint) {
                                             pieSlicePath.push(google.maps.geometry.spherical.computeOffset(centerPt, radiusMeters, nextRadialPoint));
                                             nextRadialPoint += 1;
                                         }
-                            
+
                                         // ensure that the last path of the pieslice is there for the last line of the path
                                         var endArc = lastRadialPoint;
                                         pieSlicePath.push(google.maps.geometry.spherical.computeOffset(centerPt, radiusMeters, endArc));
-                            
+
                                         // put the center point to the start and end of the pieSlicePath
                                         pieSlicePath.unshift(centerPt);
                                         pieSlicePath.push(centerPt);
@@ -608,7 +610,7 @@
                                         map.AddUpdateShape(pieSlicePoly, false );
                                     });
                                 }
-                            
+
                             });
                         }
                     }
@@ -627,10 +629,10 @@
                             bounds.extend(path.getAt(i));
                         }
                     }
- 
+
                     return bounds;
                 }
-            } 
+            }
 
             // extend polygon to getBounds
             if (!google.maps.Polyline.prototype.getBounds) {
@@ -674,6 +676,6 @@
                 <Rock:LocationItemPicker ID="lpLocation" runat="server" AllowMultiSelect="false" />
             </Content>
         </Rock:ModalDialog>
-        
+
     </ContentTemplate>
 </asp:UpdatePanel>

@@ -20,7 +20,6 @@ using System.Linq;
 
 using Rock.Data;
 using Rock.Model;
-using Rock.Web.Cache;
 
 namespace Rock.Field.Types
 {
@@ -35,20 +34,17 @@ namespace Rock.Field.Types
         /// <value>
         /// The list source.
         /// </value>
-        internal override Dictionary<string, string> ListSource
+        internal override Dictionary<string, string> GetListSource( Dictionary<string, ConfigurationValue> configurationValues )
         {
-            get
-            {
-                return new ConnectionTypeService( new RockContext() )
-                    .Queryable().AsNoTracking()
-                    .OrderBy( o => o.Name )
-                    .Select( o => new
-                    {
-                        o.Guid,
-                        o.Name,
-                    } )
-                    .ToDictionary( c => c.Guid.ToString(), c => c.Name );
-            }
+            return new ConnectionTypeService( new RockContext() )
+                .Queryable().AsNoTracking()
+                .OrderBy( o => o.Name )
+                .Select( o => new
+                {
+                    o.Guid,
+                    o.Name,
+                } )
+                .ToDictionary( c => c.Guid.ToString(), c => c.Name );
         }
     }
 }

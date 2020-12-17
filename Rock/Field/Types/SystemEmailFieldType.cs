@@ -29,6 +29,8 @@ namespace Rock.Field.Types
     /// <summary>
     /// Field Type to select a system email. Stored as SystemEmail.Guid
     /// </summary>
+    [Obsolete( "Use SystemCommunicationFieldType instead." )]
+    [RockObsolete( "1.10" )]
     public class SystemEmailFieldType : FieldType
     {
 
@@ -49,10 +51,13 @@ namespace Rock.Field.Types
             Guid guid = Guid.Empty;
             if ( Guid.TryParse( value, out guid ) )
             {
-                var systemEmail = new SystemEmailService( new RockContext() ).Get( guid );
-                if ( systemEmail != null )
+                using ( var rockContext = new RockContext() )
                 {
-                    formattedValue = systemEmail.Title;
+                    var systemEmail = new SystemEmailService( rockContext ).GetNoTracking( guid );
+                    if ( systemEmail != null )
+                    {
+                        formattedValue = systemEmail.Title;
+                    }
                 }
             }
 

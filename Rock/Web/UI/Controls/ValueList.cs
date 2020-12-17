@@ -19,16 +19,19 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using System.Web;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
+using Rock.Utility;
 
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public class ValueList : CompositeControl, IRockControl
     {
@@ -360,7 +363,7 @@ namespace Rock.Web.UI.Controls
                     .GetByDefinedTypeId( DefinedTypeId.Value )
                     .ToList()
                     .ForEach( v => definedValues.Add( v.Id.ToString(), v.Value ) );
-            } 
+            }
             else if ( CustomValues != null )
             {
                 definedValues = CustomValues;
@@ -391,7 +394,7 @@ namespace Rock.Web.UI.Controls
             {
                 valueHtml.AppendFormat( @"<input class=""form-control input-width-lg js-value-list-input"" type=""text"" placeholder=""{0}""></input>", ValuePrompt );
             }
-            valueHtml.Append( @"<a href=""#"" class=""btn btn-sm btn-danger value-list-remove""><i class=""fa fa-minus-circle""></i></a></div>" );
+            valueHtml.Append( @"<a href=""#"" class=""btn btn-danger btn-square value-list-remove""><i class=""fa fa-times""></i></a></div>" );
 
             var hfValueHtml = new HtmlInputHidden();
             hfValueHtml.AddCssClass( "js-value-list-html" );
@@ -402,9 +405,9 @@ namespace Rock.Web.UI.Controls
             writer.RenderBeginTag( HtmlTextWriterTag.Span );
             writer.WriteLine();
 
+            var values = RockSerializableList.FromUriEncodedString( this.Value );
 
-            string[] values = this.Value.Split( new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries );
-            foreach ( string value in values )
+            foreach ( string value in values.List )
             {
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "controls controls-row form-control-group" );
                 writer.RenderBeginTag( HtmlTextWriterTag.Div );
@@ -438,7 +441,7 @@ namespace Rock.Web.UI.Controls
                 writer.AddAttribute( HtmlTextWriterAttribute.Href, "#" );
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "btn btn-sm btn-danger value-list-remove" );
                 writer.RenderBeginTag( HtmlTextWriterTag.A );
-                writer.AddAttribute(HtmlTextWriterAttribute.Class, "fa fa-minus-circle");
+                writer.AddAttribute(HtmlTextWriterAttribute.Class, "fa fa-times" );
                 writer.RenderBeginTag( HtmlTextWriterTag.I );
                 writer.RenderEndTag();
                 writer.RenderEndTag();
@@ -455,7 +458,7 @@ namespace Rock.Web.UI.Controls
             writer.AddAttribute( HtmlTextWriterAttribute.Class, "actions" );
             writer.RenderBeginTag( HtmlTextWriterTag.Div );
 
-            var addButtonCssClass = "btn btn-action btn-xs value-list-add";
+            var addButtonCssClass = "btn btn-action btn-xs btn-square value-list-add";
             if ( !this.Enabled )
             {
                 addButtonCssClass += " aspNetDisabled disabled";
@@ -467,7 +470,7 @@ namespace Rock.Web.UI.Controls
             writer.RenderBeginTag( HtmlTextWriterTag.A );
             writer.AddAttribute(HtmlTextWriterAttribute.Class, "fa fa-plus-circle");
             writer.RenderBeginTag( HtmlTextWriterTag.I );
-            
+
             writer.RenderEndTag();
             writer.RenderEndTag();
             writer.RenderEndTag();

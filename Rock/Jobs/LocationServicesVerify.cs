@@ -15,19 +15,22 @@
 // </copyright>
 //
 using System;
+using System.ComponentModel;
 using System.Linq;
 
 using Quartz;
 
-using Rock.Model;
-using Rock.Web.Cache;
 using Rock.Attribute;
+using Rock.Model;
 
 namespace Rock.Jobs
 {
     /// <summary>
     /// Job to keep a heartbeat of the job process so we know when the jobs stop working
     /// </summary>
+    [DisplayName( "Location Services Verify" )]
+    [Description( "Attempts to standardize and geocode addresses that have not been verified yet. It also attempts to re-verify address that failed in the past after a given wait period." )]
+
     [IntegerField("Max Records Per Run", "The maximum number of records to run per run.", true, 1000 )]
     [IntegerField( "Throttle Period", "The number of milliseconds to wait between records. This helps to throttle requests to the lookup services.", true, 500 )]
     [IntegerField( "Retry Period", "The number of days to wait before retrying a unsuccessful address lookup.", true, 200 )]
@@ -36,7 +39,7 @@ namespace Rock.Jobs
     {
         
         /// <summary> 
-        /// Empty constructor for job initilization
+        /// Empty constructor for job initialization
         /// <para>
         /// Jobs require a public empty constructor so that the
         /// scheduler can instantiate the class whenever it needs.
@@ -59,9 +62,9 @@ namespace Rock.Jobs
             // get the job map
             JobDataMap dataMap = context.JobDetail.JobDataMap;
 
-            int maxRecords = Int32.Parse( dataMap.GetString( "MaxRecordsPerRun" ) );
-            int throttlePeriod = Int32.Parse( dataMap.GetString( "ThrottlePeriod" ) );
-            int retryPeriod = Int32.Parse( dataMap.GetString( "RetryPeriod" ) );
+            int maxRecords = dataMap.GetString( "MaxRecordsPerRun" ).AsIntegerOrNull() ?? 1000;
+            int throttlePeriod = dataMap.GetString( "ThrottlePeriod" ).AsIntegerOrNull() ?? 500;
+            int retryPeriod = dataMap.GetString( "RetryPeriod" ).AsIntegerOrNull() ?? 200;
 
             DateTime retryDate = DateTime.Now.Subtract(new TimeSpan(retryPeriod, 0, 0, 0));
 
@@ -73,9 +76,9 @@ namespace Rock.Jobs
                         ( l.IsGeoPointLocked == null || l.IsGeoPointLocked == false ) &&// don't ever try locked address
                         l.IsActive == true && 
                         l.Street1 != null &&
-                        l.Street1 != "" &&
+                        l.Street1 != string.Empty &&
                         l.City != null && 
-                        l.City != "" &&
+                        l.City != string.Empty &&
                         (
                             ( l.GeocodedDateTime == null && ( l.GeocodeAttemptedDateTime == null || l.GeocodeAttemptedDateTime < retryDate ) ) || // has not been attempted to be geocoded since retry date
                             ( l.StandardizedDateTime == null && ( l.StandardizeAttemptedDateTime == null || l.StandardizeAttemptedDateTime < retryDate ) ) // has not been attempted to be standardize since retry date
@@ -93,7 +96,7 @@ namespace Rock.Jobs
                     successes++;
                 }
                 rockContext.SaveChanges();
-                System.Threading.Thread.Sleep( throttlePeriod );
+                System.Threading.Tasks.Task.Delay( throttlePeriod ).Wait();
             }
 
             context.Result = string.Format( "{0:N0} address verifications attempted; {1:N0} successfully verified", attempts, successes );

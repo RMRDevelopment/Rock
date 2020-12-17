@@ -63,10 +63,10 @@ namespace Rock.Workflow.Action
 
             if ( guidGroupAttribute.HasValue )
             {
-                var attributeGroup = AttributeCache.Read( guidGroupAttribute.Value, rockContext );
+                var attributeGroup = AttributeCache.Get( guidGroupAttribute.Value, rockContext );
                 if ( attributeGroup != null )
                 {
-                    var groupGuid = action.GetWorklowAttributeValue( guidGroupAttribute.Value ).AsGuidOrNull();
+                    var groupGuid = action.GetWorkflowAttributeValue( guidGroupAttribute.Value ).AsGuidOrNull();
 
                     if ( groupGuid.HasValue )
                     {
@@ -75,7 +75,7 @@ namespace Rock.Workflow.Action
                         if ( group != null )
                         {
                             // use the group's grouptype's default group role if a group role wasn't specified
-                            groupRoleId = GroupTypeCache.Read( group.GroupTypeId ).DefaultGroupRoleId;
+                            groupRoleId = GroupTypeCache.Get( group.GroupTypeId ).DefaultGroupRoleId;
                         }
                     }
                 }
@@ -99,10 +99,10 @@ namespace Rock.Workflow.Action
 
             if ( guidPersonAttribute.HasValue )
             {
-                var attributePerson = AttributeCache.Read( guidPersonAttribute.Value, rockContext );
+                var attributePerson = AttributeCache.Get( guidPersonAttribute.Value, rockContext );
                 if ( attributePerson != null )
                 {
-                    string attributePersonValue = action.GetWorklowAttributeValue( guidPersonAttribute.Value );
+                    string attributePersonValue = action.GetWorkflowAttributeValue( guidPersonAttribute.Value );
                     if ( !string.IsNullOrWhiteSpace( attributePersonValue ) )
                     {
                         if ( attributePerson.FieldType.Class == typeof( Rock.Field.Types.PersonFieldType ).FullName )
@@ -133,14 +133,29 @@ namespace Rock.Workflow.Action
             if ( !errorMessages.Any() )
             {
                 var groupMemberService = new GroupMemberService( rockContext );
-                var groupMember = new GroupMember();
-                groupMember.PersonId = person.Id;
-                groupMember.GroupId = group.Id;
+                var groupMember = groupMemberService.GetByGroupIdAndPersonIdAndPreferredGroupRoleId( group.Id, person.Id, groupRoleId.Value );
+                bool isNew = false;
+                if ( groupMember == null )
+                {
+                    groupMember = new GroupMember();
+                    groupMember.PersonId = person.Id;
+                    groupMember.GroupId = group.Id;
+                    isNew = true;
+                }
+                else
+                {
+                    action.AddLogEntry( $"{person.FullName} was already a member of the selected group.", true );
+                }
+
                 groupMember.GroupRoleId = groupRoleId.Value;
                 groupMember.GroupMemberStatus = GroupMemberStatus.Active;
+
                 if ( groupMember.IsValidGroupMember( rockContext ) )
                 {
-                    groupMemberService.Add( groupMember );
+                    if (isNew)
+                    {
+                        groupMemberService.Add( groupMember );
+                    }
                     rockContext.SaveChanges();
                 }
                 else

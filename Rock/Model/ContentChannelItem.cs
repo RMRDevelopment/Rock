@@ -23,6 +23,7 @@ using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Linq;
 using System.Runtime.Serialization;
+
 using Rock.Data;
 using Rock.UniversalSearch;
 using Rock.UniversalSearch.IndexModels;
@@ -33,7 +34,7 @@ namespace Rock.Model
     /// 
     /// </summary>
     [RockDomain( "CMS" )]
-    [Table( "ContentChannelItem")]
+    [Table( "ContentChannelItem" )]
     [DataContract]
     public partial class ContentChannelItem : Model<ContentChannelItem>, IOrdered, IRockIndexable
     {
@@ -80,6 +81,15 @@ namespace Rock.Model
         public string Content { get; set; }
 
         /// <summary>
+        /// Gets or sets the structured content.
+        /// </summary>
+        /// <value>
+        /// The structured content.
+        /// </value>
+        [DataMember]
+        public string StructuredContent { get; set; }
+
+        /// <summary>
         /// Gets or sets the priority of this ContentItem. The lower the number, the higher the priority.
         /// </summary>
         /// <value>
@@ -99,7 +109,7 @@ namespace Rock.Model
         public ContentChannelItemStatus Status { get; set; }
 
         /// <summary>
-        /// Gets or sets the PersonAliasId of the <see cref="Rock.Model.Person"/> who either approved or declined the ContentItem. If no approval action has been performed on this Ad, this value will be null.
+        /// Gets or sets the PersonAliasId of the <see cref="Rock.Model.Person"/> who either approved or declined the ContentItem. If no approval action has been performed on this item, this value will be null.
         /// </summary>
         /// <value>
         /// A <see cref="System.Int32"/> representing the PersonAliasId of hte <see cref="Rock.Model.Person"/> who either approved or declined the ContentItem. This value will be null if no approval action has been
@@ -124,7 +134,7 @@ namespace Rock.Model
         /// The start date time.
         /// </value>
         [DataMember]
-        public DateTime StartDateTime { get; set; }
+        public DateTime StartDateTime { get; set; } = RockDateTime.Now;
 
         /// <summary>
         /// Gets or sets the expire date time.
@@ -153,6 +163,16 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public int Order { get; set; }
+
+        /// <summary>
+        /// Gets or sets the item global key.
+        /// </summary>
+        /// <value>
+        /// The item global key.
+        /// </value>
+        [MaxLength( 100 )]
+        [DataMember]
+        public string ItemGlobalKey { get; set; }
 
         #endregion
 
@@ -184,6 +204,31 @@ namespace Rock.Model
         /// </value>
         [LavaInclude]
         public virtual PersonAlias ApprovedByPersonAlias { get; set; }
+
+        /// <summary>
+        /// Gets the primary slug.
+        /// </summary>
+        /// <value>
+        /// The primary alias.
+        /// </value>
+        [NotMapped]
+        [LavaInclude]
+        public virtual string PrimarySlug
+        {
+            get
+            {
+                return ContentChannelItemSlugs.Select( a => a.Slug ).FirstOrDefault( );
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the content channel item slugs.
+        /// </summary>
+        /// <value>
+        /// The content channel item slugs.
+        /// </value>
+        [LavaInclude]
+        public virtual ICollection<ContentChannelItemSlug> ContentChannelItemSlugs { get; set; }
 
         /// <summary>
         /// Gets or sets the child items.
@@ -238,7 +283,7 @@ namespace Rock.Model
             get
             {
                 var supportedActions = base.SupportedActions;
-                supportedActions.AddOrReplace( Rock.Security.Authorization.INTERACT, "The roles and/or users that have access to intertact with the channel item." );
+                supportedActions.AddOrReplace( Rock.Security.Authorization.INTERACT, "The roles and/or users that have access to interact with the channel item." );
                 return supportedActions;
             }
         }
@@ -290,7 +335,7 @@ namespace Rock.Model
             var contentChannelItems = new ContentChannelItemService( rockContext ).Queryable()
                                             .Where( i =>
                                                 i.ContentChannel.IsIndexEnabled
-                                                && (i.ContentChannel.RequiresApproval == false || i.ContentChannel.ContentChannelType.DisableStatus || i.Status == ContentChannelItemStatus.Approved) );
+                                                && ( i.ContentChannel.RequiresApproval == false || i.ContentChannel.ContentChannelType.DisableStatus || i.Status == ContentChannelItemStatus.Approved ) );
 
             int recordCounter = 0;
 
@@ -324,7 +369,7 @@ namespace Rock.Model
             if ( itemEntity.ContentChannel != null && itemEntity.ContentChannel.IsIndexEnabled )
             {
                 // ensure it's meant to be indexed
-                if ( itemEntity.ContentChannel.IsIndexEnabled && (itemEntity.ContentChannel.RequiresApproval == false || itemEntity.ContentChannel.ContentChannelType.DisableStatus || itemEntity.Status == ContentChannelItemStatus.Approved) )
+                if ( itemEntity.ContentChannel.IsIndexEnabled && ( itemEntity.ContentChannel.RequiresApproval == false || itemEntity.ContentChannel.ContentChannelType.DisableStatus || itemEntity.Status == ContentChannelItemStatus.Approved ) )
                 {
                     var indexItem = ContentChannelItemIndex.LoadByModel( itemEntity );
                     IndexContainer.IndexDocument( indexItem );
@@ -383,22 +428,76 @@ namespace Rock.Model
         #endregion
 
         #region Methods
+
+        /// <summary>
+        /// Assigns the item global key to the current instance if one does not exist.
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        private void AssignItemGlobalKey( Data.DbContext dbContext )
+        {
+            if ( this.ItemGlobalKey.IsNullOrWhiteSpace() )
+            {
+                var rockContext = ( RockContext ) dbContext;
+                var contentChannelItemSlugService = new ContentChannelItemSlugService( rockContext );
+                this.ItemGlobalKey = contentChannelItemSlugService.GetUniqueContentSlug( this.Title, null );
+            }
+        }
+
         /// <summary>
         /// Pres the save.
         /// </summary>
         /// <param name="dbContext">The database context.</param>
         /// <param name="state">The state.</param>
-        public override void PreSaveChanges( Data.DbContext dbContext, System.Data.Entity.EntityState state )
+        public override void PreSaveChanges( Data.DbContext dbContext, EntityState state )
         {
             var channel = this.ContentChannel;
 
-            if ( state == System.Data.Entity.EntityState.Deleted )
+            if ( state == EntityState.Deleted )
             {
                 ChildItems.Clear();
                 ParentItems.Clear();
+
+                DeleteRelatedSlugs( dbContext );
+            }
+            else
+            {
+                AssignItemGlobalKey( dbContext );
             }
 
             base.PreSaveChanges( dbContext, state );
+        }
+
+        /// <summary>
+        /// Delete any related slugs.
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        private void DeleteRelatedSlugs( Data.DbContext dbContext )
+        {
+            var rockContext = ( RockContext ) dbContext;
+            var contentChannelSlugSerivce = new ContentChannelItemSlugService( rockContext );
+            var slugsToDelete = contentChannelSlugSerivce.Queryable().Where( a => a.ContentChannelItemId == this.Id );
+            if ( slugsToDelete.Any() )
+            {
+                dbContext.BulkDelete( slugsToDelete );
+            }
+        }
+
+        /// <summary>
+        /// Posts the save changes.
+        /// </summary>
+        /// <param name="dbContext">The database context.</param>
+        public override void PostSaveChanges( Data.DbContext dbContext )
+        {
+            base.PostSaveChanges( dbContext );
+
+            var rockContext = ( RockContext ) dbContext;
+            var contentChannelItemSerivce = new ContentChannelItemService( rockContext );
+            var contentChannelSlugSerivce = new ContentChannelItemSlugService( rockContext );
+
+            if ( !contentChannelSlugSerivce.Queryable().Any( a => a.ContentChannelItemId == this.Id ) && contentChannelItemSerivce.Queryable().Any(a=>a.Id == Id) )
+            {
+                contentChannelSlugSerivce.SaveSlug( Id, Title, null );
+            }
         }
 
         /// <summary>
@@ -437,7 +536,7 @@ namespace Rock.Model
     #region Enumerations
 
     /// <summary>
-    /// Represents the status of a Marketing Campaign Card
+    /// Represents the approval status of a content channel item
     /// </summary>
     public enum ContentChannelItemStatus
     {

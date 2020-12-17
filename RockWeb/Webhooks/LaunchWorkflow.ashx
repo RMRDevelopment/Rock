@@ -29,6 +29,7 @@ using Rock;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
+using Rock.Utility;
 
 /// <summary>
 /// A webhook for launching a workflow. Does basic decoding of FORM data
@@ -56,7 +57,7 @@ public class LaunchWorkflow : IHttpHandler
                     Guid guid = hook.GetAttributeValue( "WorkflowType" ).AsGuid();
 
 
-                    WorkflowTypeCache workflowType = WorkflowTypeCache.Read( guid );
+                    WorkflowTypeCache workflowType = WorkflowTypeCache.Get( guid );
                     if ( workflowType != null )
                     {
                         Workflow workflow = Workflow.Activate( workflowType, context.Request.UserHostName );
@@ -76,7 +77,7 @@ public class LaunchWorkflow : IHttpHandler
                                 List<string> errorMessages;
                                 new WorkflowService( rockContext ).Process( workflow, out errorMessages );
 
-                                // We send a response (if one is available) wether the workflow has ended
+                                // We send a response (if one is available) whether the workflow has ended
                                 // or not. This gives them a chance to send a "let me work on that for you"
                                 // type response and then continue processing in the background.
                                 SetWorkflowResponse( context, workflow );
@@ -126,7 +127,7 @@ public class LaunchWorkflow : IHttpHandler
     {
         var hooks = new List<DefinedValueCache>();
 
-        var dt = DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.WEBHOOK_TO_WORKFLOW.AsGuid() );
+        var dt = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.WEBHOOK_TO_WORKFLOW.AsGuid() );
         if ( dt != null )
         {
             foreach ( DefinedValueCache hook in dt.DefinedValues.OrderBy( h => h.Order ) )
@@ -164,7 +165,7 @@ public class LaunchWorkflow : IHttpHandler
 
         // set workflow name
         string nameTemplate = hook.GetAttributeValue( "WorkflowNameTemplate" ).ResolveMergeFields( mergeFields );
-        if ( nameTemplate.IsNotNullOrWhitespace() )
+        if ( nameTemplate.IsNotNullOrWhiteSpace() )
         {
             workflow.Name = nameTemplate.ResolveMergeFields( mergeFields );
         }
@@ -180,7 +181,7 @@ public class LaunchWorkflow : IHttpHandler
     protected Dictionary<string, object> RequestToDictionary( HttpContext httpContext )
     {
         var dictionary = Rock.Lava.LavaHelper.GetCommonMergeFields( null );
-
+        var host = WebRequestHelper.GetHostNameFromRequest( HttpContext.Current );
         // Set the standard values to be used.
         dictionary.Add( "Url", "/" + string.Join( "", httpContext.Request.Url.Segments.SkipWhile( s => !s.EndsWith( ".ashx", StringComparison.InvariantCultureIgnoreCase ) && !s.EndsWith( ".ashx/", StringComparison.InvariantCultureIgnoreCase ) ).Skip( 1 ).ToArray() ) );
         dictionary.Add( "RawUrl", httpContext.Request.Url.AbsoluteUri );
@@ -188,7 +189,7 @@ public class LaunchWorkflow : IHttpHandler
         dictionary.Add( "QueryString", httpContext.Request.QueryString.Cast<string>().ToDictionary( q => q, q => httpContext.Request.QueryString[q] ) );
         dictionary.Add( "RemoteAddress", httpContext.Request.UserHostAddress );
         dictionary.Add( "RemoteName", httpContext.Request.UserHostName );
-        dictionary.Add( "ServerName", httpContext.Request.Url.Host );
+        dictionary.Add( "ServerName", host );
         dictionary.Add( "ContentType", httpContext.Request.ContentType );
 
         // Add in the raw body content.
@@ -204,9 +205,7 @@ public class LaunchWorkflow : IHttpHandler
             {
                 dictionary.Add( "Body", Newtonsoft.Json.JsonConvert.DeserializeObject( (string)dictionary["RawBody"] ) );
             }
-            catch
-            {
-            }
+            catch { }
         }
         else if ( httpContext.Request.ContentType == "application/x-www-form-urlencoded" )
         {
@@ -214,9 +213,7 @@ public class LaunchWorkflow : IHttpHandler
             {
                 dictionary.Add( "Body", httpContext.Request.Form.Cast<string>().ToDictionary( q => q, q => httpContext.Request.Form[q] ) );
             }
-            catch
-            {
-            }
+            catch { }
         }
         else if ( httpContext.Request.ContentType == "application/xml" )
         {
@@ -227,9 +224,7 @@ public class LaunchWorkflow : IHttpHandler
                 string jsonText = JsonConvert.SerializeXmlNode( doc );
                 dictionary.Add( "Body", Newtonsoft.Json.JsonConvert.DeserializeObject( ( jsonText ) ) );
             }
-            catch
-            {
-            }
+            catch { }
         }
 
         // Add the headers
@@ -255,10 +250,10 @@ public class LaunchWorkflow : IHttpHandler
         string response = workflow.GetAttributeValue( "WebhookResponse" );
         string contentType = workflow.GetAttributeValue( "WebhookResponseContentType" );
 
-        if ( response.IsNotNullOrWhitespace() )
+        if ( response.IsNotNullOrWhiteSpace() )
         {
             httpContext.Response.Write( response );
-            httpContext.Response.ContentType = contentType.IsNotNullOrWhitespace() ? contentType : "text/plain";
+            httpContext.Response.ContentType = contentType.IsNotNullOrWhiteSpace() ? contentType : "text/plain";
         }
     }
 
@@ -290,7 +285,7 @@ public class LaunchWorkflow : IHttpHandler
             {
                 if ( retry < maxRetry - 1 )
                 {
-                    System.Threading.Thread.Sleep( 2000 );
+                    System.Threading.Tasks.Task.Delay( 2000 ).Wait();
                 }
             }
         }

@@ -19,24 +19,18 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
-using System.Runtime.Caching;
 using System.Text.RegularExpressions;
 using System.Web;
-using dotless.Core;
-using dotless.Core.configuration;
+
 using DotLiquid;
+
 using Rock.Utility;
-using Rock.Web.Cache;
 using Rock.Web.UI;
 
 namespace Rock.Lava.Blocks
 {
     /// <summary>
-    /// Sql stores the result of provided SQL query into a variable.
-    /// 
-    /// {% sql results %}
-    /// SELECT [FirstName], [LastName] FROM [Person]
-    /// {% endsql %}
+    /// Tag which allows a snippet of JavaScript to be executed in the browser.
     /// </summary>
     public class Javascript : DotLiquid.Block, IRockStartup
     {
@@ -107,7 +101,7 @@ namespace Rock.Lava.Blocks
                     if ( parms.ContainsKey( "id" ) )
                     {
                         var identifier = parms["id"];
-                        if ( identifier.IsNotNullOrWhitespace() )
+                        if ( identifier.IsNotNullOrWhiteSpace() )
                         {
                             var controlId = "js-" + identifier;
 
@@ -132,7 +126,7 @@ namespace Rock.Lava.Blocks
                     if ( parms.ContainsKey( "id" ) )
                     {
                         var identifier = parms["id"];
-                        if ( identifier.IsNotNullOrWhitespace() )
+                        if ( identifier.IsNotNullOrWhiteSpace() )
                         {
                             var controlId = "js-" + identifier;
 
@@ -146,7 +140,7 @@ namespace Rock.Lava.Blocks
                         }
                     }
                     else
-                    { 
+                    {
                         page.Header.Controls.Add( new System.Web.UI.LiteralControl( $"{Environment.NewLine}<script src='{url}' type='text/javascript'></script>{Environment.NewLine}" ) );
                     }
                 }
@@ -165,11 +159,11 @@ namespace Rock.Lava.Blocks
             if ( url.StartsWith( "~~" ) )
             {
                 string theme = "Rock";
-                if ( page.Theme.IsNotNullOrWhitespace() )
+                if ( page.Theme.IsNotNullOrWhiteSpace() )
                 {
                     theme = page.Theme;
                 }
-                else if ( page.Site != null && page.Site.Theme.IsNotNullOrWhitespace() )
+                else if ( page.Site != null && page.Site.Theme.IsNotNullOrWhiteSpace() )
                 {
                     theme = page.Site.Theme;
                 }
@@ -186,7 +180,6 @@ namespace Rock.Lava.Blocks
         /// <param name="markup">The markup.</param>
         /// <param name="context">The context.</param>
         /// <returns></returns>
-        /// <exception cref="System.Exception">No parameters were found in your command. The syntax for a parameter is parmName:'' (note that you must use single quotes).</exception>
         private Dictionary<string, string> ParseMarkup( string markup, Context context )
         {
             // first run lava across the inputted markup
@@ -217,7 +210,7 @@ namespace Rock.Lava.Blocks
             parms.Add( "disableanonymousfunction", "false" );
             parms.Add( "url", string.Empty );
 
-            var markupItems = Regex.Matches( resolvedMarkup, "(.*?:'[^']+')" )
+            var markupItems = Regex.Matches( resolvedMarkup, @"(\S*?:'[^']+')" )
                 .Cast<Match>()
                 .Select( m => m.Value )
                 .ToList();

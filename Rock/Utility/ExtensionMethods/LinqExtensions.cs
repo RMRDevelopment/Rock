@@ -37,7 +37,7 @@ namespace Rock
         #region GenericCollection Extensions
 
         /// <summary>
-        /// Concatonate the items into a Delimited string
+        /// Concatenate the items into a Delimited string
         /// </summary>
         /// <example>
         /// FirstNamesList.AsDelimited(",") would be "Ted,Suzy,Noah"
@@ -54,7 +54,7 @@ namespace Rock
         }
 
         /// <summary>
-        /// Concatonate the items into a Delimited string an optionally htmlencode the strings
+        /// Concatenate the items into a Delimited string an optionally htmlencode the strings
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="items">The items.</param>
@@ -138,7 +138,7 @@ namespace Rock
         /// Joins a dictionary of items.
         /// </summary>
         /// <param name="items">The items.</param>
-        /// <param name="delimter">The delimter.</param>
+        /// <param name="delimter">The delimiter.</param>
         /// <returns></returns>
         public static string Join( this Dictionary<string, string> items, string delimter )
         {
@@ -359,22 +359,46 @@ namespace Rock
         /// <returns></returns>
         public static IOrderedQueryable<T> Sort<T>( this IQueryable<T> source, Rock.Web.UI.Controls.SortProperty sortProperty )
         {
-            if ( sortProperty.Property.StartsWith( "attribute:" ) )
+            if ( sortProperty.Property.StartsWith( "attribute:" ) && source.Any() )
             {
                 var itemType = typeof( T );
-                var attributeCache = AttributeCache.Read( sortProperty.Property.Substring( 10 ).AsInteger() );
+                var attributeCache = AttributeCache.Get( sortProperty.Property.Substring( 10 ).AsInteger() );
                 if ( attributeCache != null && typeof( IModel ).IsAssignableFrom( typeof( T ) ) )
                 {
-                    var entityIds = new List<int>();
-
+                    List<int> ids = new List<int>();
                     var models = new List<IModel>();
                     source.ToList().ForEach( i => models.Add( i as IModel ) );
-                    var ids = models.Select( m => m.Id ).ToList();
-
-                    var field = attributeCache.FieldType.Field;
 
                     using ( var rockContext = new RockContext() )
                     {
+                        //Check if Attribute Entity Type is same as Source Entity Type
+                        var type = models.First().GetType();
+                        EntityTypeCache modelEntity = EntityTypeCache.Get( type, false );
+                        PropertyInfo modelProperty = null;
+                        //Same Entity Type
+                        if ( modelEntity != null && modelEntity.Id == attributeCache.EntityTypeId )
+                        {
+                            ids = models.Select( m => m.Id ).ToList();
+                        }
+                        //Different Entity Types
+                        else if ( modelEntity != null )
+                        {
+                            //Search the entity properties for a matching entity and save the property information and primary key name
+                            var propertiesWithAttributes = type.GetProperties().Where( a => typeof( IHasAttributes ).IsAssignableFrom( a.PropertyType ) ).ToList();
+                            foreach ( var propertyInfo in propertiesWithAttributes )
+                            {
+                                var propertyEntity = EntityTypeCache.Get( propertyInfo.PropertyType, false );
+                                if ( propertyEntity != null && propertyEntity.Id == attributeCache.EntityTypeId )
+                                {
+                                    Object obj = models.First().GetPropertyValue( propertyInfo.Name );
+                                    var prop = obj.GetType().GetProperty( "Id" );
+                                    modelProperty = propertyInfo;
+                                    ids = models.Select( m => Int32.Parse( prop.GetValue( m.GetPropertyValue( propertyInfo.Name ) ).ToString() ) ).ToList();
+                                }
+                            }
+                        }
+                        var field = attributeCache.FieldType.Field;
+
                         foreach ( var attributeValue in new AttributeValueService( rockContext )
                             .Queryable().AsNoTracking()
                             .Where( v =>
@@ -383,7 +407,27 @@ namespace Rock
                                 ids.Contains( v.EntityId.Value ) )
                             .ToList() )
                         {
-                            var model = models.FirstOrDefault( m => m.Id == attributeValue.EntityId.Value );
+                            IModel model = null;
+                            if ( modelEntity != null && modelEntity.Id == attributeCache.EntityTypeId )
+                            {
+                                model = models.FirstOrDefault( m => m.Id == attributeValue.EntityId.Value );
+                            }
+                            else if ( modelEntity != null )
+                            {
+                                //Use the model property and primary key name to get the foreign key EntityId refers to
+                                model = models.FirstOrDefault( m =>
+                                {
+                                    var obj = m.GetPropertyValue( modelProperty.Name );
+                                    PropertyInfo prop = obj.GetType().GetProperty( "Id" );
+                                    string val = prop.GetValue( obj ).ToString();
+                                    return Int32.Parse( val ) == attributeValue.EntityId.Value;
+                                } );
+                            }
+                            else
+                            {
+                                //Handle not finding an Entity type
+                                model = null;
+                            }
                             if ( model != null )
                             {
                                 model.CustomSortValue = field.SortValue( null, attributeValue.Value, attributeCache.QualifierValues );
@@ -431,7 +475,7 @@ namespace Rock
             }
 
             return qry;
-            
+
         }
 
         /// <summary>
@@ -446,9 +490,9 @@ namespace Rock
         /// <example>
         /// var test = new PersonService( rockContext ).Queryable().Where( a =&gt; a.FirstName == "Bob" ).WhereAttributeValue( rockContext, "BaptizedHere", "True" ).ToList();
         ///   </example>
-        public static IQueryable<T> WhereAttributeValue<T>( this IQueryable<T> source, RockContext rockContext, string attributeKey, string attributeValue ) where T : Rock.Data.Model<T>, new()
+        public static IQueryable<T> WhereAttributeValue<T>( this IQueryable<T> source, RockContext rockContext, string attributeKey, string attributeValue ) where T : Entity<T>, new()
         {
-            int entityTypeId = Rock.Web.Cache.EntityTypeCache.GetId( typeof( T ) ) ?? 0;
+            int entityTypeId = EntityTypeCache.GetId( typeof( T ) ) ?? 0;
 
             var avs = new AttributeValueService( rockContext ).Queryable()
                 .Where( a => a.Attribute.Key == attributeKey )
@@ -469,7 +513,7 @@ namespace Rock
         /// <param name="rockContext">The rock context.</param>
         /// <param name="predicate">The predicate.</param>
         /// <returns></returns>
-        public static IQueryable<T> WhereAttributeValue<T>( this IQueryable<T> source, RockContext rockContext, Expression<Func<AttributeValue, bool>> predicate ) where T : Rock.Data.Model<T>, new()
+        public static IQueryable<T> WhereAttributeValue<T>( this IQueryable<T> source, RockContext rockContext, Expression<Func<AttributeValue, bool>> predicate ) where T : Entity<T>, new()
         {
             /*
               Example: 
@@ -477,7 +521,7 @@ namespace Rock
                 .WhereAttributeValue( rockContext, a => a.Attribute.Key == "IsAwesome" && a.ValueAsBoolean == true );
             */
 
-            int entityTypeId = Rock.Web.Cache.EntityTypeCache.GetId( typeof( T ) ) ?? 0;
+            int entityTypeId = EntityTypeCache.GetId( typeof( T ) ) ?? 0;
 
             var avs = new AttributeValueService( rockContext ).Queryable()
                 .Where( a => a.Attribute.EntityTypeId == entityTypeId )
@@ -485,6 +529,28 @@ namespace Rock
                 .Select( a => a.EntityId );
 
             var result = source.Where( a => avs.Contains( ( a as T ).Id ) );
+            return result;
+        }
+
+        /// <summary>
+        /// Wheres the campus.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="source">The source.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <param name="campusId">The campus identifier.</param>
+        /// <returns></returns>
+        public static IQueryable<T> WhereCampus<T>( this IQueryable<T> source, RockContext rockContext, int campusId ) where T : Entity<T>, new()
+        {
+            int entityTypeId = EntityTypeCache.GetId( typeof( T ) ) ?? 0;
+
+            var entityCampusFilterService = new EntityCampusFilterService( rockContext )
+                .Queryable()
+                .Where( e => e.CampusId == campusId )
+                .Where( e => e.EntityTypeId == entityTypeId )
+                .Select( e => e.EntityId );
+
+            var result = source.Where( s => entityCampusFilterService.Contains( ( s as T ).Id ) );
             return result;
         }
 
@@ -505,198 +571,5 @@ namespace Rock
         }
 
         #endregion IQueryable extensions
-
-        #region Dictionary<TKey, TValue> extension methods
-
-        /// <summary>
-        /// Adds or replaces an item in a Dictionary.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key.</typeparam>
-        /// <typeparam name="TValue">The type of the value.</typeparam>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <param name="value">The value.</param>
-        public static void AddOrReplace<TKey, TValue>( this Dictionary<TKey, TValue> dictionary, TKey key, TValue value )
-        {
-            AddOrReplace( (IDictionary<TKey, TValue>)dictionary, key, value );
-        }
-
-        /// <summary>
-        /// Adds the or replace.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key.</typeparam>
-        /// <typeparam name="TValue">The type of the value.</typeparam>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <param name="value">The value.</param>
-        public static void AddOrReplace<TKey, TValue>( this IDictionary<TKey, TValue> dictionary, TKey key, TValue value )
-        {
-            if ( !dictionary.ContainsKey( key ) )
-            {
-                dictionary.Add( key, value );
-            }
-            else
-            {
-                dictionary[key] = value;
-            }
-        }
-
-        /// <summary>
-        /// Adds an item to a Dictionary if it doesn't already exist in Dictionary.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key.</typeparam>
-        /// <typeparam name="TValue">The type of the value.</typeparam>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <param name="value">The value.</param>
-        public static void AddOrIgnore<TKey, TValue>( this IDictionary<TKey, TValue> dictionary, TKey key, TValue value )
-        {
-            if ( !dictionary.ContainsKey( key ) )
-            {
-                dictionary.Add( key, value );
-            }
-        }
-
-        /// <summary>
-        /// Adds if not empty.
-        /// </summary>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <param name="value">The value.</param>
-        /// <param name="replace">if set to <c>true</c> [replace].</param>
-        public static void AddIfNotBlank( this IDictionary<string, string> dictionary, string key, string value, bool replace = true ) 
-        {
-            if ( value.IsNotNullOrWhitespace() )
-            {
-                if ( !dictionary.ContainsKey( key ) )
-                {
-                    dictionary.Add( key, value );
-                }
-                else
-                {
-                    if ( replace )
-                    {
-                        dictionary[key] = value;
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets value for the specified key, or null if the dictionary doesn't contain the key
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key.</typeparam>
-        /// <typeparam name="TValue">The type of the value.</typeparam>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <returns></returns>
-        public static TValue GetValueOrNull<TKey, TValue>( this IDictionary<TKey, TValue> dictionary, TKey key )
-        {
-            if ( dictionary.ContainsKey( key ) )
-            {
-                return dictionary[key];
-            }
-            else
-            {
-                return default( TValue );
-            }
-        }
-
-        /// <summary>
-        /// Gets the value or null.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key.</typeparam>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <returns></returns>
-        public static int? GetValueOrNull<TKey>( this IDictionary<TKey, int> dictionary, TKey key )
-        {
-            if ( dictionary.ContainsKey( key ) )
-            {
-                return dictionary[key];
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Gets the value or null.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key.</typeparam>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <returns></returns>
-        public static decimal? GetValueOrNull<TKey>( this IDictionary<TKey, decimal> dictionary, TKey key )
-        {
-            if ( dictionary.ContainsKey( key ) )
-            {
-                return dictionary[key];
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Gets the value or null.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key.</typeparam>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <returns></returns>
-        public static double? GetValueOrNull<TKey>( this IDictionary<TKey, double> dictionary, TKey key )
-        {
-            if ( dictionary.ContainsKey( key ) )
-            {
-                return dictionary[key];
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Gets the value or null.
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key.</typeparam>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <returns></returns>
-        public static Guid? GetValueOrNull<TKey>( this IDictionary<TKey, Guid> dictionary, TKey key )
-        {
-            if ( dictionary.ContainsKey( key ) )
-            {
-                return dictionary[key];
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Gets ConfigurationValue's Value for the specified key, or null if the dictionary doesn't contain the key or the ConfigurationValue is null
-        /// </summary>
-        /// <typeparam name="TKey">The type of the key.</typeparam>
-        /// <param name="dictionary">The dictionary.</param>
-        /// <param name="key">The key.</param>
-        /// <returns></returns>
-        public static string GetValueOrNull<TKey>( this IDictionary<TKey, Rock.Field.ConfigurationValue> dictionary, TKey key )
-        {
-            if ( dictionary.ContainsKey( key ) && dictionary[key] != null )
-            {
-                return dictionary[key].Value;
-            }
-            else
-            {
-                return null;
-            }
-        }
-
-        #endregion Dictionary<TKey, TValue> extension methods
     }
 }

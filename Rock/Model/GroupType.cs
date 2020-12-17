@@ -23,10 +23,10 @@ using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Linq;
 using System.Runtime.Serialization;
+
 using Rock.Data;
 using Rock.Security;
-using Rock.UniversalSearch;
-using Rock.UniversalSearch.IndexModels;
+using Rock.Transactions;
 using Rock.Web.Cache;
 
 namespace Rock.Model
@@ -39,19 +39,8 @@ namespace Rock.Model
     [RockDomain( "Group" )]
     [Table( "GroupType" )]
     [DataContract]
-    public partial class GroupType : Model<GroupType>, IOrdered
+    public partial class GroupType : Model<GroupType>, IOrdered, ICacheable
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="GroupType"/> class.
-        /// </summary>
-        public GroupType()
-        {
-            ShowInGroupList = true;
-            ShowInNavigation = true;
-            GroupTerm = "Group";
-            GroupMemberTerm = "Member";
-        }
-
         #region Entity Properties
 
         /// <summary>
@@ -96,7 +85,7 @@ namespace Rock.Model
         [Required]
         [MaxLength( 100 )]
         [DataMember]
-        public string GroupTerm { get; set; }
+        public string GroupTerm { get; set; } = "Group";
 
         /// <summary>
         /// Gets or sets the term that a <see cref="Rock.Model.GroupMember"/> of a <see cref="Rock.Model.Group"/> that belongs to this GroupType is called.
@@ -111,7 +100,7 @@ namespace Rock.Model
         [Required]
         [MaxLength( 100 )]
         [DataMember]
-        public string GroupMemberTerm { get; set; }
+        public string GroupMemberTerm { get; set; } = "Member";
 
         /// <summary>
         /// Gets or sets the Id of the <see cref="Rock.Model.GroupTypeRole"/> that a <see cref="Rock.Model.GroupMember"/> of a <see cref="Rock.Model.Group"/> belonging to this GroupType is given by default.
@@ -138,7 +127,7 @@ namespace Rock.Model
         ///   A <see cref="System.Boolean"/> value that is <c>true</c> if a <see cref="Rock.Model.Group"/> of this GroupType will be shown in the GroupList; otherwise <c>false</c>.
         /// </value>
         [DataMember]
-        public bool ShowInGroupList { get; set; }
+        public bool ShowInGroupList { get; set; } = true;
 
         /// <summary>
         /// Gets or sets a flag indicating if this GroupType and its <see cref="Rock.Model.Group">Groups</see> are shown in Navigation.
@@ -151,7 +140,7 @@ namespace Rock.Model
         /// A <see cref="System.Boolean"/> value that is <c>true</c> if this GroupType and Groups should be displayed in Navigation controls.
         /// </value>
         [DataMember]
-        public bool ShowInNavigation { get; set; }
+        public bool ShowInNavigation { get; set; } = true;
 
         /// <summary>
         /// Gets or sets the icon CSS class name for a font vector based icon.
@@ -357,6 +346,435 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public bool GroupAttendanceRequiresSchedule { get; set; }
+
+        /// <summary>
+        /// Gets or sets a lava template that can be used for generating  view details for Group.
+        /// </summary>
+        /// <value>
+        /// The Group View Lava Template.
+        /// </value>
+        [DataMember]
+        public string GroupViewLavaTemplate
+        {
+            get
+            {
+                if ( _groupViewLavaTemplate.IsNullOrWhiteSpace() )
+                {
+                    return _defaultLavaTemplate;
+                }
+                else
+                {
+                    return _groupViewLavaTemplate;
+                }
+            }
+            set
+            {
+                _groupViewLavaTemplate = value;
+            }
+        }
+        private string _groupViewLavaTemplate;
+        private string _defaultLavaTemplate = @"{% if Group.GroupType.GroupCapacityRule != 'None' and Group.GroupCapacity != '' %}
+		{% assign warningLevel = ''warning'' %}
+
+		{% if Group.GroupType.GroupCapacityRule == 'Hard' %}
+			{% assign warningLevel = 'danger' %}
+		{% endif %}
+
+		{% assign activeMemberCount = countActive | Plus:1 %} {% comment %}the counter is zero based{% endcomment %}
+		{% assign overageAmount = activeMemberCount | Minus:Group.GroupCapacity %}
+
+		{% if overageAmount > 0 %}
+			<div class=""alert alert-{{ warningLevel }} margin-t-sm"">This group is over capacity by {{ overageAmount }} {{ 'individual' | PluralizeForQuantity:overageAmount }}.</div>
+		{% endif %}
+	{% endif %}
+	
+	
+	
+{% if Group.Description != '' -%}
+    <p class='description'>{{ Group.Description }}</p>
+{% endif -%}
+
+<div class=""row"">
+   <div class=""col-md-6"">
+        <dl>
+            {% if Group.ParentGroup != null %}
+            <dt> Parent Group </ dt>
+               <dd>{{ Group.ParentGroup.Name }}</dd>
+            {% endif %}
+            {% if Group.RequiredSignatureDocumentTemplate != null %}
+            <dt> Required Signed Document </dt>
+               <dd>{{ Group.RequiredSignatureDocumentTemplate.Name }}</ dd >
+            {% endif %}
+            {% if Group.Schedule != null %}
+
+            <dt> Schedule </dt>
+            <dd>{{ Group.Schedule.FriendlyScheduleText }}</ dd >
+            {% endif %}
+            {% if Group.GroupCapacity != null and Group.GroupCapacity != '' %}
+
+            <dt> Capacity </dt>
+
+            <dd>{{ Group.GroupCapacity }}</dd>
+            {% endif %}
+        {% if Group.GroupType.ShowAdministrator and Group.GroupAdministratorPersonAlias != null and Group.GroupAdministratorPersonAlias != '' %}
+            <dt> {{ Group.GroupType.AdministratorTerm }}</dt>
+            <dd>{{ Group.GroupAdministratorPersonAlias.Person.FullName }}</dd>
+            {% endif %}
+        </dl>
+        <dl>
+        {% for attribute in Group.AttributeValues %}
+        <dt>{{ attribute.AttributeName }}:</dt>
+
+<dd>{{ attribute.ValueFormatted }} </dd>
+        {% endfor %}
+        </dl>
+    </div>
+
+    <div class=""col-md-6 location-maps"">
+	{% assign googleAPIKey = 'Global' | Attribute: 'GoogleAPIKey' %}
+	{% assign staticMapStyle = MapStyle | Attribute: 'StaticMapStyle' %}
+
+	{% if Group.GroupLocations != null %}
+	{% assign groupLocations = Group.GroupLocations %}
+	{% assign locationCount = groupLocations | Size %}
+	    {% if locationCount > 0 and googleAPIKey != null and googleAPIKey !='' and staticMapStyle != null and staticMapStyle != '' %}
+		{% for groupLocation in groupLocations %}
+	    	{% if groupLocation.Location.GeoPoint != null and groupLocation.Location.GeoPoint != '' %}
+	    	{% capture markerPoints %}{{ groupLocation.Location.Latitude }},{{ groupLocation.Location.Longitude }}{% endcapture %}
+	    	{% assign mapLink = staticMapStyle | Replace:'{MarkerPoints}', markerPoints %}
+	    	{% assign mapLink = mapLink | Replace:'{PolygonPoints}','' %}
+	    	{% assign mapLink = mapLink | Append:'&sensor=false&size=450x250&zoom=13&format=png&key=' %}
+            {% assign mapLink = mapLink | Append: googleAPIKey %}
+	    	<div class=""group-location-map"">
+	    	    {% if groupLocation.GroupLocationTypeValue != null %}
+	    	    <h4> {{ groupLocation.GroupLocationTypeValue.Value }} </h4>
+	    	    {% endif %}
+	    	    <a href = '{{ GroupMapUrl }}'>
+	    	    <img class='img-thumbnail' src='{{ mapLink }}'/>
+	    	    </a>
+	    	    {% if groupLocation.Location.FormattedAddress != null and groupLocation.Location.FormattedAddress != '' and ShowLocationAddresses == true %}
+	    	    {{ groupLocation.Location.FormattedAddress }}
+	    	    {% endif %}
+	    	 </div>
+		    {% endif %}
+		    {% if groupLocation.Location.GeoFence != null and groupLocation.Location.GeoFence != '' %}
+
+		    {% assign mapLink = staticMapStyle | Replace:'{MarkerPoints}','' %}
+		    {% assign googlePolygon = 'enc:' | Append: groupLocation.Location.GooglePolygon %}
+	    	{% assign mapLink = mapLink | Replace:'{PolygonPoints}', googlePolygon %}
+	    	{% assign mapLink = mapLink | Append:'&sensor=false&size=350x200&format=png&key=' %}
+	    	{% assign mapLink = mapLink | Append: googleAPIKey %}
+		    <div class='group-location-map'>
+		        {% if groupLocation.GroupLocationTypeValue != null %}
+		        <h4> {{ groupLocation.GroupLocationTypeValue.Value }} </h4>
+		        {% endif %}
+		    <a href = '{{ GroupMapUrl }}'><img class='img-thumbnail' src='{{ mapLink }}'/></a>
+		    </div>	
+		    {% endif %}
+		{% endfor %}
+		{% endif %}
+	{% endif %}
+	{% if Group.Linkages != null %}
+	{% assign linkages = Group.Linkages %}
+	{% assign linkageCount = linkages | Size %}
+	{% if linkageCount > 0 %}
+	{% assign countRegistration = 0 %}
+	{% assign countLoop = 0 %}
+	{% assign countEventItemOccurrences = 0 %}
+	{% assign countContentItems = 0 %}
+	{% for linkage in linkages %}
+		{% if linkage.RegistrationInstanceId != null and linkage.RegistrationInstanceId != '' %}
+			{% if countRegistration == 0 %}
+			<strong> Registrations</strong>
+			<ul class=""list-unstyled"">
+			{% endif %}
+			<li><a href = '{{ RegistrationInstancePage }}?RegistrationInstanceId={{ linkage.RegistrationInstanceId }}'>{% if linkage.EventItemOccurrence != null %} {{ linkage.EventItemOccurrence.EventItem.Name }} ({% if linkage.EventItemOccurrence.Campus != null %} {{ linkage.EventItemOccurrence.Campus.Name }}  {% else %}  All Campuses {% endif %}) {% endif %} - {{ linkage.RegistrationInstance.Name }}</a></li>
+			{% assign countRegistration = countRegistration | Plus: 1 %}
+		{% endif %}
+		{% assign countLoop = countLoop | Plus: 1 %}
+		{% if countRegistration > 0 and countLoop == linkageCount %}
+		</ul>
+		{% endif %}
+	{% endfor %}
+	{% assign countLoop = 0 %}
+	{% for linkage in linkages %}
+		{% if linkage.EventItemOccurrence != null and linkage.EventItemOccurrence.EventItem != null %}
+			{% if countEventItemOccurrences == 0 %}
+			<strong> Event Item Occurrences</strong>
+			<ul class=""list-unstyled"">
+			{% endif %}
+			<li><a href = '{{ EventItemOccurrencePage }}?EventItemOccurrenceId={{ linkage.EventItemOccurrence.Id }}'>{% if linkage.EventItemOccurrence != null %} {{ linkage.EventItemOccurrence.EventItem.Name }} -{% if linkage.EventItemOccurrence.Campus != null %} {{ linkage.EventItemOccurrence.Campus.Name }}  {% else %}  All Campuses {% endif %} {% endif %}</a></li>
+			{% assign countEventItemOccurrences = countEventItemOccurrences | Plus: 1 %}
+		{% endif %}
+		{% assign countLoop = countLoop | Plus: 1 %}
+		{% if countEventItemOccurrences > 0 and countLoop == linkageCount %}
+			</ul>
+		{% endif %}
+	{% endfor %}
+	{% assign countLoop = 0 %}
+	{% for linkage in linkages %}
+		{% if linkage.EventItemOccurrence != null and linkage.EventItemOccurrence.EventItem != null %}
+			{% assign contentChannelItemsCount = linkage.EventItemOccurrence.ContentChannelItems | Size %}
+			{% if contentChannelItemsCount > 0 %}
+			{% assign contentChannelItems = linkage.EventItemOccurrence.ContentChannelItems %}
+				{% for contentChannelItem in contentChannelItems %}
+				{% if contentChannelItem.ContentChannelItem != null %}
+					{% if countContentItems == 0 %}
+					<strong> Content Items</strong>
+					<ul class=""list-unstyled"">
+					{% endif %}
+					<li><a href = '{{ ContentItemPage }}?ContentItemId={{ contentChannelItem.ContentChannelItemId }}'>{{ contentChannelItem.ContentChannelItem.Title }} <small>({{ contentChannelItem.ContentChannelItem.ContentChannelType.Name }})</small></a></li>
+					{% assign countContentItems = countContentItems | Plus: 1 %}
+				{% endif %}
+				{% endfor %}
+			{% endif %}
+    	{% endif %}
+    	{% assign countLoop = countLoop | Plus: 1 %}
+    	{% if countContentItems > 0 and countLoop == linkageCount %}
+			</ul>
+		{% endif %}
+	{% endfor %}
+	{% endif %}
+{% endif %}
+	</div>
+</div>";
+
+        /// <summary>
+        /// Gets or sets a flag indicating if specific groups are allowed to have their own member attributes.
+        /// </summary>
+        /// <value>
+        /// A <see cref="System.Boolean"/> value that is <c>true</c> if this specific group are allowed to have their own member attributes, otherwise <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool AllowSpecificGroupMemberAttributes { get; set; }
+
+        /// <summary>
+        /// Gets or sets a flag indicating if group requirements section is enabled for group of this type.
+        /// </summary>
+        /// <value>
+        /// A <see cref="System.Boolean"/> value that is <c>true</c> if group requirements section is enabled for group of this type, otherwise <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool EnableSpecificGroupRequirements { get; set; }
+
+        /// <summary>
+        /// Gets or sets a flag indicating if groups of this type are allowed to be sync'ed.
+        /// </summary>
+        /// <value>
+        /// A <see cref="System.Boolean"/> value that is <c>true</c> if groups of this type are allowed to be sync'ed, otherwise <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool AllowGroupSync { get; set; }
+
+        /// <summary>
+        /// Gets or sets a flag indicating if groups of this type should be allowed to have Group Member Workflows.
+        /// </summary>
+        /// <value>
+        /// A <see cref="System.Boolean"/> value that is <c>true</c> if groups of this type should be allowed to have group member workflows, otherwise <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool AllowSpecificGroupMemberWorkflows { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether group history should be enabled for groups of this type
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [enable group history]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool EnableGroupHistory { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether group tag should be enabled for groups of this type
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [enable group tag]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool EnableGroupTag { get; set; } = false;
+
+        /// <summary>
+        /// The color used to visually distinguish groups on lists.
+        /// </summary>
+        /// <value>
+        /// The group type color.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string GroupTypeColor { get; set; }
+
+        /// <summary>
+        /// Gets or sets the DefinedType that Groups of this type will use for the Group.StatusValue
+        /// </summary>
+        /// <value>
+        /// The group status defined type identifier.
+        /// </value>
+        [DataMember]
+        public int? GroupStatusDefinedTypeId { get; set; }
+
+        /// <summary>
+        /// Indicates whether RSVP functionality should be enabled for this group.
+        /// </summary>
+        /// <value>
+        /// A boolean value.
+        /// </value>
+        [DataMember]
+        public bool EnableRSVP { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether [enable inactive reason].
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [enable inactive reason]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool EnableInactiveReason { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether [requires inactive reason].
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [requires inactive reason]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool RequiresInactiveReason { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating if group type allows any child group type.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [allow any child group type]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool AllowAnyChildGroupType { get; set; }
+
+        #endregion Entity Properties
+
+        #region Group Scheduling Related
+
+        /// <summary>
+        /// Gets or sets a value indicating whether scheduling is enabled for groups of this type
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this instance is scheduling enabled; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool IsSchedulingEnabled { get; set; }
+
+        /// <summary>
+        /// Gets or sets the system communication to use when a person is scheduled or when the schedule has been updated.
+        /// </summary>
+        /// <value>
+        /// The scheduled system communication identifier.
+        /// </value>
+        [DataMember]
+        public int? ScheduleConfirmationSystemCommunicationId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the system email to use when a person is scheduled or when the schedule has been updated
+        /// </summary>
+        /// <value>
+        /// The scheduled system email identifier.
+        /// </value>
+        [DataMember]
+        [Obsolete( "Use ScheduleConfirmationSystemCommunicationId instead." )]
+        [RockObsolete( "1.10" )]
+        public int? ScheduleConfirmationSystemEmailId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the system communication to use when sending a schedule reminder.
+        /// </summary>
+        /// <value>
+        /// The schedule reminder system communication identifier.
+        /// </value>
+        [DataMember]
+        public int? ScheduleReminderSystemCommunicationId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the system email to use when sending a schedule reminder
+        /// </summary>
+        /// <value>
+        /// The schedule reminder system email identifier.
+        /// </value>
+        [DataMember]
+        [Obsolete( "Use ScheduleReminderSystemCommunicationId instead." )]
+        [RockObsolete( "1.10" )]
+        public int? ScheduleReminderSystemEmailId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the system communication to use for sending an RSVP reminder.
+        /// </summary>
+        /// <value>
+        /// The RSVP reminder system communication identifier.
+        /// </value>
+        [DataMember]
+        public int? RSVPReminderSystemCommunicationId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of days prior to the RSVP date that a reminder should be sent.
+        /// </summary>
+        /// <value>
+        /// The number of days.
+        /// </value>
+        [DataMember]
+        public int? RSVPReminderOffsetDays { get; set; }
+
+        /// <summary>
+        /// Gets or sets the WorkflowType to execute when a person indicates they won't be able to attend at their scheduled time
+        /// </summary>
+        /// <value>
+        /// The schedule cancellation workflow type identifier.
+        /// </value>
+        [DataMember]
+        public int? ScheduleCancellationWorkflowTypeId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of days prior to the schedule to send a confirmation email.
+        /// </summary>
+        /// <value>
+        /// The schedule confirmation email offset days.
+        /// </value>
+        [DataMember]
+        public int? ScheduleConfirmationEmailOffsetDays { get; set; } = 4;
+
+        /// <summary>
+        /// Gets or sets the number of days prior to the schedule to send a reminder email. See also <seealso cref="GroupMember.ScheduleReminderEmailOffsetDays"/>.
+        /// </summary>
+        /// <value>
+        /// The schedule reminder email offset days.
+        /// </value>
+        [DataMember]
+        public int? ScheduleReminderEmailOffsetDays { get; set; } = 2;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether a person must specify a reason when declining/cancelling.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [requires reason if decline schedule]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool RequiresReasonIfDeclineSchedule { get; set; }
+
+        /// <summary>
+        /// Gets or sets the administrator term for the group of this GroupType.
+        /// </summary>
+        /// <value>
+        /// The administrator term for the group of this GroupType.
+        /// </value>
+        [DataMember]
+        [MaxLength( 100 )]
+        public string AdministratorTerm { get; set; } = "Administrator";
+
+        /// <summary>
+        /// Gets or sets a value indicating whether administrator for the group of this GroupType will be shown.
+        /// </summary>
+        /// <value>
+        ///   A <see cref="System.Boolean"/> value that is <c>true</c> if administrator for the group of this GroupType will be shown; otherwise <c>false</c>.
+        /// </value>
+        [Required]
+        [DataMember( IsRequired = true )]
+        public bool ShowAdministrator { get; set; }
+
         #endregion
 
         #region Virtual Properties
@@ -384,6 +802,25 @@ namespace Rock.Model
         [DataMember, LavaIgnore]
         public virtual ICollection<GroupType> ChildGroupTypes
         {
+            /* 2020-09-03 MDP
+             ChildGroupTypes (GroupTypeAssociation) is sort of used for two different things. Which can be a little confusing:
+             There is an explanation in Asana at https://app.asana.com/0/0/1191515790495258/f, but here is a summary...
+
+            1) In Checkin Configuration, Checkin Areas are GroupTypes under the covers.
+               In this case, it is used as a hierarchy tree. For example:
+                - Kids Areas
+                    - Area 1
+                        - Kittens Group
+                    - Area 2
+                        - Bobcat Group    
+                    - Area 3
+                        - Tigers Group
+                        - Bears Group
+            2) As the Allowed Child Types (Group Type Detail).
+               In this case, it is as used for child GroupTypes that are allowed to be added. It is *not* used as a hierarchy tree.
+               It would just be the Group Types you could choose from when adding a new group.
+             */
+
             get { return _childGroupTypes ?? ( _childGroupTypes = new Collection<GroupType>() ); }
             set { _childGroupTypes = value; }
         }
@@ -478,6 +915,55 @@ namespace Rock.Model
         public virtual DefinedValue GroupTypePurposeValue { get; set; }
 
         /// <summary>
+        /// Gets or sets the system email to use when a person is scheduled or when the schedule has been updated
+        /// </summary>
+        /// <value>
+        /// The scheduled system email.
+        /// </value>
+        [DataMember]
+        [Obsolete( "Use ScheduleConfirmationSystemCommunication instead." )]
+        [RockObsolete( "1.10" )]
+        public virtual SystemEmail ScheduleConfirmationSystemEmail { get; set; }
+
+        /// <summary>
+        /// Gets or sets the system email to use when sending a Schedule Reminder
+        /// </summary>
+        /// <value>
+        /// The schedule reminder system email.
+        /// </value>
+        [DataMember]
+        [Obsolete( "Use ScheduleReminderSystemCommunication instead." )]
+        [RockObsolete( "1.10" )]
+        public virtual SystemEmail ScheduleReminderSystemEmail { get; set; }
+
+        /// <summary>
+        /// Gets or sets the system communication to use when a person is scheduled or when the schedule has been updated
+        /// </summary>
+        /// <value>
+        /// The scheduled system communication.
+        /// </value>
+        [DataMember]
+        public virtual SystemCommunication ScheduleConfirmationSystemCommunication { get; set; }
+
+        /// <summary>
+        /// Gets or sets the system communication to use when sending a Schedule Reminder
+        /// </summary>
+        /// <value>
+        /// The schedule reminder system communication.
+        /// </value>
+        [DataMember]
+        public virtual SystemCommunication ScheduleReminderSystemCommunication { get; set; }
+
+        /// <summary>
+        /// Gets or sets the WorkflowType to execute when a person indicates they won't be able to attend at their scheduled time
+        /// </summary>
+        /// <value>
+        /// The type of the schedule cancellation workflow.
+        /// </value>
+        [DataMember]
+        public virtual WorkflowType ScheduleCancellationWorkflowType { get; set; }
+
+        /// <summary>
         /// Gets a count of <see cref="Rock.Model.Group">Groups</see> that belong to this GroupType.
         /// </summary>
         /// <value>
@@ -531,6 +1017,14 @@ namespace Rock.Model
         private ICollection<GroupRequirement> _groupsRequirements;
 
         /// <summary>
+        /// Gets or sets the DefinedType that Groups of this type will use for the Group.StatusValue
+        /// </summary>
+        /// <value>
+        /// The type of the group status defined.
+        /// </value>
+        public DefinedType GroupStatusDefinedType { get; set; }
+
+        /// <summary>
         /// A dictionary of actions that this class supports and the description of each.
         /// </summary>
         public override Dictionary<string, string> SupportedActions {
@@ -542,6 +1036,7 @@ namespace Rock.Model
                     _supportedActions.Add( Authorization.MANAGE_MEMBERS, "The roles and/or users that have access to manage the group members." );
                     _supportedActions.Add( Authorization.EDIT, "The roles and/or users that have access to edit." );
                     _supportedActions.Add( Authorization.ADMINISTRATE, "The roles and/or users that have access to administrate." );
+                    _supportedActions.Add( Authorization.SCHEDULE, "The roles and/or users that may perform scheduling." );
                 }
                 return _supportedActions;
             }
@@ -583,6 +1078,12 @@ namespace Rock.Model
                             parent = parent.InheritedGroupType;
                         }
                     }
+
+                    if ( string.IsNullOrEmpty( GroupViewLavaTemplate ) )
+                    {
+                        this.ValidationResults.Add( new ValidationResult( "Lava template for group view is mandatory." ) );
+                        return false;
+                    }
                 }
 
                 return result;
@@ -594,9 +1095,9 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext">The database context.</param>
         /// <param name="state">The state.</param>
-        public override void PreSaveChanges( Rock.Data.DbContext dbContext, System.Data.Entity.EntityState state )
+        public override void PreSaveChanges( Rock.Data.DbContext dbContext, EntityState state )
         {
-            if (state == System.Data.Entity.EntityState.Deleted)
+            if (state == EntityState.Deleted)
             {
                 ChildGroupTypes.Clear();
 
@@ -610,11 +1111,11 @@ namespace Rock.Model
             }
 
             // clean up the index
-            if ( state == System.Data.Entity.EntityState.Deleted && IsIndexEnabled )
+            if ( state == EntityState.Deleted && IsIndexEnabled )
             {
                 this.DeleteIndexedDocumentsByGroupType( this.Id );
             }
-            else if ( state == System.Data.Entity.EntityState.Modified )
+            else if ( state == EntityState.Modified )
             {
                 // check if indexing is enabled
                 var changeEntry = dbContext.ChangeTracker.Entries<GroupType>().Where( a => a.Entity == this ).FirstOrDefault();
@@ -643,7 +1144,7 @@ namespace Rock.Model
         /// inheritence tree.
         /// </summary>
         /// <param name="rockContext">The database context to operate in.</param>
-        /// <returns>A list of GroupType Ids, including our own Id, that identifies the inheritence tree.</returns>
+        /// <returns>A list of GroupType Ids, including our own Id, that identifies the inheritance tree.</returns>
         public List<int> GetInheritedGroupTypeIds( Rock.Data.RockContext rockContext )
         {
             rockContext = rockContext ?? new RockContext();
@@ -680,19 +1181,61 @@ namespace Rock.Model
         }
 
         /// <summary>
+        /// Gets all dependent group type ids.
+        /// </summary>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        public List<int> GetAllDependentGroupTypeIds( Rock.Data.RockContext rockContext )
+        {
+            rockContext = rockContext ?? new RockContext();
+
+            var groupTypeService = new GroupTypeService( rockContext );
+            var groupTypeIds = new List<int>(10);
+
+            var groupType = this;
+
+            //
+            // Loop until we find a recursive loop or run out of parent group types.
+            //
+            List<int> childGroupTypeIds = null;
+            do
+            {
+                if ( childGroupTypeIds == null )
+                {
+                    childGroupTypeIds = groupTypeService
+                                    .Queryable()
+                                    .AsNoTracking()
+                                    .Where( t => t.InheritedGroupTypeId == groupType.Id )
+                                    .Select( t => t.Id ).ToList();
+                } else
+                {
+                    childGroupTypeIds = groupTypeService
+                                    .Queryable()
+                                    .AsNoTracking()
+                                    .Where( t => t.InheritedGroupTypeId != null && childGroupTypeIds.Contains(t.InheritedGroupTypeId.Value) )
+                                    .Select( t => t.Id ).ToList();
+                }
+                groupTypeIds.AddRange( childGroupTypeIds );
+
+            } while ( childGroupTypeIds.Count > 0 );
+
+            return groupTypeIds;
+        }
+
+        /// <summary>
         /// Gets a list of all attributes defined for the GroupTypes specified that
         /// match the entityTypeQualifierColumn and the GroupType Ids.
         /// </summary>
         /// <param name="rockContext">The database context to operate in.</param>
         /// <param name="entityTypeId">The Entity Type Id for which Attributes to load.</param>
         /// <param name="entityTypeQualifierColumn">The EntityTypeQualifierColumn value to match against.</param>
-        /// <returns>A list of attributes defined in the inheritence tree.</returns>
+        /// <returns>A list of attributes defined in the inheritance tree.</returns>
         public List<AttributeCache> GetInheritedAttributesForQualifier( Rock.Data.RockContext rockContext, int entityTypeId, string entityTypeQualifierColumn )
         {
             var groupTypeIds = GetInheritedGroupTypeIds( rockContext );
 
-            var inheritedAttributes = new Dictionary<int, List<Rock.Web.Cache.AttributeCache>>();
-            groupTypeIds.ForEach( g => inheritedAttributes.Add( g, new List<Rock.Web.Cache.AttributeCache>() ) );
+            var inheritedAttributes = new Dictionary<int, List<AttributeCache>>();
+            groupTypeIds.ForEach( g => inheritedAttributes.Add( g, new List<AttributeCache>() ) );
 
             //
             // Walk each group type and generate a list of matching attributes.
@@ -707,7 +1250,7 @@ namespace Rock.Model
                     {
                         foreach ( int attributeId in entityAttributes.AttributeIds )
                         {
-                            inheritedAttributes[groupTypeIdValue].Add( Rock.Web.Cache.AttributeCache.Read( attributeId ) );
+                            inheritedAttributes[groupTypeIdValue].Add( AttributeCache.Get( attributeId ) );
                         }
                     }
                 }
@@ -717,7 +1260,7 @@ namespace Rock.Model
             // Walk the generated list of attribute groups and put them, ordered, into a list
             // of inherited attributes.
             //
-            var attributes = new List<Rock.Web.Cache.AttributeCache>();
+            var attributes = new List<AttributeCache>();
             foreach ( var attributeGroup in inheritedAttributes )
             {
                 foreach ( var attribute in attributeGroup.Value.OrderBy( a => a.Order ) )
@@ -752,45 +1295,76 @@ namespace Rock.Model
         #endregion
 
         #region Index Methods
+
         /// <summary>
-        /// Deletes the indexed documents by group type.
+        /// Queues groups of this type to have their indexes deleted
         /// </summary>
         /// <param name="groupTypeId">The group type identifier.</param>
         public void DeleteIndexedDocumentsByGroupType( int groupTypeId )
         {
-            var groups = new GroupService( new RockContext() ).Queryable()
-                                    .Where( i => i.GroupTypeId == groupTypeId );
+            var groupIds = new GroupService( new RockContext() ).Queryable()
+                .Where( i => i.GroupTypeId == groupTypeId )
+                .Select( a => a.Id ).ToList();
 
-            foreach ( var group in groups )
+            int groupEntityTypeId = EntityTypeCache.GetId<Rock.Model.Group>().Value;
+
+            foreach ( var groupId in groupIds )
             {
-                var indexableGroup = GroupIndex.LoadByModel( group );
-                IndexContainer.DeleteDocument<GroupIndex>( indexableGroup );
+                var transaction = new DeleteIndexEntityTransaction { EntityId = groupId, EntityTypeId = groupEntityTypeId };
+                transaction.Enqueue();
             }
         }
 
         /// <summary>
-        /// Bulks the index documents by content channel.
+        /// Queues groups of this type to have their indexes updated
         /// </summary>
-        /// <param name="groupTypeId">The content channel identifier.</param>
+        /// <param name="groupTypeId">The group type identifier.</param>
         public void BulkIndexDocumentsByGroupType( int groupTypeId )
         {
-            List<GroupIndex> indexableGroups = new List<GroupIndex>();
+            var groupIds = new GroupService( new RockContext() ).Queryable()
+                .Where( i => i.GroupTypeId == groupTypeId )
+                .Select( a => a.Id ).ToList();
 
-            // return all approved content channel items that are in content channels that should be indexed
-            RockContext rockContext = new RockContext();
-            var groups = new GroupService( rockContext ).Queryable()
-                                            .Where( g =>
-                                                g.GroupTypeId == groupTypeId
-                                                && g.IsActive);
+            int groupEntityTypeId = EntityTypeCache.GetId<Rock.Model.Group>().Value;
 
-            foreach ( var group in groups )
+            foreach ( var groupId in groupIds )
             {
-                var indexableChannelItem = GroupIndex.LoadByModel( group );
-                indexableGroups.Add( indexableChannelItem );
+                var transaction = new IndexEntityTransaction { EntityId = groupId, EntityTypeId = groupEntityTypeId };
+                transaction.Enqueue();
+            }
+        }
+        #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return GroupTypeCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            var parentGroupTypeIds = new GroupTypeService( dbContext as RockContext ).GetParentGroupTypes( this.Id ).Select( a => a.Id ).ToList();
+            if ( parentGroupTypeIds?.Any() == true )
+            {
+                foreach ( var parentGroupTypeId in parentGroupTypeIds )
+                {
+                    GroupTypeCache.UpdateCachedEntity( parentGroupTypeId, EntityState.Detached );
+                }
             }
 
-            IndexContainer.IndexDocuments( indexableGroups );
+            GroupTypeCache.UpdateCachedEntity( this.Id, entityState );
         }
+
         #endregion
     }
 
@@ -808,7 +1382,17 @@ namespace Rock.Model
         {
             this.HasMany( p => p.ChildGroupTypes ).WithMany( c => c.ParentGroupTypes ).Map( m => { m.MapLeftKey( "GroupTypeId" ); m.MapRightKey( "ChildGroupTypeId" ); m.ToTable( "GroupTypeAssociation" ); } );
             this.HasOptional( p => p.DefaultGroupRole ).WithMany().HasForeignKey( p => p.DefaultGroupRoleId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.GroupStatusDefinedType ).WithMany().HasForeignKey( p => p.GroupStatusDefinedTypeId ).WillCascadeOnDelete( false );
             this.HasOptional( p => p.InheritedGroupType ).WithMany().HasForeignKey( p => p.InheritedGroupTypeId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.ScheduleConfirmationSystemCommunication ).WithMany().HasForeignKey( p => p.ScheduleConfirmationSystemCommunicationId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.ScheduleReminderSystemCommunication ).WithMany().HasForeignKey( p => p.ScheduleReminderSystemCommunicationId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.ScheduleCancellationWorkflowType ).WithMany().HasForeignKey( p => p.ScheduleCancellationWorkflowTypeId ).WillCascadeOnDelete( false );
+
+#pragma warning disable CS0618 // Type or member is obsolete
+            this.HasOptional( p => p.ScheduleConfirmationSystemEmail ).WithMany().HasForeignKey( p => p.ScheduleConfirmationSystemEmailId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.ScheduleReminderSystemEmail ).WithMany().HasForeignKey( p => p.ScheduleReminderSystemEmailId ).WillCascadeOnDelete( false );
+#pragma warning restore CS0618 // Type or member is obsolete
+
         }
     }
 

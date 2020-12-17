@@ -29,7 +29,8 @@ using Rock.Model;
 using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 using Rock.Attribute;
-
+using System.Web.UI.HtmlControls;
+using System.Linq.Dynamic;
 
 namespace RockWeb.Blocks.Event
 {
@@ -93,11 +94,11 @@ namespace RockWeb.Blocks.Event
 
             if ( !Page.IsPostBack )
             {
-                // load campuses
-                cpCampus.DataSource = CampusCache.All();
-                cpCampus.DataValueField = "Id";
-                cpCampus.DataTextField = "Name";
-                cpCampus.DataBind();
+                //// load campuses
+                //cpCampus.DataSource = CampusCache.All();
+                //cpCampus.DataValueField = "Id";
+                //cpCampus.DataTextField = "Name";
+                //cpCampus.DataBind();
 
                 LoadContent();
             }
@@ -123,7 +124,7 @@ namespace RockWeb.Blocks.Event
         {
             var rockContext = new RockContext();
 
-            // get the person who was passed in for the registration registar
+            // get the person who was passed in for the registration registrar
             Person person = null;
 
             Guid personGuid = Guid.Empty;
@@ -362,7 +363,7 @@ namespace RockWeb.Blocks.Event
                 lbRegister.Visible = false;
                 lEventIntro.Visible = false;
                 cblRegistrants.Visible = false;
-                var campus = CampusCache.Read( _campusId );
+                var campus = CampusCache.Get( _campusId );
                 lMessages.Text = string.Format( "<div class='alert alert-info'>There are no {0} events for the {1} campus in the next {2} days.</div>",
                                     eventItem.Name,
                                     campus != null ? campus.Name : string.Empty,
@@ -371,7 +372,20 @@ namespace RockWeb.Blocks.Event
         }
 
         #endregion
-}
+
+        protected void rptEvents_ItemDataBound( object sender, RepeaterItemEventArgs e )
+        {
+            var eventSummary = e.Item.DataItem;
+            if ( eventSummary == null )
+            {
+                return;
+            }
+
+            var campusDiv = ( HtmlGenericControl ) e.Item.FindControl( "campusLabel" );
+            campusDiv.Visible = cpCampus.Visible;
+
+        }
+    }
 
     public class EventSummary
     {

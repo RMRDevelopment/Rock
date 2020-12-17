@@ -38,6 +38,8 @@ namespace Rock.Client
         public bool AllowMultiple { get; set; }
 
         /// <summary />
+        // Made Obsolete in Rock "1.9"
+        [Obsolete( "Use FeeItems instead", false )]
         public string CostValue { get; set; }
 
         /// <summary />
@@ -51,6 +53,15 @@ namespace Rock.Client
 
         /// <summary />
         public string ForeignKey { get; set; }
+
+        /// <summary />
+        public bool HideWhenNoneRemaining { get; set; }
+
+        /// <summary />
+        public bool IsActive { get; set; } = true;
+
+        /// <summary />
+        public bool IsRequired { get; set; }
 
         /// <summary>
         /// If the ModifiedByPersonAliasId is being set manually and should not be overwritten with current user when saved, set this value to true
@@ -100,11 +111,16 @@ namespace Rock.Client
         {
             this.Id = source.Id;
             this.AllowMultiple = source.AllowMultiple;
+            #pragma warning disable 612, 618
             this.CostValue = source.CostValue;
+            #pragma warning restore 612, 618
             this.DiscountApplies = source.DiscountApplies;
             this.FeeType = source.FeeType;
             this.ForeignGuid = source.ForeignGuid;
             this.ForeignKey = source.ForeignKey;
+            this.HideWhenNoneRemaining = source.HideWhenNoneRemaining;
+            this.IsActive = source.IsActive;
+            this.IsRequired = source.IsRequired;
             this.ModifiedAuditValuesAlreadyUpdated = source.ModifiedAuditValuesAlreadyUpdated;
             this.Name = source.Name;
             this.Order = source.Order;
@@ -124,6 +140,9 @@ namespace Rock.Client
     /// </summary>
     public partial class RegistrationTemplateFee : RegistrationTemplateFeeEntity
     {
+        /// <summary />
+        public ICollection<RegistrationTemplateFeeItem> FeeItems { get; set; }
+
         /// <summary>
         /// NOTE: Attributes are only populated when ?loadAttributes is specified. Options for loadAttributes are true, false, 'simple', 'expanded' 
         /// </summary>

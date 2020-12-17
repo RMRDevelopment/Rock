@@ -14,10 +14,10 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
 
@@ -34,7 +34,7 @@ namespace Rock.Model
     [RockDomain( "Core" )]
     [Table( "Category" )]
     [DataContract]
-    public partial class Category : Model<Category>, IOrdered
+    public partial class Category : Model<Category>, IOrdered, ICacheable
     {
 
         #region Entity Properties
@@ -196,10 +196,10 @@ namespace Rock.Model
         {
             get
             {
-                var entityTypeCache = EntityTypeCache.Read( this.EntityTypeId );
+                var entityTypeCache = EntityTypeCache.Get( this.EntityTypeId );
                 if ( entityTypeCache == null && this.EntityType != null )
                 {
-                    entityTypeCache = EntityTypeCache.Read( this.EntityType.Id );
+                    entityTypeCache = EntityTypeCache.Get( this.EntityType.Id );
                 }
 
                 if ( entityTypeCache != null )
@@ -210,7 +210,7 @@ namespace Rock.Model
                             {
                                 var supportedActions = new Dictionary<string, string>();
                                 supportedActions.Add( Authorization.VIEW, "The roles and/or users that have access to view." );
-                                supportedActions.Add( "Tag", "The roles and/or users that have access to tag items." );
+                                supportedActions.Add( Authorization.TAG, "The roles and/or users that have access to tag items." );
                                 supportedActions.Add( Authorization.EDIT, "The roles and/or users that have access to edit." );
                                 supportedActions.Add( Authorization.ADMINISTRATE, "The roles and/or users that have access to administrate." );
                                 return supportedActions;
@@ -275,6 +275,32 @@ namespace Rock.Model
 
         #endregion
 
+        #region ICacheable
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return CategoryCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            CategoryCache.UpdateCachedEntity( this.Id, entityState );
+        }
+
+        #endregion
+
+        #endregion
     }
 
     #region Entity Configuration

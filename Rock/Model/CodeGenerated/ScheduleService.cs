@@ -51,6 +51,8 @@ namespace Rock.Model
         public bool CanDelete( Schedule item, out string errorMessage )
         {
             errorMessage = string.Empty;
+            
+            // ignoring AttendanceOccurrence,ScheduleId 
  
             if ( new Service<EventItemOccurrence>( Context ).Queryable().Any( a => a.ScheduleId == item.Id ) )
             {
@@ -61,6 +63,30 @@ namespace Rock.Model
             if ( new Service<Group>( Context ).Queryable().Any( a => a.ScheduleId == item.Id ) )
             {
                 errorMessage = string.Format( "This {0} is assigned to a {1}.", Schedule.FriendlyTypeName, Group.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<GroupHistorical>( Context ).Queryable().Any( a => a.ScheduleId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Schedule.FriendlyTypeName, GroupHistorical.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<GroupLocationHistoricalSchedule>( Context ).Queryable().Any( a => a.ScheduleId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Schedule.FriendlyTypeName, GroupLocationHistoricalSchedule.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<GroupMemberAssignment>( Context ).Queryable().Any( a => a.ScheduleId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Schedule.FriendlyTypeName, GroupMemberAssignment.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<GroupMemberScheduleTemplate>( Context ).Queryable().Any( a => a.ScheduleId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Schedule.FriendlyTypeName, GroupMemberScheduleTemplate.FriendlyTypeName );
                 return false;
             }  
  
@@ -117,6 +143,7 @@ namespace Rock.Model
             target.iCalendarContent = source.iCalendarContent;
             target.IsActive = source.IsActive;
             target.Name = source.Name;
+            target.Order = source.Order;
             target.WeeklyDayOfWeek = source.WeeklyDayOfWeek;
             target.WeeklyTimeOfDay = source.WeeklyTimeOfDay;
             target.CreatedDateTime = source.CreatedDateTime;

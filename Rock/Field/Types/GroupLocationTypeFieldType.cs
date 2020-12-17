@@ -16,17 +16,20 @@
 //
 using System;
 using System.Collections.Generic;
+using System.Data.Entity;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
 
 using Rock.Data;
+using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 
 namespace Rock.Field.Types
 {
     /// <summary>
-    /// Field Type used to display a dropdown list of Defined Values for a specific Defined Type
+    /// Field Type used to display a DropDown list of Group Location Types for a specific Group Type.
+    /// Stored as GroupLocationTypeValue.Guid.
     /// </summary>
     [Serializable]
     public class GroupLocationTypeFieldType : FieldType
@@ -58,17 +61,17 @@ namespace Rock.Field.Types
             // build a drop down list of group types (the one that gets selected is
             // used to build a list of group location type defined values that the
             // group type allows) 
-            var ddl = new RockDropDownList();
-            controls.Add( ddl );
-            ddl.AutoPostBack = true;
-            ddl.SelectedIndexChanged += OnQualifierUpdated;
-            ddl.Label = "Group Type";
-            ddl.Help = "The Group Type to select location types from.";
+            var ddlGroupType = new RockDropDownList();
+            controls.Add( ddlGroupType );
+            ddlGroupType.AutoPostBack = true;
+            ddlGroupType.SelectedIndexChanged += OnQualifierUpdated;
+            ddlGroupType.Label = "Group Type";
+            ddlGroupType.Help = "The Group Type to select location types from.";
 
             Rock.Model.GroupTypeService groupTypeService = new Model.GroupTypeService( new RockContext() );
-            foreach ( var groupType in groupTypeService.Queryable().OrderBy( g => g.Name ) )
+            foreach ( var groupType in groupTypeService.Queryable().AsNoTracking().OrderBy( g => g.Name ).Select( a => new { a.Name, a.Guid } ) )
             {
-                ddl.Items.Add( new ListItem( groupType.Name, groupType.Guid.ToString() ) );
+                ddlGroupType.Items.Add( new ListItem( groupType.Name, groupType.Guid.ToString() ) );
             }
 
             return controls;
@@ -86,9 +89,10 @@ namespace Rock.Field.Types
 
             if ( controls != null && controls.Count == 1 )
             {
-                if ( controls[0] != null && controls[0] is DropDownList )
+                DropDownList ddlGroupType = controls[0] as DropDownList;
+                if ( ddlGroupType != null )
                 {
-                    configurationValues[GROUP_TYPE_KEY].Value = ( (DropDownList)controls[0] ).SelectedValue;
+                    configurationValues[GROUP_TYPE_KEY].Value = ddlGroupType.SelectedValue;
                 }
             }
 
@@ -104,9 +108,10 @@ namespace Rock.Field.Types
         {
             if ( controls != null && controls.Count == 1 && configurationValues != null )
             {
-                if ( controls[0] != null && controls[0] is DropDownList && configurationValues.ContainsKey( GROUP_TYPE_KEY ) )
+                DropDownList ddlGroupType = controls[0] as DropDownList;
+                if ( ddlGroupType != null )
                 {
-                    ( (DropDownList)controls[0] ).SelectedValue = configurationValues[GROUP_TYPE_KEY].Value;
+                    ddlGroupType.SelectedValue = configurationValues.GetValueOrNull( GROUP_TYPE_KEY );
                 }
             }
         }
@@ -127,16 +132,13 @@ namespace Rock.Field.Types
         {
             string formattedValue = string.Empty;
 
-            if ( !string.IsNullOrWhiteSpace( value ) )
+            var definedValueGuid = value.AsGuidOrNull();
+            if ( definedValueGuid.HasValue )
             {
-                Guid guid = Guid.Empty;
-                if ( Guid.TryParse( value, out guid ) )
+                var definedValue = DefinedValueCache.Get( definedValueGuid.Value );
+                if ( definedValue != null )
                 {
-                    var definedValue = Rock.Web.Cache.DefinedValueCache.Read( guid );
-                    if ( definedValue != null )
-                    {
-                        formattedValue = definedValue.Value;
-                    }
+                    formattedValue = definedValue.Value;
                 }
             }
 
@@ -159,35 +161,31 @@ namespace Rock.Field.Types
         {
             ListControl editControl;
 
-            editControl = new Rock.Web.UI.Controls.RockDropDownList { ID = id }; 
+            editControl = new Rock.Web.UI.Controls.RockDropDownList { ID = id };
             editControl.Items.Add( new ListItem() );
 
             if ( configurationValues != null && configurationValues.ContainsKey( GROUP_TYPE_KEY ) )
             {
-                Guid groupTypeGuid = Guid.Empty;
-                if ( Guid.TryParse( configurationValues[GROUP_TYPE_KEY].Value, out groupTypeGuid ) )
+                Guid? groupTypeGuid = configurationValues.GetValueOrNull( GROUP_TYPE_KEY ).AsGuidOrNull();
+                if ( groupTypeGuid != null )
                 {
-                    var groupType = Rock.Web.Cache.GroupTypeCache.Read( groupTypeGuid );
-                    if (groupType != null)
+                    var groupType = GroupTypeCache.Get( groupTypeGuid.Value );
+                    if ( groupType != null )
                     {
                         var locationTypeValues = groupType.LocationTypeValues;
                         if ( locationTypeValues != null )
                         {
-                            if ( locationTypeValues.Any() )
+                            foreach ( var locationTypeValue in locationTypeValues )
                             {
-                                foreach ( var locationTypeValue in locationTypeValues )
-                                {
-                                    editControl.Items.Add( new ListItem( locationTypeValue.Value, locationTypeValue.Id.ToString() ) );
-                                }
-
-                                return editControl;
+                                editControl.Items.Add( new ListItem( locationTypeValue.Value, locationTypeValue.Id.ToString() ) );
                             }
+
                         }
                     }
                 }
             }
-            
-            return null;
+
+            return editControl;
         }
 
         /// <summary>
@@ -198,24 +196,20 @@ namespace Rock.Field.Types
         /// <returns></returns>
         public override string GetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues )
         {
-            var ids = new List<string>();
-
-            if ( control != null && control is RockDropDownList )
+            var picker = control as RockDropDownList;
+            if ( picker != null )
             {
-                string id  = ( (ListControl)control ).SelectedValue;
-
-                int definedValueId = int.MinValue;
-                if ( int.TryParse( id, out definedValueId ) )
+                DefinedValueCache definedValue = null;
+                int? definedValueId = picker.SelectedValue.AsIntegerOrNull();
+                if ( definedValueId.HasValue )
                 {
-                    var definedValue = Rock.Web.Cache.DefinedValueCache.Read( definedValueId );
-                    if ( definedValue != null )
-                    {
-                        return definedValue.Guid.ToString();
-                    }
+                    definedValue = DefinedValueCache.Get( definedValueId.Value );
                 }
+
+                return definedValue?.Guid.ToString() ?? string.Empty;
             }
 
-            return string.Empty;
+            return null;
         }
 
         /// <summary>
@@ -226,32 +220,20 @@ namespace Rock.Field.Types
         /// <param name="value">The value.</param>
         public override void SetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
-            if ( value != null )
+            var picker = control as RockDropDownList;
+            if ( picker != null )
             {
-                if ( control != null && control is RockDropDownList )
+                DefinedValueCache definedValue = null;
+                Guid? definedValueGuid = value.AsGuidOrNull();
+                if ( definedValueGuid.HasValue )
                 {
-                    string id = string.Empty;
-
-                    Guid guid = Guid.Empty;
-                    if ( Guid.TryParse( value, out guid ) )
-                    {
-                        var definedValue = Rock.Web.Cache.DefinedValueCache.Read( guid );
-                        if ( definedValue != null )
-                        {
-                            id = definedValue.Id.ToString();
-                        }
-                    }
-
-                    var listControl = control as RockDropDownList;
-                    foreach ( ListItem li in listControl.Items )
-                    {
-                        li.Selected = id == li.Value;
-                    }
+                    definedValue = DefinedValueCache.Get( definedValueGuid.Value );
                 }
+
+                picker.SetValue( definedValue?.Id );
             }
         }
 
         #endregion
-
     }
 }

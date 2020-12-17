@@ -22,6 +22,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Utility;
@@ -37,7 +38,7 @@ namespace Rock.Reporting.DataFilter.Person
     [Description( "Select people according to their membership of Groups from a Group Data View." )]
     [Export( typeof( DataFilterComponent ) )]
     [ExportMetadata( "ComponentName", "Group Data View" )]
-    public class GroupDataViewFilter : DataFilterComponent
+    public class GroupDataViewFilter : DataFilterComponent, IRelatedChildDataView
     {
         #region Properties
 
@@ -95,8 +96,8 @@ namespace Rock.Reporting.DataFilter.Person
 function ()
 {    
     var result = 'Members of Groups in Data View';
-    
-    var dataViewName = $('.rock-drop-down-list,select:first', $content).find(':selected').text();    
+
+    var dataViewName = $('.js-data-view-picker', $content).find('.js-item-name-value').val().trim();
     result += ' ""' + dataViewName + '""';
 
     var groupMemberStatus = $('.js-group-member-status option:selected', $content).text();    
@@ -139,17 +140,17 @@ function ()
             {
                 var dataView = new DataViewService( context ).Get( settings.DataViewGuid.GetValueOrDefault() );
 
-                result = string.Format( "Members of Groups in Data View \"{0}\"", (dataView != null ? dataView.ToString() : string.Empty ));
+                result = string.Format( "Members of Groups in Data View \"{0}\"", ( dataView != null ? dataView.ToString() : string.Empty ) );
 
                 var groupMemberStatus = settings.MemberStatus;
 
-                if (groupMemberStatus.HasValue)
+                if ( groupMemberStatus.HasValue )
                 {
                     result += ", with Status: " + groupMemberStatus.ToString();
                 }
 
-                if (settings.RoleType.HasValue
-                    && settings.RoleType != RoleTypeSpecifier.Any)
+                if ( settings.RoleType.HasValue
+                    && settings.RoleType != RoleTypeSpecifier.Any )
                 {
                     result += ", with Role Type: " + settings.RoleType.ToString();
                 }
@@ -172,18 +173,18 @@ function ()
         {
             var settings = new SelectSettings( selection );
 
-            var context = (RockContext)serviceInstance.Context;
+            var context = ( RockContext ) serviceInstance.Context;
 
             //
             // Evaluate the Data View that defines the candidate Groups.
             //
             var dataView = DataComponentSettingsHelper.GetDataViewForFilterComponent( settings.DataViewGuid, context );
-            
+
             var groupService = new GroupService( context );
 
             var groupQuery = groupService.Queryable();
 
-            if (dataView != null)
+            if ( dataView != null )
             {
                 groupQuery = DataComponentSettingsHelper.FilterByDataView( groupQuery, dataView, groupService );
             }
@@ -232,7 +233,7 @@ function ()
             return selectExpression;
         }
 
-        private const string _CtlDataView = "ddlDataView";
+        private const string _CtlDataView = "dvpDataView";
         private const string _CtlGroupStatus = "ddlGroupStatus";
         private const string _CtlRoleType = "ddlRoleType";
 
@@ -248,16 +249,17 @@ function ()
         public override Control[] CreateChildControls( Type entityType, FilterField filterControl )
         {
             // Define Control: Group Data View Picker
-            var ddlDataView = new DataViewPicker();
-            ddlDataView.ID = filterControl.GetChildControlInstanceName( _CtlDataView );
-            ddlDataView.Label = "Is Member of Group from Data View";
-            ddlDataView.Help = "A Data View that filters the Groups included in the result. If no value is selected, any Groups that would be visible in a Group List will be included.";
-            filterControl.Controls.Add( ddlDataView );
+            var dvpDataView = new DataViewItemPicker();
+            dvpDataView.ID = filterControl.GetChildControlInstanceName( _CtlDataView );
+            dvpDataView.CssClass = "js-data-view-picker";
+            dvpDataView.Label = "Is Member of Group from Data View";
+            dvpDataView.Help = "A Data View that filters the Groups included in the result. If no value is selected, any Groups that would be visible in a Group List will be included.";
+            filterControl.Controls.Add( dvpDataView );
 
             // Define Control: Group Member Status DropDown List
             var ddlGroupMemberStatus = new RockDropDownList();
-            ddlGroupMemberStatus.CssClass = "js-group-member-status";
             ddlGroupMemberStatus.ID = filterControl.GetChildControlInstanceName( _CtlGroupStatus );
+            ddlGroupMemberStatus.CssClass = "js-group-member-status";
             ddlGroupMemberStatus.Label = "with Group Member Status";
             ddlGroupMemberStatus.Help = "Specifies the Status the Member must have to be included in the result. If no value is selected, Members of every Group Status will be shown.";
             ddlGroupMemberStatus.BindToEnum<GroupMemberStatus>( true );
@@ -267,6 +269,7 @@ function ()
             // Define Control: Role Type DropDown List
             var ddlRoleType = new RockDropDownList();
             ddlRoleType.ID = filterControl.GetChildControlInstanceName( _CtlRoleType );
+            ddlRoleType.CssClass = "js-group-member-role";
             ddlRoleType.Label = "with Group Role Type";
             ddlRoleType.Help = "Specifies the type of Group Role the Member must have to be included in the result. If no value is selected, Members in every Role will be shown.";
             ddlRoleType.Items.Add( new ListItem( string.Empty, RoleTypeSpecifier.Any.ToString() ) );
@@ -275,10 +278,10 @@ function ()
             filterControl.Controls.Add( ddlRoleType );
 
             // Populate the Data View Picker
-            int entityTypeId = EntityTypeCache.Read( typeof( Model.Group ) ).Id;
-            ddlDataView.EntityTypeId = entityTypeId;
+            int entityTypeId = EntityTypeCache.Get( typeof( Model.Group ) ).Id;
+            dvpDataView.EntityTypeId = entityTypeId;
 
-            return new Control[] { ddlDataView, ddlGroupMemberStatus, ddlRoleType };
+            return new Control[] { dvpDataView, ddlGroupMemberStatus, ddlRoleType };
         }
 
         /// <summary>
@@ -292,7 +295,7 @@ function ()
         /// </returns>
         public override string GetSelection( Type entityType, Control[] controls )
         {
-            var ddlDataView = controls.GetByName<DataViewPicker>( _CtlDataView );
+            var dvpDataView = controls.GetByName<DataViewItemPicker>( _CtlDataView );
             var ddlRoleType = controls.GetByName<RockDropDownList>( _CtlRoleType );
             var ddlGroupMemberStatus = controls.GetByName<RockDropDownList>( _CtlGroupStatus );
 
@@ -300,7 +303,7 @@ function ()
 
             settings.MemberStatus = ddlGroupMemberStatus.SelectedValue.ConvertToEnumOrNull<GroupMemberStatus>();
             settings.RoleType = ddlRoleType.SelectedValue.ConvertToEnumOrNull<RoleTypeSpecifier>();
-            settings.DataViewGuid = DataComponentSettingsHelper.GetDataViewGuid( ddlDataView.SelectedValue );
+            settings.DataViewGuid = DataComponentSettingsHelper.GetDataViewGuid( dvpDataView.SelectedValue );
 
             return settings.ToSelectionString();
         }
@@ -314,7 +317,7 @@ function ()
         /// <param name="selection">The selection.</param>
         public override void SetSelection( Type entityType, Control[] controls, string selection )
         {
-            var ddlDataView = controls.GetByName<DataViewPicker>( _CtlDataView );
+            var dvpDataView = controls.GetByName<DataViewItemPicker>( _CtlDataView );
             var ddlRoleType = controls.GetByName<RockDropDownList>( _CtlRoleType );
             var ddlGroupMemberStatus = controls.GetByName<RockDropDownList>( _CtlGroupStatus );
 
@@ -331,16 +334,33 @@ function ()
 
                 var dataView = dsService.Get( settings.DataViewGuid.Value );
 
-                if ( dataView != null )
-                {
-                    ddlDataView.SelectedValue = dataView.Id.ToString();
-                }
+                dvpDataView.SetValue( dataView );
             }
 
             ddlRoleType.SelectedValue = settings.RoleType.ToStringSafe();
             ddlGroupMemberStatus.SelectedValue = settings.MemberStatus.ToStringSafe();
         }
 
+        /// <summary>
+        /// Gets the related data view identifier.
+        /// </summary>
+        /// <param name="controls">The controls.</param>
+        /// <returns></returns>
+        public int? GetRelatedDataViewId( Control[] controls )
+        {
+            if ( controls == null )
+            {
+                return null;
+            }
+
+            var ddlDataView = controls.GetByName<DataViewItemPicker>( _CtlDataView );
+            if ( ddlDataView == null )
+            {
+                return null;
+            }
+
+            return ddlDataView.SelectedValueAsId();
+        }
         #endregion
 
         #region Settings
@@ -380,7 +400,7 @@ function ()
             {
                 DataViewGuid = DataComponentSettingsHelper.GetParameterOrDefault( parameters, 0, string.Empty ).AsGuidOrNull();
                 MemberStatus = DataComponentSettingsHelper.GetParameterAsEnum<GroupMemberStatus>( parameters, 1 );
-                RoleType = DataComponentSettingsHelper.GetParameterAsEnum<RoleTypeSpecifier>( parameters, 2 );                
+                RoleType = DataComponentSettingsHelper.GetParameterAsEnum<RoleTypeSpecifier>( parameters, 2 );
             }
 
             /// <summary>
@@ -394,9 +414,9 @@ function ()
             {
                 var settings = new List<string>();
 
-                settings.Add( DataViewGuid.ToStringSafe() );                
-                settings.Add( MemberStatus == null ? string.Empty : ( (int)MemberStatus ).ToString() );
-                settings.Add( RoleType == null ? string.Empty : ( (int)RoleType ).ToString() );
+                settings.Add( DataViewGuid.ToStringSafe() );
+                settings.Add( MemberStatus == null ? string.Empty : ( ( int ) MemberStatus ).ToString() );
+                settings.Add( RoleType == null ? string.Empty : ( ( int ) RoleType ).ToString() );
 
                 return settings;
             }

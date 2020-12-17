@@ -14,8 +14,11 @@
 // limitations under the License.
 // </copyright>
 //
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
+using System.Data.Entity.Infrastructure;
 using System.Data.Entity.ModelConfiguration;
 using System.Linq;
 using System.Runtime.Serialization;
@@ -92,7 +95,18 @@ namespace Rock.Model
         /// The history changes.
         /// </value>
         [NotMapped]
+        [RockObsolete( "1.8" )]
+        [Obsolete("Use HistoryChangeList instead", true )]
         public virtual List<string> HistoryChanges { get; set; }
+
+        /// <summary>
+        /// Gets or sets the history change list.
+        /// </summary>
+        /// <value>
+        /// The history change list.
+        /// </value>
+        [NotMapped]
+        public virtual History.HistoryChangeList HistoryChangeList { get; set; }
 
         #endregion
 
@@ -103,17 +117,17 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext">The database context.</param>
         /// <param name="entry"></param>
-        public override void PreSaveChanges( Rock.Data.DbContext dbContext, System.Data.Entity.Infrastructure.DbEntityEntry entry )
+        public override void PreSaveChanges( Rock.Data.DbContext dbContext, DbEntityEntry entry )
         {
             var rockContext = (RockContext)dbContext;
             BinaryFileService binaryFileService = new BinaryFileService( rockContext );
             var binaryFile = binaryFileService.Get( BinaryFileId );
 
-            HistoryChanges = new List<string>();
+            HistoryChangeList = new History.HistoryChangeList();
 
             switch ( entry.State )
             {
-                case System.Data.Entity.EntityState.Added:
+                case EntityState.Added:
                     {
                         // if there is an binaryfile (image) associated with this, make sure that it is flagged as IsTemporary=False
                         if ( binaryFile.IsTemporary )
@@ -121,11 +135,11 @@ namespace Rock.Model
                             binaryFile.IsTemporary = false;
                         }
 
-                        HistoryChanges.Add( "Added Image" );
+                        HistoryChangeList.AddChange( History.HistoryVerb.Add, History.HistoryChangeType.Record, "Image" );
                         break;
                     }
 
-                case System.Data.Entity.EntityState.Modified:
+                case EntityState.Modified:
                     {
                         // if there is an binaryfile (image) associated with this, make sure that it is flagged as IsTemporary=False
                         if ( binaryFile.IsTemporary )
@@ -133,10 +147,10 @@ namespace Rock.Model
                             binaryFile.IsTemporary = false;
                         }
 
-                        HistoryChanges.Add( "Updated Image" );
+                        HistoryChangeList.AddChange( History.HistoryVerb.Modify, History.HistoryChangeType.Record, "Image" );
                         break;
                     }
-                case System.Data.Entity.EntityState.Deleted:
+                case EntityState.Deleted:
                     {
                         // if deleting, and there is an binaryfile (image) associated with this, make sure that it is flagged as IsTemporary=true 
                         // so that it'll get cleaned up
@@ -145,7 +159,7 @@ namespace Rock.Model
                             binaryFile.IsTemporary = true;
                         }
 
-                        HistoryChanges.Add( "Removed Image" );
+                        HistoryChangeList.AddChange( History.HistoryVerb.Delete, History.HistoryChangeType.Record, "Image" );
                         break;
                     }
             }
@@ -157,17 +171,19 @@ namespace Rock.Model
         /// Method that will be called on an entity immediately after the item is saved
         /// </summary>
         /// <param name="dbContext">The database context.</param>
-        public override void PostSaveChanges( DbContext dbContext )
+        public override void PostSaveChanges( Data.DbContext dbContext )
         {
-            if ( HistoryChanges.Any() )
+            if ( HistoryChangeList?.Any() == true )
             {
-                HistoryService.SaveChanges( (RockContext)dbContext, typeof( FinancialTransaction ), Rock.SystemGuid.Category.HISTORY_FINANCIAL_TRANSACTION.AsGuid(), this.TransactionId, HistoryChanges, true, this.ModifiedByPersonAliasId );
+                HistoryService.SaveChanges( (RockContext)dbContext, typeof( FinancialTransaction ), Rock.SystemGuid.Category.HISTORY_FINANCIAL_TRANSACTION.AsGuid(), this.TransactionId, HistoryChangeList, true, this.ModifiedByPersonAliasId );
 
                 var txn = new FinancialTransactionService( (RockContext)dbContext ).Get( this.TransactionId );
                 if ( txn != null && txn.BatchId != null )
                 {
-                    var batchHistory = new List<string> { string.Format( "Updated <span class='field-name'>Transaction</span> ID: <span class='field-value'>{0}</span>.", txn.Id ) };
-                    HistoryService.SaveChanges( (RockContext)dbContext, typeof( FinancialBatch ), Rock.SystemGuid.Category.HISTORY_FINANCIAL_TRANSACTION.AsGuid(), txn.BatchId.Value, batchHistory, string.Empty, typeof( FinancialTransaction ), this.TransactionId, true, this.ModifiedByPersonAliasId );
+                    var batchHistory = new History.HistoryChangeList();
+
+                    batchHistory.AddChange( History.HistoryVerb.Modify, History.HistoryChangeType.Record, "Transaction" );
+                    HistoryService.SaveChanges( (RockContext)dbContext, typeof( FinancialBatch ), Rock.SystemGuid.Category.HISTORY_FINANCIAL_TRANSACTION.AsGuid(), txn.BatchId.Value, batchHistory, string.Empty, typeof( FinancialTransaction ), this.TransactionId, true, this.ModifiedByPersonAliasId, dbContext.SourceOfChange );
                 }
             }
 

@@ -134,7 +134,13 @@ namespace RockWeb.Blocks.Event
             cpCampusPicker.Campuses = CampusCache.All();
             cpCampusPicker.Items[0].Text = "All";
 
-            var campusEntityType = EntityTypeCache.Read( typeof( Campus ) );
+            var campusEntityType = EntityTypeCache.Get( typeof( Campus ) );
+
+            if ( !cpCampusPicker.Visible )
+            {
+                cpCampusPicker.SelectedCampusId = null;
+                return;
+            }
 
             if ( this.GetAttributeValue( "UseCampusContext" ).AsBoolean() )
             {

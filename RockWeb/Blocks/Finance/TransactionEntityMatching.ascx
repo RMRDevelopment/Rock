@@ -12,9 +12,10 @@
             </div>
             <div class="panel-body">
                 <Rock:NotificationBox ID="nbBlockConfigurationWarning" runat="server" NotificationBoxType="Warning" Text="Please set the Entity Type in block settings" Visible="false" />
+                <Rock:NotificationBox ID="nbErrorMessage" runat="server" NotificationBoxType="Danger" Visible="false" />
                 <div class="row">
                     <div class="col-md-4">
-                        <Rock:DataViewPicker ID="dvpDataView" runat="server" Label="Dataview" AutoPostBack="true" OnSelectedIndexChanged="FilterChanged" EnhanceForLongLists="true" />
+                        <Rock:DataViewItemPicker ID="dvpDataView" runat="server" Label="Dataview" OnSelectItem="FilterChanged" />
                         <Rock:RockDropDownList ID="ddlBatch" runat="server" Label="Open Batches" AutoPostBack="true" OnSelectedIndexChanged="FilterChanged" EnhanceForLongLists="true" />
                     </div>
                 </div>
@@ -51,7 +52,7 @@
                         <ContentTemplate>
                             <div class="row">
                                 <div class="col-md-6">
-                                    <Rock:DefinedValuePicker ID="ddlTransactionType" runat="server" Label="Transaction Type" Help="The Transaction Type that the transaction should be set to. Leave blank to get the original Transaction Type." />
+                                    <Rock:DefinedValuePicker ID="ddlTransactionType" runat="server" Label="Transaction Type" Help="This is the Transaction Type that the financial transaction detail record will be set to when a match is made. If you do not wish to change the original value, leave this setting blank." />
                                     <Rock:EntityTypePicker ID="etpEntityType" runat="server" AutoPostBack="true" OnSelectedIndexChanged="etpEntityType_SelectedIndexChanged" />
                                     <Rock:RockTextBox ID="tbEntityTypeQualifierColumn" runat="server" Label="Entity Type Qualifier Column" />
                                     <Rock:RockTextBox ID="tbEntityTypeQualifierValue" runat="server" Label="Entity Type Qualifier Value" />

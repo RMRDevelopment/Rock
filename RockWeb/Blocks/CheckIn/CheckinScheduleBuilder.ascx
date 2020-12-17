@@ -2,7 +2,7 @@
 
 <asp:UpdatePanel ID="upCheckinScheduleBuilder" runat="server">
     <ContentTemplate>
-        
+
         <div class="panel panel-block">
             <div class="panel-heading">
                 <h1 class="panel-title"><i class="fa fa-calendar"></i> Schedule Builder</h1>
@@ -35,7 +35,7 @@
                 <div class="actions">
                         <Rock:BootstrapButton ID="btnSave" runat="server" AccessKey="s" ToolTip="Alt+s" Text="Save" CssClass="btn btn-primary" OnClick="btnSave_Click"
                             DataLoadingText="&lt;i class='fa fa-refresh fa-spin'&gt;&lt;/i&gt; Saving"
-                            CompletedText ="Done" CompletedDuration="3" CompletedMessage="&nbsp;Your Changes have been Saved!"/>
+                            CompletedText ="Done" CompletedMessage="<div class='margin-t-md alert alert-success'>Changes have been saved.</div>" CompletedDuration="3"/>
                     <asp:LinkButton ID="btnCancel" runat="server" AccessKey="c" ToolTip="Alt+c" Text="Cancel" CssClass="btn btn-link" CausesValidation="false" OnClick="btnCancel_Click" />
                 </div>
 
@@ -60,16 +60,16 @@
             }
 
             Sys.Application.add_load(function () {
-                // set the default state of the header checkbox based on if all item row checkboxes are checked                
+                // set the default state of the header checkbox based on if all item row checkboxes are checked
                 var $table = $('#<%=gGroupLocationSchedule.ClientID%>');
                 updateScheduleBuilderHeaderCheckboxes($table);
-                
-                $table.find('tbody > tr > td input[type="checkbox"]').click(function () { 
-                    updateScheduleBuilderHeaderCheckboxes($table); 
+
+                $table.find('tbody > tr > td input[type="checkbox"]').on('click', function () {
+                    updateScheduleBuilderHeaderCheckboxes($table);
                 });
-                
+
                 // toggle all check boxes when the user clicks the header checkbox.
-                $('.js-sched-select-all').click(function (e) {
+                $('.js-sched-select-all').on('click', function (e) {
                     e.preventDefault();
                     var $th = $(this).closest('th');
                     var $table = $(this).closest('table');

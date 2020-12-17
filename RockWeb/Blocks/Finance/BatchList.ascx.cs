@@ -27,6 +27,7 @@ using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
+using Rock.Utility;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
@@ -39,8 +40,38 @@ namespace RockWeb.Blocks.Finance
     [LinkedPage( "Detail Page", order: 0 )]
     [BooleanField( "Show Accounting Code", "Should the accounting code column be displayed.", false, "", 1 )]
     [BooleanField( "Show Accounts Column", "Should the accounts column be displayed.", true, "", 2 )]
+    [CodeEditorField( "Summary Lava Template", "The lava template for display the content for summary", CodeEditorMode.Lava, CodeEditorTheme.Rock, order: 3, defaultValue: @"
+         <div class='panel panel-block'>
+            <div class='panel-heading'>
+                <h1 class='panel-title'>Total Results</h1>
+            </div>
+            <div class='panel-body'>
+                {% assign totalAmount = 0 %}
+                {% for batchSummary in BatchSummary %}
+                <div class='row'>
+                    <div class='col-xs-8'>{{ batchSummary.FinancialAccount.Name }}</div>
+                    <div class='col-xs-4 text-right'>{{ batchSummary.TotalAmount | FormatAsCurrency }}</div>
+                </div>
+                {% assign totalAmount = totalAmount | Plus: batchSummary.TotalAmount %}
+                {% endfor %}
+                <div class='row'>
+                    <div class='col-xs-8'><b>Total: </div>
+                    <div class='col-xs-4 text-right'>
+                        {{ totalAmount | FormatAsCurrency }}
+                    </div>
+                </div>
+            </div>
+        </div>
+" )]
+
     public partial class BatchList : RockBlock, IPostBackEventHandler, ICustomGridColumns
     {
+        #region Constants
+
+        private const string SUMMARY_LAVA_TEMPLATE = "SummaryLavaTemplate";
+
+        #endregion
+
         #region Fields
 
         private RockDropDownList ddlAction;
@@ -73,7 +104,6 @@ namespace RockWeb.Blocks.Finance
             gBatchList.Actions.ShowAdd = UserCanEdit;
             gBatchList.Actions.AddClick += gBatchList_Add;
             gBatchList.GridRebind += gBatchList_GridRebind;
-            gBatchList.RowCreated += GBatchList_RowCreated;
             gBatchList.RowDataBound += gBatchList_RowDataBound;
             gBatchList.IsDeleteEnabled = UserCanEdit;
             gBatchList.ShowConfirmDeleteDialog = false;
@@ -86,7 +116,7 @@ namespace RockWeb.Blocks.Finance
             ddlAction.Items.Add( new ListItem( "Close Selected Batches", "CLOSE" ) );
 
             string deleteScript = @"
-                $('table.js-grid-batch-list a.grid-delete-button').click(function( e ){
+                $('table.js-grid-batch-list a.grid-delete-button').on('click', function( e ){
                     var $btn = $(this);
                     e.preventDefault();
                     Rock.dialogs.confirm('Are you sure you want to delete this batch?', function (result) {
@@ -169,7 +199,7 @@ namespace RockWeb.Blocks.Finance
         private void RegisterJavaScriptForGridActions()
         {
             string scriptFormat = @"
-                $('#{0}').change(function( e ){{
+                $('#{0}').on('change', function( e ){{
                     var count = $(""#{1} input[id$='_cbSelect_0']:checked"").length;
                     if (count == 0) {{
                         $('#{3}').val($ddl.val());
@@ -190,8 +220,8 @@ namespace RockWeb.Blocks.Finance
                     }}
                 }});";
 
-            string script = string.Format( 
-                scriptFormat, 
+            string script = string.Format(
+                scriptFormat,
                 ddlAction.ClientID, // {0}
                 gBatchList.ClientID,  // {1}
                 Page.ClientScript.GetPostBackEventReference( this, "StatusUpdate" ),  // {2}
@@ -276,7 +306,7 @@ namespace RockWeb.Blocks.Finance
                         var transactionTypeValueId = e.Value.AsIntegerOrNull();
                         if ( transactionTypeValueId.HasValue )
                         {
-                            var transactionTypeValue = DefinedValueCache.Read( transactionTypeValueId.Value );
+                            var transactionTypeValue = DefinedValueCache.Get( transactionTypeValueId.Value );
                             e.Value = transactionTypeValue != null ? transactionTypeValue.ToString() : string.Empty;
                         }
                         else
@@ -289,10 +319,24 @@ namespace RockWeb.Blocks.Finance
 
                 case "Campus":
                     {
-                        var campus = CampusCache.Read( e.Value.AsInteger() );
+                        var campus = CampusCache.Get( e.Value.AsInteger() );
                         if ( campus != null )
                         {
                             e.Value = campus.Name;
+                        }
+                        else
+                        {
+                            e.Value = string.Empty;
+                        }
+
+                        break;
+                    }
+                case "Contains Source Type":
+                    {
+                        var sourceTypeValueId = e.Value.AsIntegerOrNull();
+                        if ( sourceTypeValueId.HasValue )
+                        {
+                            e.Value = DefinedValueCache.GetValue( sourceTypeValueId.Value );
                         }
                         else
                         {
@@ -320,7 +364,8 @@ namespace RockWeb.Blocks.Finance
 
             gfBatchFilter.SaveUserPreference( "Status", ddlStatus.SelectedValue );
             gfBatchFilter.SaveUserPreference( "Campus", campCampus.SelectedValue );
-            gfBatchFilter.SaveUserPreference( "Contains Transaction Type", ddlTransactionType.SelectedValue );
+            gfBatchFilter.SaveUserPreference( "Contains Transaction Type", dvpTransactionType.SelectedValue );
+            gfBatchFilter.SaveUserPreference( "Contains Source Type", dvpSourceType.SelectedValue );
 
             if ( AvailableAttributes != null )
             {
@@ -374,12 +419,15 @@ namespace RockWeb.Blocks.Finance
                         {
                             transactionService.Delete( txn );
                         }
+
+                        var changes = new History.HistoryChangeList();
+                        changes.AddChange( History.HistoryVerb.Delete, History.HistoryChangeType.Record, "Batch" );
                         HistoryService.SaveChanges(
                             rockContext,
                             typeof( FinancialBatch ),
                             Rock.SystemGuid.Category.HISTORY_FINANCIAL_BATCH.AsGuid(),
                             batch.Id,
-                            new List<string> { "Deleted the batch" } );
+                            changes );
 
                         batchService.Delete( batch );
 
@@ -395,47 +443,6 @@ namespace RockWeb.Blocks.Finance
             BindGrid();
         }
 
-
-        /// <summary>
-        /// Handles the RowCreated event of the GBatchList control.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="GridViewRowEventArgs"/> instance containing the event data.</param>
-        private void GBatchList_RowCreated( object sender, GridViewRowEventArgs e )
-        {
-            if ( e.Row.RowType == DataControlRowType.DataRow && e.Row.DataItem != null )
-            {
-                var batch = e.Row.DataItem as FinancialBatch;
-                if ( batch != null )
-                {
-                    var batchRow = new BatchRow
-                    {
-                        Id = batch.Id,
-                        BatchStartDateTime = batch.BatchStartDateTime.Value,
-                        Name = batch.Name,
-                        AccountingSystemCode = batch.AccountingSystemCode,
-                        TransactionCount = batch.Transactions.Count(),
-                        ControlAmount = batch.ControlAmount,
-                        CampusName = batch.Campus != null ? batch.Campus.Name : "",
-                        Status = batch.Status,
-                        UnMatchedTxns = batch.Transactions.Any( t => !t.AuthorizedPersonAliasId.HasValue ),
-                        BatchNote = batch.Note,
-                        AccountSummaryList = batch.Transactions
-                        .SelectMany( t => t.TransactionDetails )
-                        .GroupBy( d => d.AccountId )
-                        .Select( s => new BatchAccountSummary
-                        {
-                            AccountId = s.Key,
-                            Amount = s.Sum( d => (decimal?)d.Amount ) ?? 0.0M
-                        } )
-                        .ToList()
-                    };
-
-                    e.Row.DataItem = batchRow;
-                }
-            }
-        }
-        
         /// <summary>
         /// Handles the RowDataBound event of the gBatchList control.
         /// </summary>
@@ -446,8 +453,6 @@ namespace RockWeb.Blocks.Finance
             if ( e.Row.RowType == DataControlRowType.DataRow )
             {
                 var batchRow = e.Row.DataItem as BatchRow;
-                var deleteField = gBatchList.Columns.OfType<DeleteField>().First();
-                var cell = ( e.Row.Cells[gBatchList.Columns.IndexOf( deleteField )] as DataControlFieldCell ).Controls[0];
 
                 if ( batchRow != null )
                 {
@@ -457,6 +462,8 @@ namespace RockWeb.Blocks.Finance
                     }
 
                     // Hide delete button if the batch is closed.
+                    var deleteField = gBatchList.Columns.OfType<DeleteField>().First();
+                    var cell = ( e.Row.Cells[gBatchList.GetColumnIndex( deleteField )] as DataControlFieldCell ).Controls[0];
                     if ( batchRow.Status == BatchStatus.Closed && cell != null )
                     {
                         cell.Visible = false;
@@ -472,7 +479,7 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
         protected void gBatchList_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "batchId", e.RowKeyId );
+            NavigateToLinkedPage( "DetailPage", "BatchId", e.RowKeyId );
         }
 
         /// <summary>
@@ -482,7 +489,7 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void gBatchList_Add( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "batchId", 0 );
+            NavigateToLinkedPage( "DetailPage", "BatchId", 0 );
         }
 
         /// <summary>
@@ -501,7 +508,7 @@ namespace RockWeb.Blocks.Finance
         /// <param name="eventArgument">A <see cref="T:System.String" /> that represents an optional event argument to be passed to the event handler.</param>
         public void RaisePostBackEvent( string eventArgument )
         {
-            if ( eventArgument == "StatusUpdate" && hfAction.Value.IsNotNullOrWhitespace() )
+            if ( eventArgument == "StatusUpdate" && hfAction.Value.IsNotNullOrWhiteSpace() )
             {
                 var batchesSelected = new List<int>();
 
@@ -509,8 +516,7 @@ namespace RockWeb.Blocks.Finance
 
                 if ( batchesSelected.Any() )
                 {
-                    var newStatus = ddlAction.SelectedValue == "OPEN" ? BatchStatus.Open : BatchStatus.Closed;
-
+                    var newStatus = hfAction.Value == "OPEN" ? BatchStatus.Open : BatchStatus.Closed;
                     var rockContext = new RockContext();
                     var batchService = new FinancialBatchService( rockContext );
                     var batchesToUpdate = batchService.Queryable()
@@ -521,7 +527,7 @@ namespace RockWeb.Blocks.Finance
 
                     foreach ( var batch in batchesToUpdate )
                     {
-                        var changes = new List<string>();
+                        var changes = new History.HistoryChangeList();
                         History.EvaluateChange( changes, "Status", batch.Status, newStatus );
 
                         string errorMessage;
@@ -536,7 +542,7 @@ namespace RockWeb.Blocks.Finance
                             errorMessage = string.Format( "{0} is an automated batch and the status can not be modified when the status is pending. The system will automatically set this batch to OPEN when all transactions have been downloaded.", batch.Name );
                             maWarningDialog.Show( errorMessage, ModalAlertType.Warning );
                             return;
-                        } 
+                        }
 
                         batch.Status = newStatus;
 
@@ -631,9 +637,9 @@ namespace RockWeb.Blocks.Finance
 
             ddlStatus.SetValue( statusFilter );
 
-            var definedTypeTransactionTypes = DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.FINANCIAL_TRANSACTION_TYPE.AsGuid() );
-            ddlTransactionType.BindToDefinedType( definedTypeTransactionTypes, true );
-            ddlTransactionType.SetValue( gfBatchFilter.GetUserPreference( "Contains Transaction Type" ) );
+            var definedTypeTransactionTypes = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.FINANCIAL_TRANSACTION_TYPE.AsGuid() );
+            dvpTransactionType.DefinedTypeId = definedTypeTransactionTypes.Id;
+            dvpTransactionType.SetValue( gfBatchFilter.GetUserPreference( "Contains Transaction Type" ) );
 
             var campusi = CampusCache.All();
             campCampus.Campuses = campusi;
@@ -641,6 +647,10 @@ namespace RockWeb.Blocks.Finance
             campCampus.SetValue( gfBatchFilter.GetUserPreference( "Campus" ) );
 
             drpBatchDate.DelimitedValues = gfBatchFilter.GetUserPreference( "Date Range" );
+
+            var definedTypeSourceTypes = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.FINANCIAL_SOURCE_TYPE.AsGuid() );
+            dvpSourceType.DefinedTypeId = definedTypeSourceTypes.Id;
+            dvpSourceType.SetValue( gfBatchFilter.GetUserPreference( "Contains Source Type" ) );
 
             BindAttributes();
             AddDynamicControls();
@@ -654,6 +664,65 @@ namespace RockWeb.Blocks.Finance
         public string FormatValueAsCurrency( decimal value )
         {
             return value.FormatAsCurrency();
+        }
+
+        /// <summary>
+        /// Handles the DataBound event of the lVarianceAmount control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
+        protected void lVarianceAmount_DataBound( object sender, RowEventArgs e )
+        {
+            Literal lVarianceAmount = sender as Literal;
+            BatchRow batchRow = e.Row.DataItem as BatchRow;
+            if (batchRow.AmountVariance != 0.00M)
+            {
+                lVarianceAmount.Text = string.Format( "<span class='label label-danger'>{0}</span>", batchRow.AmountVariance.FormatAsCurrency() );
+            }
+            else
+            {
+                lVarianceAmount.Text = string.Format( "<span class=''>{0}</span>", batchRow.AmountVariance.FormatAsCurrency() );
+            }
+
+        }
+
+        /// <summary>
+        /// Handles the DataBound event of the lVarianceItemCount control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
+        protected void lVarianceItemCount_DataBound( object sender, RowEventArgs e )
+        {
+            Literal lVarianceItemCount = sender as Literal;
+            BatchRow batchRow = e.Row.DataItem as BatchRow;
+            if ( batchRow.ItemCountVariance.HasValue )
+            {
+                if ( batchRow.ItemCountVariance != 0 )
+                {
+                    lVarianceItemCount.Text = string.Format( "<span class='label label-danger'>{0}</span>", batchRow.ItemCountVariance );
+                }
+                else
+                {
+                    lVarianceItemCount.Text = string.Format( "<span class=''>{0}</span>", batchRow.ItemCountVariance );
+                }
+            }
+            else
+            {
+                // doesn't apply
+                lVarianceItemCount.Text = "-";
+            }
+        }
+
+        /// <summary>
+        /// Handles the DataBound event of the lBatchStatus control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="RowEventArgs"/> instance containing the event data.</param>
+        protected void lBatchStatus_DataBound( object sender, RowEventArgs e )
+        {
+            Literal lBatchStatus = sender as Literal;
+            BatchRow batchRow = e.Row.DataItem as BatchRow;
+            lBatchStatus.Text = string.Format( "<span class='{0}'>{1}</span>", batchRow.StatusLabelClass, batchRow.StatusText );
         }
 
         /// <summary>
@@ -687,33 +756,57 @@ namespace RockWeb.Blocks.Finance
                 var rockContext = new RockContext();
                 _financialAccountLookup = new FinancialAccountService( rockContext ).Queryable().AsNoTracking().ToList().ToDictionary( k => k.Id, v => v );
 
-                var financialBatchQry = GetQuery( rockContext )
-                    .AsNoTracking()
-                    .Include( b => b.Campus )
-                    .Include( b => b.Transactions.Select( t => t.TransactionDetails ) );
+                var financialBatchQry = GetQuery( rockContext ).AsNoTracking();
 
-                gBatchList.SetLinqDataSource( financialBatchQry );
-                gBatchList.ObjectList = ( (List<FinancialBatch>)gBatchList.DataSource ).ToDictionary( k => k.Id.ToString(), v => v as object );
-                gBatchList.EntityTypeId = EntityTypeCache.Read<Rock.Model.FinancialBatch>().Id;
+                var batchRowQry = financialBatchQry.Select( b => new BatchRow
+                {
+                    Id = b.Id,
+                    BatchStartDateTime = b.BatchStartDateTime.Value,
+                    Name = b.Name,
+                    AccountingSystemCode = b.AccountingSystemCode,
+                    TransactionCount = b.Transactions.Count(),
+                    ControlAmount = b.ControlAmount,
+                    ControlItemCount = b.ControlItemCount,
+                    CampusName = b.Campus != null ? b.Campus.Name : "",
+                    Status = b.Status,
+                    UnMatchedTxns = b.Transactions.Any( t => !t.AuthorizedPersonAliasId.HasValue ),
+                    BatchNote = b.Note,
+                    AccountSummaryList = b.Transactions
+                        .SelectMany( t => t.TransactionDetails )
+                        .GroupBy( d => d.AccountId )
+                        .Select( s => new BatchAccountSummary
+                        {
+                            AccountId = s.Key,
+                            Amount = s.Sum( d => ( decimal? ) d.Amount ) ?? 0.0M
+                        } )
+                        .ToList()
+                } );
 
+                if ( CampusCache.All().Count == 1 )
+                {
+                    gBatchList.ColumnsOfType<RockBoundField>().First( c => c.DataField == "CampusName").Visible = false;
+                }
+
+                gBatchList.ObjectList = financialBatchQry.ToList().ToDictionary( k => k.Id.ToString(), v => v as object );
+                gBatchList.SetLinqDataSource( batchRowQry.AsNoTracking() );
+                gBatchList.EntityTypeId = EntityTypeCache.Get<FinancialBatch>().Id;
                 gBatchList.DataBind();
 
                 RegisterJavaScriptForGridActions();
 
                 var qryTransactionDetails = financialBatchQry.SelectMany( a => a.Transactions ).SelectMany( a => a.TransactionDetails );
-                var accountSummaryQry = qryTransactionDetails.GroupBy( a => a.Account ).Select( a => new
+                var accountSummaries = qryTransactionDetails.GroupBy( a => a.Account ).Select( a => new
                 {
-                    a.Key.Name,
-                    a.Key.Order,
+                    FinancialAccount = a.Key,
                     TotalAmount = (decimal?)a.Sum( d => d.Amount )
-                } ).OrderBy( a => a.Order );
+                } ).OrderBy( a => a.FinancialAccount.Order )
+                .ToList();
 
-                var summaryList = accountSummaryQry.ToList();
-                var grandTotalAmount = ( summaryList.Count > 0 ) ? summaryList.Sum( a => a.TotalAmount ?? 0 ) : 0;
-                string currencyFormat = GlobalAttributesCache.Value( "CurrencySymbol" ) + "{0:n}";
-                lGrandTotal.Text = string.Format( currencyFormat, grandTotalAmount );
-                rptAccountSummary.DataSource = summaryList.Select( a => new { a.Name, TotalAmount = string.Format( currencyFormat, a.TotalAmount ) } ).ToList();
-                rptAccountSummary.DataBind();
+                var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( this.RockPage, CurrentPerson );
+                mergeFields.Add( "BatchSummary", accountSummaries );
+
+                string lavaTemplate = this.GetAttributeValue( SUMMARY_LAVA_TEMPLATE );
+                lSummary.Text = lavaTemplate.ResolveMergeFields( mergeFields );
             }
             catch ( Exception ex )
             {
@@ -785,45 +878,26 @@ namespace RockWeb.Blocks.Finance
             }
 
             // filter by campus
-            var campus = CampusCache.Read( gfBatchFilter.GetUserPreference( "Campus" ).AsInteger() );
+            var campus = CampusCache.Get( gfBatchFilter.GetUserPreference( "Campus" ).AsInteger() );
             if ( campus != null )
             {
                 qry = qry.Where( b => b.CampusId == campus.Id );
             }
 
+            // filter by batches that contain transactions of the specified source type
+            var sourceTypeValueId = gfBatchFilter.GetUserPreference( "Contains Source Type" ).AsIntegerOrNull();
+            if ( sourceTypeValueId.HasValue )
+            {
+                qry = qry.Where( a => a.Transactions.Any( t => t.SourceTypeValueId == sourceTypeValueId.Value ) );
+            }
+
             // Filter query by any configured attribute filters
             if ( AvailableAttributes != null && AvailableAttributes.Any() )
             {
-                var attributeValueService = new AttributeValueService( rockContext );
-                var parameterExpression = attributeValueService.ParameterExpression;
-
                 foreach ( var attribute in AvailableAttributes )
                 {
                     var filterControl = phAttributeFilters.FindControl( "filter_" + attribute.Id.ToString() );
-                    if (filterControl == null) continue;
-
-                    var filterValues = attribute.FieldType.Field.GetFilterValues( filterControl, attribute.QualifierValues, Rock.Reporting.FilterMode.SimpleFilter );
-                    var filterIsDefault = attribute.FieldType.Field.IsEqualToValue( filterValues, attribute.DefaultValue );
-                    var expression = attribute.FieldType.Field.AttributeFilterExpression( attribute.QualifierValues, filterValues, parameterExpression );
-                    if (expression == null) continue;
-
-                    var attributeValues = attributeValueService
-                        .Queryable()
-                        .Where(v => v.Attribute.Id == attribute.Id);
-
-                    var filteredAttributeValues = attributeValues.Where( parameterExpression, expression, null );
-
-                    if (filterIsDefault)
-                    {
-                        qry = qry.Where(w =>
-                            !attributeValues.Any(v => v.EntityId == w.Id) ||
-                            filteredAttributeValues.Select( v => v.EntityId ).Contains( w.Id ));
-                    }
-                    else
-                    {
-                        qry = qry.Where( w =>
-                            filteredAttributeValues.Select( v => v.EntityId ).Contains( w.Id ) );
-                    }
+                    qry = attribute.FieldType.Field.ApplyAttributeQueryFilter( qry, filterControl, attribute, batchService, Rock.Reporting.FilterMode.SimpleFilter );
                 }
             }
 
@@ -883,7 +957,7 @@ namespace RockWeb.Blocks.Finance
 
         #region Helper Class
 
-        public class BatchAccountSummary
+        public class BatchAccountSummary : RockDynamic
         {
             public int AccountId { get; set; }
             public int AccountOrder
@@ -910,7 +984,7 @@ namespace RockWeb.Blocks.Finance
             }
         }
 
-        public class BatchRow
+        public class BatchRow : RockDynamic
         {
             public int Id { get; set; }
             public DateTime BatchStartDateTime { get; set; }
@@ -927,6 +1001,9 @@ namespace RockWeb.Blocks.Finance
             }
 
             public decimal ControlAmount { get; set; }
+
+            public int? ControlItemCount { get; set; }
+
             public List<BatchAccountSummary> AccountSummaryList
             {
                 get
@@ -945,11 +1022,38 @@ namespace RockWeb.Blocks.Finance
             public bool UnMatchedTxns { get; set; }
             public string BatchNote { get; set; }
 
-            public decimal Variance
+            /// <summary>
+            /// Gets the amount variance.
+            /// </summary>
+            /// <value>
+            /// The amount variance.
+            /// </value>
+            public decimal AmountVariance
             {
                 get
                 {
                     return TransactionAmount - ControlAmount;
+                }
+            }
+
+            /// <summary>
+            /// Gets the item count variance.
+            /// </summary>
+            /// <value>
+            /// The item count variance.
+            /// </value>
+            public int? ItemCountVariance
+            {
+                get
+                {
+                    if ( ControlItemCount.HasValue )
+                    {
+                        return TransactionCount - ControlItemCount;
+                    }
+                    else
+                    {
+                        return ( int? ) null;
+                    }
                 }
             }
 
@@ -980,7 +1084,6 @@ namespace RockWeb.Blocks.Finance
                     return Status.ConvertToString();
                 }
             }
-
 
             public string StatusLabelClass
             {
@@ -1032,7 +1135,7 @@ namespace RockWeb.Blocks.Finance
         /// </summary>
         private void BindAttributes()
         {
-            // Parse the attribute filters 
+            // Parse the attribute filters
             AvailableAttributes = new List<AttributeCache>();
 
             int entityTypeId = new FinancialBatch().TypeId;
@@ -1043,7 +1146,7 @@ namespace RockWeb.Blocks.Finance
                 .OrderBy( a => a.Order )
                 .ThenBy( a => a.Name ) )
             {
-                AvailableAttributes.Add( AttributeCache.Read( attributeModel ) );
+                AvailableAttributes.Add( AttributeCache.Get( attributeModel ) );
             }
 
         }
@@ -1108,7 +1211,7 @@ namespace RockWeb.Blocks.Finance
                         boundField.AttributeId = attribute.Id;
                         boundField.HeaderText = attribute.Name;
 
-                        var attributeCache = Rock.Web.Cache.AttributeCache.Read( attribute.Id );
+                        var attributeCache = Rock.Web.Cache.AttributeCache.Get( attribute.Id );
                         if ( attributeCache != null )
                         {
                             boundField.ItemStyle.HorizontalAlign = attributeCache.FieldType.Field.AlignValue;

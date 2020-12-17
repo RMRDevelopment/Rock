@@ -14,7 +14,6 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Linq;
 
 using Rock.Data;
@@ -31,7 +30,7 @@ namespace Rock.Model
         /// <returns></returns>
         public IQueryable<FinancialTransactionDetail> GetPayments( int registrationId )
         {
-            int registrationEntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.Registration ) ).Id;
+            int registrationEntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.Registration ) ).Id;
             return new FinancialTransactionDetailService( (RockContext)this.Context )
                 .Queryable( "Transaction" )
                 .Where( t =>

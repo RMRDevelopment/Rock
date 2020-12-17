@@ -14,11 +14,11 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web;
 using System.Web.UI.WebControls;
+
 using Rock.Attribute;
 using Rock.Field.Types;
 using Rock.Web.Cache;
@@ -137,19 +137,20 @@ namespace Rock.Web.UI.Controls
 
                 if ( exists )
                 {
-                    if ( attrib?.FieldType?.Field is BooleanFieldType )
-                    {
-                        if ( this.ItemStyle.HorizontalAlign != HorizontalAlign.Center )
-                        {
-                            this.ItemStyle.HorizontalAlign = HorizontalAlign.Center;
-                        }
-
-                        var boolValue = rawValue.AsBoolean();
-                        return boolValue ? "<i class=\"fa fa-check\"></i>" : string.Empty;
-                    }
-
                     if ( formatAsHtml )
                     {
+                        if ( attrib?.FieldType?.Field is BooleanFieldType )
+                        {
+                            if ( this.ItemStyle.HorizontalAlign != HorizontalAlign.Center )
+                            {
+                                this.ItemStyle.HorizontalAlign = HorizontalAlign.Center;
+                                this.HeaderStyle.HorizontalAlign = HorizontalAlign.Center;
+                            }
+
+                            var boolValue = rawValue.AsBoolean();
+                            return boolValue ? "<i class=\"fa fa-check\"></i>" : string.Empty;
+                        }
+
                         string resultHtml = attrib.FieldType.Field.FormatValueAsHtml( null, attrib.EntityTypeId, dataItem.Id, rawValue, attrib.QualifierValues, condensed );
                         return new HtmlString( resultHtml ?? string.Empty );
                     }

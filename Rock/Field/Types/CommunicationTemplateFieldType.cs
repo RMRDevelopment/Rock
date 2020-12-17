@@ -29,10 +29,42 @@ namespace Rock.Field.Types
     /// <summary>
     /// Field Type to select 0 or more communication templates 
     /// </summary>
-    public class CommunicationTemplateFieldType : FieldType
+    public class CommunicationTemplateFieldType : FieldType, IEntityFieldType
     {
 
         #region Edit Control
+
+        #region Formatting
+
+        /// <summary>
+        /// Returns the field's current value(s)
+        /// </summary>
+        /// <param name="parentControl">The parent control.</param>
+        /// <param name="value">Information about the value</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <param name="condensed">Flag indicating if the value should be condensed (i.e. for use in a grid column)</param>
+        /// <returns></returns>
+        public override string FormatValue( Control parentControl, string value, Dictionary<string, ConfigurationValue> configurationValues, bool condensed )
+        {
+            string formattedValue = value;
+
+            System.Guid? guid = value.AsGuidOrNull();
+            if ( guid.HasValue )
+            {
+                using ( var rockContext = new RockContext() )
+                {
+                    var communicationTemplateName = new CommunicationTemplateService( rockContext ).GetSelect( guid.Value, a => a.Name );
+                    if ( communicationTemplateName != null )
+                    {
+                        formattedValue = communicationTemplateName;
+                    }
+                }
+            }
+
+            return base.FormatValue( parentControl, formattedValue, configurationValues, condensed );
+        }
+
+        #endregion
 
         /// <summary>
         /// Creates the control(s) necessary for prompting user for a new value
@@ -47,7 +79,12 @@ namespace Rock.Field.Types
             var editControl = new RockDropDownList { ID = id };
             editControl.Items.Add( new ListItem() );
 
-            var templates = new CommunicationTemplateService( new RockContext() ).Queryable().OrderBy( t => t.Name );
+            var templates = new CommunicationTemplateService( new RockContext() ).Queryable().OrderBy( t => t.Name ).Select( a => new
+            {
+                a.Guid,
+                a.Name
+            } );
+
             if ( templates.Any() )
             {
                 foreach ( var template in templates )
@@ -95,5 +132,60 @@ namespace Rock.Field.Types
 
         #endregion
 
+        #region IEntityFieldType
+        /// <summary>
+        /// Gets the edit value as the IEntity.Id
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <returns></returns>
+        public int? GetEditValueAsEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues )
+        {
+            var guid = GetEditValue( control, configurationValues ).AsGuid();
+            var item = new CommunicationTemplateService( new RockContext() ).Get( guid );
+            return item != null ? item.Id : ( int? ) null;
+        }
+
+        /// <summary>
+        /// Sets the edit value from IEntity.Id value
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <param name="id">The identifier.</param>
+        public void SetEditValueFromEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues, int? id )
+        {
+            var item = new CommunicationTemplateService( new RockContext() ).Get( id ?? 0 );
+            var guidValue = item != null ? item.Guid.ToString() : string.Empty;
+            SetEditValue( control, configurationValues, guidValue );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value )
+        {
+            return GetEntity( value, null );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value, RockContext rockContext )
+        {
+            var guid = value.AsGuidOrNull();
+            if ( guid.HasValue )
+            {
+                rockContext = rockContext ?? new RockContext();
+                return new CommunicationTemplateService( rockContext ).Get( guid.Value );
+            }
+
+            return null;
+        }
+        #endregion
     }
 }

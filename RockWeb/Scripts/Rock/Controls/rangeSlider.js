@@ -11,18 +11,11 @@
                 }
 
                 Sys.Application.add_load(function () {
-                    var cssFile = Rock.settings.get('baseUrl') + 'Scripts/ion.rangeSlider/css/ion.rangeSlider.css';
-                    var cssSkinFile = Rock.settings.get('baseUrl') + 'Scripts/ion.rangeSlider/css/ion.rangeSlider.skinHTML5.css';
-                    var jsFile = Rock.settings.get('baseUrl') + 'Scripts/ion.rangeSlider/js/ion-rangeSlider/ion.rangeSlider.min.js';
+                    var cssFile = Rock.settings.get('baseUrl') + 'Scripts/ion.rangeSlider/css/ion.rangeSlider.Rock.css';
 
                     // ensure that css for rangeSlider is added to page
                     if (!$('#rangeSliderCss').length) {
                         $('head').append("<link id='rangeSliderCss' href='" + cssFile + "' type='text/css' rel='stylesheet' />");
-                    }
-
-                    // ensure that skin css for rangeSlider is added to page
-                    if (!$('#rangeSliderSkinCss').length) {
-                        $('head').append("<link id='rangeSliderSkinCss' href='" + cssSkinFile + "' type='text/css' rel='stylesheet' />");
                     }
                 });
 
@@ -32,8 +25,10 @@
                     type: options.type || 'single', // Choose slider type, could be 'single' for one handle, or 'double' for two handles
                     min: options.min || 0,
                     max: options.max || 100,
+                    step: options.step || 1,
                     from: options.from || null, // for 'single' the position of the slider. for 'double' the lower position of the selected range
-                    to: options.to || null // if 'double' the upper position of the selected range
+                    to: options.to || null, // if 'double' the upper position of the selected range
+                    disable: options.disable || false // if 'true', the control will render as read-only
                 });
 
             }

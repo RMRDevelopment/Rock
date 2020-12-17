@@ -70,7 +70,7 @@ namespace RockWeb.Blocks.Groups
 
             var detailPageReference = new Rock.Web.PageReference( GetAttributeValue( "DetailPage" ) );
 
-            // NOTE: if the detail page is the current page, use the current route instead of route specified in the DetailPage (to preserve old behavoir)
+            // NOTE: if the detail page is the current page, use the current route instead of route specified in the DetailPage (to preserve old behavior)
             if ( detailPageReference == null || detailPageReference.PageId == this.RockPage.PageId )
             {
                 hfPageRouteTemplate.Value = ( this.RockPage.RouteData.Route as System.Web.Routing.Route ).Url;
@@ -79,7 +79,7 @@ namespace RockWeb.Blocks.Groups
             else
             {
                 hfPageRouteTemplate.Value = string.Empty;
-                var pageCache = PageCache.Read( detailPageReference.PageId );
+                var pageCache = PageCache.Get( detailPageReference.PageId );
                 if ( pageCache != null )
                 {
                     var route = pageCache.PageRoutes.FirstOrDefault( a => a.Id == detailPageReference.RouteId );
@@ -119,6 +119,8 @@ namespace RockWeb.Blocks.Groups
                 }
 
                 tglHideInactiveGroups.Checked = hideInactiveGroups ?? true;
+
+                tglLimitPublicGroups.Checked = this.GetUserPreference( "LimitPublicGroups" ).AsBooleanOrNull() ?? false;
             }
             else
             {
@@ -148,20 +150,20 @@ namespace RockWeb.Blocks.Groups
 
             ddlCampuses.Campuses = CampusCache.All( GetAttributeValue( "DisplayInactiveCampuses" ).AsBoolean() );
 
-            var CampusFilter = this.GetUserPreference( "CampusFilter" );
+            var campusFilter = this.GetUserPreference( "CampusFilter" );
             if ( pnlConfigPanel.Visible )
             {
-                ddlCampuses.SetValue( CampusFilter );
+                ddlCampuses.SetValue( campusFilter );
             }
             else
             {
                 ddlCampuses.SetValue( "" );
             }
 
-            var IncludeNoCampus = this.GetUserPreference( "IncludeNoCampus" ).AsBoolean();
             if ( pnlConfigPanel.Visible )
             {
-                tglIncludeNoCampus.Checked = IncludeNoCampus;
+                tglIncludeNoCampus.Visible = ddlCampuses.Visible;
+                tglIncludeNoCampus.Checked = this.GetUserPreference( "IncludeNoCampus" ).AsBoolean();
             }
 
         }
@@ -224,7 +226,7 @@ namespace RockWeb.Blocks.Groups
             }
 
             bool canEditBlock = IsUserAuthorized( Authorization.EDIT );
-            bool canAddChildGroup = false;
+            bool showAddChildGroupButton = false;
 
             if ( !string.IsNullOrWhiteSpace( _groupId ) )
             {
@@ -292,30 +294,43 @@ namespace RockWeb.Blocks.Groups
 
                 if ( selectedGroup != null )
                 {
+                    var selectedGroupGroupType = GroupTypeCache.Get( selectedGroup.GroupTypeId );
                     hfInitialGroupId.Value = selectedGroup.Id.ToString();
                     hfSelectedGroupId.Value = selectedGroup.Id.ToString();
 
-                    // show the Add button if the selected Group's GroupType can have children and one or more of those child group types is allowed
-                    if ( selectedGroup.GroupType.ChildGroupTypes.Count > 0 &&
-                        selectedGroup.GroupType.ChildGroupTypes.Any( c => IsGroupTypeIncluded( c.Id ) ) )
+                    // show the Add Child Group button if the selected Group's GroupType can have children and one or more of those child group types is allowed
+                    if ( selectedGroupGroupType.AllowAnyChildGroupType || selectedGroupGroupType.ChildGroupTypes.Any( c => IsGroupTypeIncluded( c.Id ) ) )
                     {
-                        canAddChildGroup = canEditBlock;
+                        // if current person has Edit Auth on the block, then show the add child group button regardless of Group/GroupType security.
+                        // 
+                        showAddChildGroupButton = canEditBlock;
 
-                        if ( !canAddChildGroup )
+                        if ( !showAddChildGroupButton )
                         {
-                            canAddChildGroup = selectedGroup.IsAuthorized( Authorization.EDIT, CurrentPerson );
-                            if ( !canAddChildGroup )
+                            // if block doesn't grant Edit auth, see if the person is authorized for the selected group
+                            showAddChildGroupButton = selectedGroup.IsAuthorized( Authorization.EDIT, CurrentPerson );
+                            if ( !showAddChildGroupButton )
                             {
-                                var groupType = GroupTypeCache.Read( selectedGroup.GroupTypeId );
-                                if ( groupType != null )
+                                // if block doesn't grant Edit auth, and user isn't authorized for the selected group,
+                                // see if they have Edit auth on any of the child groups
+                                List<GroupTypeCache> allowedChildGroupTypes;
+                                if ( selectedGroupGroupType.AllowAnyChildGroupType )
                                 {
-                                    foreach ( var childGroupType in groupType.ChildGroupTypes )
+                                    // If AllowAnyChildGroupType is enabled, check for Edit Auth on all GroupTypes
+                                    allowedChildGroupTypes = GroupTypeCache.All().ToList();
+                                }
+                                else
+                                {
+                                    // If AllowAnyChildGroupType is not enabled, check for Edit Auth on the just the selected group's ChildGroupTypes
+                                    allowedChildGroupTypes = selectedGroupGroupType.ChildGroupTypes;
+                                }
+
+                                foreach ( var childGroupType in allowedChildGroupTypes )
+                                {
+                                    if ( childGroupType != null && childGroupType.IsAuthorized( Authorization.EDIT, CurrentPerson ) )
                                     {
-                                        if ( childGroupType != null && childGroupType.IsAuthorized( Authorization.EDIT, CurrentPerson ) )
-                                        {
-                                            canAddChildGroup = true;
-                                            break;
-                                        }
+                                        showAddChildGroupButton = true;
+                                        break;
                                     }
                                 }
                             }
@@ -331,9 +346,11 @@ namespace RockWeb.Blocks.Groups
                 lbAddGroupChild.Enabled = canEditBlock;
             }
 
-            divTreeviewActions.Visible = canEditBlock || canAddChildGroup;
+            // NOTE that showAddChildGroupButton just controls if the button is shown.
+            // The group detail block will take care of enforcing auth when they attempt to save a group.
+            divAddGroup.Visible = canEditBlock || showAddChildGroupButton;
             lbAddGroupRoot.Enabled = canEditBlock;
-            lbAddGroupChild.Enabled = canAddChildGroup;
+            lbAddGroupChild.Enabled = showAddChildGroupButton;
 
             // disable add child group if no group is selected
             if ( hfSelectedGroupId.ValueAsInt() == 0 )
@@ -342,6 +359,7 @@ namespace RockWeb.Blocks.Groups
             }
 
             hfIncludeInactiveGroups.Value = ( !tglHideInactiveGroups.Checked ).ToTrueFalse();
+            hfLimitPublicGroups.Value = tglLimitPublicGroups.Checked.ToTrueFalse();
             hfCountsType.Value = ddlCountsType.SelectedValue;
             hfCampusFilter.Value = ddlCampuses.SelectedValue;
             hfIncludeNoCampus.Value = tglIncludeNoCampus.Checked.ToTrueFalse();
@@ -426,7 +444,7 @@ namespace RockWeb.Blocks.Groups
                 var groupTypeIdIncludeList = new List<int>();
                 foreach ( Guid guid in groupTypeIncludeGuids )
                 {
-                    var groupType = GroupTypeCache.Read( guid );
+                    var groupType = GroupTypeCache.Get( guid );
                     if ( groupType != null )
                     {
                         groupTypeIdIncludeList.Add( groupType.Id );
@@ -443,7 +461,7 @@ namespace RockWeb.Blocks.Groups
                 var groupTypeIdExcludeList = new List<int>();
                 foreach ( Guid guid in groupTypeExcludeGuids )
                 {
-                    var groupType = GroupTypeCache.Read( guid );
+                    var groupType = GroupTypeCache.Get( guid );
                     if ( groupType != null )
                     {
                         groupTypeIdExcludeList.Add( groupType.Id );
@@ -462,6 +480,19 @@ namespace RockWeb.Blocks.Groups
         protected void tglHideInactiveGroups_CheckedChanged( object sender, EventArgs e )
         {
             this.SetUserPreference( "HideInactiveGroups", tglHideInactiveGroups.Checked.ToTrueFalse() );
+
+            // reload the whole page
+            NavigateToPage( this.RockPage.Guid, new Dictionary<string, string>() );
+        }
+
+        /// <summary>
+        /// Handles the CheckedChanged event of the tglLimitPublicGroups control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void tglLimitPublicGroups_CheckedChanged( object sender, EventArgs e )
+        {
+            this.SetUserPreference( "LimitPublicGroups", tglLimitPublicGroups.Checked.ToTrueFalse() );
 
             // reload the whole page
             NavigateToPage( this.RockPage.Guid, new Dictionary<string, string>() );
@@ -514,7 +545,7 @@ namespace RockWeb.Blocks.Groups
         protected void btnSearch_OnClick( object sender, EventArgs e )
         {
             // redirect to search
-            NavigateToPage( Rock.SystemGuid.Page.GROUP_SEARCH_RESULTS.AsGuid(), new Dictionary<string, string>() { { "SearchType", "name" },{ "SearchTerm", tbSearch.Text.Trim() } } );
+            NavigateToPage( Rock.SystemGuid.Page.GROUP_SEARCH_RESULTS.AsGuid(), new Dictionary<string, string>() { { "SearchType", "name" }, { "SearchTerm", tbSearch.Text.Trim() } } );
         }
 
         /// <summary>
@@ -530,7 +561,7 @@ namespace RockWeb.Blocks.Groups
             // if specific group types are specified, show the groups regardless of ShowInNavigation
             bool limitToShowInNavigation = !includedGroupTypeIds.Any();
 
-            var qry = groupService.GetChildren( 0, hfRootGroupId.ValueAsInt(), hfLimitToSecurityRoleGroups.Value.AsBoolean(), includedGroupTypeIds, excludedGroupTypeIds, !tglHideInactiveGroups.Checked, limitToShowInNavigation, hfCampusFilter.ValueAsInt(), tglIncludeNoCampus.Checked );
+            var qry = groupService.GetChildren( 0, hfRootGroupId.ValueAsInt(), hfLimitToSecurityRoleGroups.Value.AsBoolean(), includedGroupTypeIds, excludedGroupTypeIds, !tglHideInactiveGroups.Checked, limitToShowInNavigation, hfCampusFilter.ValueAsInt(), tglIncludeNoCampus.Checked, tglHideInactiveGroups.Checked );
 
             foreach ( var group in qry.OrderBy( g => g.Name ) )
             {

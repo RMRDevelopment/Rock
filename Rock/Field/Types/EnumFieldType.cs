@@ -32,7 +32,20 @@ namespace Rock.Field.Types
     [Serializable]
     public abstract class EnumFieldType<T> : FieldType where T : struct
     {
-        private Dictionary<int, string> EnumValues { get; set; }
+        private const string REPEAT_COLUMNS = "repeatColumns";
+
+        /// <summary>
+        /// Returns a list of the configuration keys
+        /// </summary>
+        /// <returns></returns>
+        public override List<string> ConfigurationKeys()
+        {
+            List<string> configKeys = new List<string>();
+            configKeys.Add( REPEAT_COLUMNS );
+            return configKeys;
+        }
+
+        private Dictionary<int, string> _EnumValues { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EnumFieldType{T}"/> class.
@@ -46,15 +59,115 @@ namespace Rock.Field.Types
         /// </summary>
         public EnumFieldType( T[] includedEnums )
         {
-            EnumValues = new Dictionary<int, string>();
+            SetAvailableValues( includedEnums, null );
+        }
+
+        /// <summary>
+        /// Set the enumeration values that are available for selection in this field.
+        /// </summary>
+        /// <param name="includedValues"></param>
+        protected void SetAvailableValues( IEnumerable<T> includedValues )
+        {
+            SetAvailableValues( includedValues, null );
+        }
+
+        /// <summary>
+        /// Set the enumeration values that are available for selection in this field.
+        /// </summary>
+        /// <param name="includedValues"></param>
+        protected void SetAvailableValues( Dictionary<T, string> includedValues )
+        {
+            _EnumValues = new Dictionary<int, string>();
+
             foreach ( var value in Enum.GetValues( typeof( T ) ) )
             {
-                if ( includedEnums == null || includedEnums.Contains( ( T ) value ) )
+                var key = ( T ) value;
+
+                if ( includedValues.ContainsKey( key ) )
                 {
-                    EnumValues.Add( ( int ) value, value.ToString().SplitCase() );
+                    _EnumValues.Add( ( int ) value, includedValues[key] );
                 }
             }
         }
+
+        /// <summary>
+        /// Set the enumeration values that are available for selection in this field.
+        /// </summary>
+        /// <param name="includedValues"></param>
+        /// <param name="excludedValues"></param>
+        protected void SetAvailableValues( IEnumerable<T> includedValues, IEnumerable<T> excludedValues )
+        {
+            _EnumValues = new Dictionary<int, string>();
+
+            foreach ( var value in Enum.GetValues( typeof(T) ) )
+            {
+                if ( ( includedValues == null || includedValues.Contains( (T)value ) )
+                     && ( excludedValues == null  || !excludedValues.Contains( (T)value ) ) )
+                {
+                    _EnumValues.Add( ( int ) value, value.ToString().SplitCase() );
+                }
+            }
+
+        }
+
+        #region Configuration
+        /// <summary>
+        /// Creates the HTML controls required to configure this type of field
+        /// </summary>
+        /// <returns></returns>
+        public override List<Control> ConfigurationControls()
+        {
+            List<Control> controls = base.ConfigurationControls();
+
+            var tbRepeatColumns = new NumberBox();
+            tbRepeatColumns.Label = "Columns";
+            tbRepeatColumns.Help = "Select how many columns the list should use before going to the next row. If blank or 0 then 4 columns will be displayed. There is no upper limit enforced here however the block this is used in might add contraints due to available space.";
+            tbRepeatColumns.MinimumValue = "0";
+            tbRepeatColumns.AutoPostBack = true;
+            tbRepeatColumns.TextChanged += OnQualifierUpdated;
+            controls.Add( tbRepeatColumns );
+
+            return controls;
+        }
+
+        /// <summary>
+        /// Gets the configuration value.
+        /// </summary>
+        /// <param name="controls">The controls.</param>
+        /// <returns></returns>
+        public override Dictionary<string, ConfigurationValue> ConfigurationValues( List<Control> controls )
+        {
+            Dictionary<string, ConfigurationValue> configurationValues = base.ConfigurationValues( controls );
+
+            string description = "Select how many columns the list should use before going to the next row. If blank 4 is used.";
+            configurationValues.Add( REPEAT_COLUMNS, new ConfigurationValue("Repeat Columns", description, string.Empty ) );
+
+            if ( controls != null && controls.Count > 0 )
+            {
+                var tbRepeatColumns = controls[0] as NumberBox;
+                configurationValues[REPEAT_COLUMNS].Value = tbRepeatColumns.Visible ? tbRepeatColumns.Text : string.Empty;
+            }
+
+            return configurationValues;
+        }
+
+        /// <summary>
+        /// Sets the configuration value.
+        /// </summary>
+        /// <param name="controls">The controls.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        public override void SetConfigurationValues( List<Control> controls, Dictionary<string, ConfigurationValue> configurationValues )
+        {
+            base.SetConfigurationValues( controls, configurationValues );
+
+            if ( controls != null && controls.Count > 0 && configurationValues != null )
+            {
+                var tbRepeatColumns = controls[0] as NumberBox;
+                tbRepeatColumns.Text = configurationValues.ContainsKey( REPEAT_COLUMNS ) ? configurationValues[REPEAT_COLUMNS].Value : string.Empty;
+            }
+        }
+
+        #endregion Configuration
 
         #region Formatting
 
@@ -69,9 +182,9 @@ namespace Rock.Field.Types
         public override string FormatValue( System.Web.UI.Control parentControl, string value, Dictionary<string, ConfigurationValue> configurationValues, bool condensed )
         {
             int? intValue = value.AsIntegerOrNull();
-            if ( intValue.HasValue && EnumValues.ContainsKey( intValue.Value ) )
+            if ( intValue.HasValue && _EnumValues.ContainsKey( intValue.Value ) )
             {
-                return EnumValues[intValue.Value];
+                return _EnumValues[intValue.Value];
             }
 
             return string.Empty;
@@ -108,7 +221,12 @@ namespace Rock.Field.Types
                 var editControl = new RockRadioButtonList { ID = id };
                 editControl.RepeatDirection = RepeatDirection.Horizontal;
 
-                foreach( var keyVal in EnumValues )
+                if ( configurationValues.ContainsKey( REPEAT_COLUMNS ) )
+                {
+                    ( ( RockRadioButtonList ) editControl ).RepeatColumns = configurationValues[REPEAT_COLUMNS].Value.AsInteger();
+                }
+
+                foreach ( var keyVal in _EnumValues )
                 {
                     editControl.Items.Add( new ListItem( keyVal.Value, keyVal.Key.ToString() ) );
                 }
@@ -195,7 +313,7 @@ namespace Rock.Field.Types
             cbList.AddCssClass( "js-filter-control" );
             cbList.RepeatDirection = RepeatDirection.Horizontal;
 
-            foreach ( var keyVal in EnumValues )
+            foreach ( var keyVal in _EnumValues )
             {
                 cbList.Items.Add( new ListItem( keyVal.Value, keyVal.Key.ToString() ) );
             }
@@ -300,11 +418,11 @@ namespace Rock.Field.Types
         public override string FormatFilterValueValue( Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
             var selectedValues = value.Split( new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries ).ToList().AsIntegerList();
-            return EnumValues
+            return AddQuotes( _EnumValues
                 .Where( v => selectedValues.Contains( v.Key ) )
-                .Select( v => "'" + v.Value + "'" )
+                .Select( v => v.Value )
                 .ToList()
-                .AsDelimited( " or " );
+                .AsDelimited( "' OR '" ) );
         }
 
         /// <summary>
@@ -389,6 +507,42 @@ namespace Rock.Field.Types
             }
 
             return base.AttributeFilterExpression( configurationValues, filterValues, parameterExpression );
+        }
+
+        #endregion
+
+        #region Serialization
+
+        /// <summary>
+        /// Get a serialized representation of a value for this field type.
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public string GetSerializedValue( T value )
+        {
+            return ( ( int ) ( object ) value ).ToString();
+        }
+
+        /// <summary>
+        /// Get a value for this field type from a serialized representation, or return the specified default value.
+        /// </summary>
+        /// <param name="serialized"></param>
+        /// <param name="defaultValue"></param>
+        /// <returns></returns>
+        public T GetDeserializedValue( string serialized, T defaultValue )
+        {
+            T enumValue;
+
+            var isValid = Enum.TryParse( serialized, out enumValue );
+
+            if ( isValid )
+            {
+                return enumValue;
+            }
+            else
+            {
+                return defaultValue;
+            }
         }
 
         #endregion

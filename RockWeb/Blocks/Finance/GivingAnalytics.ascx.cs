@@ -32,6 +32,7 @@ using Rock.Attribute;
 using Rock.Chart;
 using Rock.Data;
 using Rock.Model;
+using Rock.Reporting;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
@@ -45,11 +46,55 @@ namespace RockWeb.Blocks.Finance
     [Category( "Finance" )]
     [Description( "Shows a graph of giving statistics which can be configured for specific date range, amounts, currency types, campus, etc." )]
 
-    [DefinedValueField( Rock.SystemGuid.DefinedType.CHART_STYLES, "Chart Style", DefaultValue = Rock.SystemGuid.DefinedValue.CHART_STYLE_ROCK, Order = 0 )]
-    [LinkedPage( "Detail Page", "Select the page to navigate to when the chart is clicked", false, Order = 1 )]
-    [BooleanField( "Hide View By Options", "Should the View By options be hidden (Giver, Adults, Children, Family)?", Order = 2 )]
+    [DefinedValueField(
+        definedTypeGuid: Rock.SystemGuid.DefinedType.CHART_STYLES,
+        name: "Chart Style",
+        defaultValue: Rock.SystemGuid.DefinedValue.CHART_STYLE_ROCK,
+        order: 0,
+        key: AttributeKeys.ChartStyle )]
+
+    [LinkedPage(
+        name: "Detail Page",
+        description: "Select the page to navigate to when the chart is clicked",
+        required: false,
+        order: 1,
+        key: AttributeKeys.DetailPage )]
+
+    [BooleanField(
+        name: "Hide View By Options",
+        description: "Should the View By options be hidden (Giver, Adults, Children, Family)?",
+        order: 2,
+        key: AttributeKeys.HideViewByOptions )]
+
+    [CustomDropdownListField(
+        name: "Filter Column Direction",
+        description: "Choose the direction for the checkboxes for filter selections.",
+        listSource: "vertical^Vertical,horizontal^Horizontal",
+        required: true,
+        defaultValue: "vertical",
+        order: 3,
+        key: AttributeKeys.FilterColumnDirection
+        )]
+
+    [IntegerField(
+        name: "Filter Column Count",
+        description: "The number of check boxes for each row.",
+        required: false,
+        defaultValue: 1,
+        order: 4,
+        key: AttributeKeys.FilterColumnCount)]
+
     public partial class GivingAnalytics : RockBlock
     {
+        private static class AttributeKeys
+        {
+            public const string ChartStyle = "ChartStyle";
+            public const string DetailPage = "DetailPage";
+            public const string HideViewByOptions = "HideViewByOptions";
+            public const string FilterColumnCount = "FilterColumnCount";
+            public const string FilterColumnDirection = "FilterColumnDirection";
+        }
+
         #region Fields
 
         private bool FilterIncludedInURL = false;
@@ -87,7 +132,7 @@ namespace RockWeb.Blocks.Finance
             // Setup for being able to copy text to clipboard
             RockPage.AddScriptLink( this.Page, "~/Scripts/clipboard.js/clipboard.min.js" );
             string script = string.Format( @"
-    new Clipboard('#{0}');
+    new ClipboardJS('#{0}');
     $('#{0}').tooltip();
 ", btnCopyToClipboard.ClientID );
             ScriptManager.RegisterStartupScript( btnCopyToClipboard, btnCopyToClipboard.GetType(), "share-copy", script, true );
@@ -114,9 +159,9 @@ namespace RockWeb.Blocks.Finance
             pnlTotal.Controls.Add( lTotal );
             lTotal.ID = "lTotal";
 
-            dvpDataView.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.Person ) ).Id;
+            dvpDataView.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.Person ) ).Id;
 
-            pnlViewBy.Visible = !GetAttributeValue( "HideViewByOptions" ).AsBoolean();
+            pnlViewBy.Visible = !GetAttributeValue( AttributeKeys.HideViewByOptions ).AsBoolean();
         }
 
         /// <summary>
@@ -127,13 +172,14 @@ namespace RockWeb.Blocks.Finance
         {
             base.OnLoad( e );
 
-            var chartStyleDefinedValueGuid = this.GetAttributeValue( "ChartStyle" ).AsGuidOrNull();
+            var chartStyleDefinedValueGuid = this.GetAttributeValue( AttributeKeys.ChartStyle ).AsGuidOrNull();
 
             lcAmount.Options.SetChartStyle( chartStyleDefinedValueGuid );
-            bcAmount.Options.SetChartStyle( chartStyleDefinedValueGuid );
             bcAmount.Options.xaxis = new AxisOptions { mode = AxisMode.categories, tickLength = 0 };
             bcAmount.Options.series.bars.barWidth = 0.6;
             bcAmount.Options.series.bars.align = "center";
+            // Set chart style after setting options so they are not overwritten.
+            bcAmount.Options.SetChartStyle( chartStyleDefinedValueGuid );
 
             if ( !Page.IsPostBack )
             {
@@ -215,9 +261,9 @@ namespace RockWeb.Blocks.Finance
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
-        protected void gGiversGifts_GridRebind( object sender, EventArgs e )
+        protected void gGiversGifts_GridRebind( object sender, GridRebindEventArgs e )
         {
-            BindGiversGrid();
+            BindGiversGrid( e.IsExporting );
         }
 
         /// <summary>
@@ -237,7 +283,7 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The e.</param>
         protected void lcAmount_ChartClick( object sender, ChartClickArgs e )
         {
-            if ( GetAttributeValue( "DetailPage" ).AsGuidOrNull().HasValue )
+            if ( GetAttributeValue( AttributeKeys.DetailPage ).AsGuidOrNull().HasValue )
             {
                 Dictionary<string, string> qryString = new Dictionary<string, string>();
                 qryString.Add( "YValue", e.YValue.ToString() );
@@ -323,7 +369,7 @@ namespace RockWeb.Blocks.Finance
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnApplyGiversFilter_Click( object sender, EventArgs e )
         {
-            // both Attendess Filter Apply button just do the same thing as the main apply button
+            // both Attendees Filter Apply button just do the same thing as the main apply button
             btnApply_Click( sender, e );
         }
 
@@ -357,6 +403,18 @@ namespace RockWeb.Blocks.Finance
 
         private void BuildDynamicControls( bool setValues )
         {
+            string repeatDirection = GetAttributeValue( AttributeKeys.FilterColumnDirection );
+            int repeatColumns = GetAttributeValue( AttributeKeys.FilterColumnCount ).AsIntegerOrNull() ?? 0;
+
+            dvpTransactionType.RepeatDirection = repeatDirection == "vertical" ? RepeatDirection.Vertical : RepeatDirection.Horizontal;
+            dvpTransactionType.RepeatColumns = repeatDirection == "horizontal" ? repeatColumns : 0;
+
+            dvpCurrencyTypes.RepeatDirection = repeatDirection == "vertical" ? RepeatDirection.Vertical : RepeatDirection.Horizontal;
+            dvpCurrencyTypes.RepeatColumns = repeatDirection == "horizontal" ? repeatColumns : 0;
+
+            dvpTransactionSource.RepeatDirection = repeatDirection == "vertical" ? RepeatDirection.Vertical : RepeatDirection.Horizontal;
+            dvpTransactionSource.RepeatColumns = repeatDirection == "horizontal" ? repeatColumns : 0;
+
             var accountIds = new List<int>();
             if ( setValues )
             {
@@ -405,7 +463,7 @@ namespace RockWeb.Blocks.Finance
 
                 if ( campusId.Key > 0 )
                 {
-                    var campus = CampusCache.Read( campusId.Key );
+                    var campus = CampusCache.Get( campusId.Key );
                     cbList.Label = campus != null ? campus.Name + " Accounts" : "Campus " + campusId.Key.ToString();
                 }
                 else
@@ -413,7 +471,8 @@ namespace RockWeb.Blocks.Finance
                     cbList.Label = "Accounts";
                 }
 
-                cbList.RepeatDirection = RepeatDirection.Vertical;
+                cbList.RepeatDirection = repeatDirection == "vertical" ? RepeatDirection.Vertical : RepeatDirection.Horizontal;
+                cbList.RepeatColumns = repeatDirection == "horizontal" ? repeatColumns : 0;
                 cbList.DataValueField = "Key";
                 cbList.DataTextField = "Value";
                 cbList.DataSource = campusId.Value;
@@ -433,9 +492,9 @@ namespace RockWeb.Blocks.Finance
         /// </summary>
         public void LoadDropDowns()
         {
-            cblTransactionType.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.FINANCIAL_TRANSACTION_TYPE.AsGuid() ) );
-            cblCurrencyTypes.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.FINANCIAL_CURRENCY_TYPE.AsGuid() ) );
-            cblTransactionSource.BindToDefinedType( DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.FINANCIAL_SOURCE_TYPE.AsGuid() ) );
+            dvpTransactionType.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.FINANCIAL_TRANSACTION_TYPE.AsGuid() ).Id;
+            dvpCurrencyTypes.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.FINANCIAL_CURRENCY_TYPE.AsGuid() ).Id;
+            dvpTransactionSource.DefinedTypeId = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.FINANCIAL_SOURCE_TYPE.AsGuid() ).Id;
         }
 
         /// <summary>
@@ -448,7 +507,7 @@ namespace RockWeb.Blocks.Finance
 
             lcAmount.ShowTooltip = true;
             bcAmount.ShowTooltip = true;
-            if ( GetAttributeValue( "DetailPage" ).AsGuidOrNull().HasValue )
+            if ( GetAttributeValue( AttributeKeys.DetailPage ).AsGuidOrNull().HasValue )
             {
                 lcAmount.ChartClick += lcAmount_ChartClick;
                 bcAmount.ChartClick += lcAmount_ChartClick;
@@ -584,9 +643,9 @@ function(item) {
             this.SetUserPreference( keyPrefix + "SlidingDateRange", drpSlidingDateRange.DelimitedValues, false );
             this.SetUserPreference( keyPrefix + "GroupBy", hfGroupBy.Value, false );
             this.SetUserPreference( keyPrefix + "AmountRange", nreAmount.DelimitedValues, false );
-            this.SetUserPreference( keyPrefix + "TransactionTypeIds", cblTransactionType.SelectedValues.AsDelimited( "," ), false );
-            this.SetUserPreference( keyPrefix + "CurrencyTypeIds", cblCurrencyTypes.SelectedValues.AsDelimited( "," ), false );
-            this.SetUserPreference( keyPrefix + "SourceIds", cblTransactionSource.SelectedValues.AsDelimited( "," ), false );
+            this.SetUserPreference( keyPrefix + "TransactionTypeIds", dvpTransactionType.SelectedValues.AsDelimited( "," ), false );
+            this.SetUserPreference( keyPrefix + "CurrencyTypeIds", dvpCurrencyTypes.SelectedValues.AsDelimited( "," ), false );
+            this.SetUserPreference( keyPrefix + "SourceIds", dvpTransactionSource.SelectedValues.AsDelimited( "," ), false );
 
             var accountIds = new List<int>();
             foreach ( var cblAccounts in phAccounts.Controls.OfType<RockCheckBoxList>() )
@@ -663,13 +722,13 @@ function(item) {
             nreAmount.DelimitedValues = GetSetting( keyPrefix, "AmountRange" );
 
             var currencyTypeIdList = GetSetting( keyPrefix, "CurrencyTypeIds" ).Split( ',' ).ToList();
-            cblCurrencyTypes.SetValues( currencyTypeIdList );
+            dvpCurrencyTypes.SetValues( currencyTypeIdList );
 
             var transactionTypeIdList = GetSetting( keyPrefix, "TransactionTypeIds" ).Split( ',' ).ToList();
-            cblTransactionType.SetValues( transactionTypeIdList );
+            dvpTransactionType.SetValues( transactionTypeIdList );
 
             var sourceIdList = GetSetting( keyPrefix, "SourceIds" ).Split( ',' ).ToList();
-            cblTransactionSource.SetValues( sourceIdList );
+            dvpTransactionSource.SetValues( sourceIdList );
 
             var accountIdList = GetSetting( keyPrefix, "AccountIds" ).Split( ',' ).ToList();
             foreach ( var cblAccounts in phAccounts.Controls.OfType<RockCheckBoxList>() )
@@ -677,7 +736,7 @@ function(item) {
                 cblAccounts.SetValues( accountIdList );
             }
 
-            dvpDataView.SetValue( GetSetting( keyPrefix, "DataView" ) );
+            dvpDataView.SetValue( GetSetting( keyPrefix, "DataView" ).AsIntegerOrNull() );
             HideShowDataViewResultOption();
 
             rblDataViewAction.SetValue( GetSetting( keyPrefix, "DataViewAction" ) );
@@ -757,13 +816,13 @@ function(item) {
             var dateRange = SlidingDateRangePicker.CalculateDateRangeFromDelimitedValues( drpSlidingDateRange.DelimitedValues );
 
             var currencyTypeIds = new List<int>();
-            cblCurrencyTypes.SelectedValues.ForEach( i => currencyTypeIds.Add( i.AsInteger() ) );
+            dvpCurrencyTypes.SelectedValues.ForEach( i => currencyTypeIds.Add( i.AsInteger() ) );
 
             var sourceIds = new List<int>();
-            cblTransactionSource.SelectedValues.ForEach( i => sourceIds.Add( i.AsInteger() ) );
+            dvpTransactionSource.SelectedValues.ForEach( i => sourceIds.Add( i.AsInteger() ) );
 
             var transactionTypeIds = new List<int>();
-            cblTransactionType.SelectedValues.ForEach( i => transactionTypeIds.Add( i.AsInteger() ) );
+            dvpTransactionType.SelectedValues.ForEach( i => transactionTypeIds.Add( i.AsInteger() ) );
 
             var accountIds = new List<int>();
             foreach ( var cblAccounts in phAccounts.Controls.OfType<RockCheckBoxList>() )
@@ -861,7 +920,7 @@ function(item) {
 
                         if ( chartData.CampusId.HasValue )
                         {
-                            var campus = CampusCache.Read( chartData.CampusId.Value );
+                            var campus = CampusCache.Get( chartData.CampusId.Value );
                             if ( campus != null )
                             {
                                 chartData.CampusName = campus.Name;
@@ -926,10 +985,9 @@ function(item) {
                     var dataView = new DataViewService( threadRockContext ).Get( dataViewId.Value );
                     if ( dataView != null )
                     {
-                        var errorMessages = new List<string>();
                         var dvPersonService = new PersonService( threadRockContext );
                         ParameterExpression paramExpression = dvPersonService.ParameterExpression;
-                        Expression whereExpression = dataView.GetExpression( dvPersonService, paramExpression, out errorMessages );
+                        Expression whereExpression = dataView.GetExpression( dvPersonService, paramExpression );
 
                         SortProperty sort = null;
                         var dataViewPersonIdQry = dvPersonService
@@ -1059,7 +1117,7 @@ function(item) {
         /// <summary>
         /// Binds the attendees grid.
         /// </summary>
-        private void BindGiversGrid()
+        private void BindGiversGrid( bool isExporting = false )
         {
             // Get all the selected criteria values
             var dateRange = SlidingDateRangePicker.CalculateDateRangeFromDelimitedValues( drpSlidingDateRange.DelimitedValues );
@@ -1070,13 +1128,13 @@ function(item) {
             var maxAmount = nreAmount.UpperValue;
 
             var currencyTypeIds = new List<int>();
-            cblCurrencyTypes.SelectedValues.ForEach( i => currencyTypeIds.Add( i.AsInteger() ) );
+            dvpCurrencyTypes.SelectedValues.ForEach( i => currencyTypeIds.Add( i.AsInteger() ) );
 
             var transactionTypeIds = new List<int>();
-            cblTransactionType.SelectedValues.ForEach( i => transactionTypeIds.Add( i.AsInteger() ) );
+            dvpTransactionType.SelectedValues.ForEach( i => transactionTypeIds.Add( i.AsInteger() ) );
 
             var sourceIds = new List<int>();
-            cblTransactionSource.SelectedValues.ForEach( i => sourceIds.Add( i.AsInteger() ) );
+            dvpTransactionSource.SelectedValues.ForEach( i => sourceIds.Add( i.AsInteger() ) );
 
             var accountIds = new List<int>();
             foreach ( var cblAccounts in phAccounts.Controls.OfType<RockCheckBoxList>() )
@@ -1258,10 +1316,9 @@ function(item) {
                         var dataView = new DataViewService( threadRockContext ).Get( dataViewId.Value );
                         if ( dataView != null )
                         {
-                            var errorMessages = new List<string>();
                             var dvPersonService = new PersonService( threadRockContext );
                             ParameterExpression paramExpression = dvPersonService.ParameterExpression;
-                            Expression whereExpression = dataView.GetExpression( dvPersonService, paramExpression, out errorMessages );
+                            Expression whereExpression = dataView.GetExpression( dvPersonService, paramExpression );
 
                             SortProperty sort = null;
                             var dataViewPersonIdQry = dvPersonService
@@ -1433,6 +1490,33 @@ function(item) {
                         ExcelExportBehavior = ExcelExportBehavior.AlwaysInclude
                     } );
 
+                gGiversGifts.Columns.Add(
+                    new RockBoundField
+                    {
+                        DataField = "HomeAddress",
+                        HeaderText = "Home Address",
+                        Visible = false,
+                        ExcelExportBehavior = ExcelExportBehavior.AlwaysInclude
+                    } );
+
+                gGiversGifts.Columns.Add(
+                    new RockBoundField
+                    {
+                        DataField = "CellPhone",
+                        HeaderText = "Cell Phone",
+                        Visible = false,
+                        ExcelExportBehavior = ExcelExportBehavior.AlwaysInclude
+                    } );
+
+                gGiversGifts.Columns.Add(
+                    new RockBoundField
+                    {
+                        DataField = "HomePhone",
+                        HeaderText = "Home Phone",
+                        Visible = false,
+                        ExcelExportBehavior = ExcelExportBehavior.AlwaysInclude
+                    } );
+
                 ti.end = DateTime.Now;
 
             } ) );
@@ -1448,7 +1532,7 @@ function(item) {
 
             var rockContext = new RockContext();
 
-            // if dataview was selected and it includes people not in the result set, 
+            // if dataview was selected and it includes people not in the result set,
             if ( dataViewId.HasValue && rblDataViewAction.SelectedValue == "All" && dataViewPersonIds.Any() )
             {
                 // Query for the names of each of these people
@@ -1591,6 +1675,81 @@ function(item) {
                 pnlTotal.Visible = false;
             }
 
+            if ( isExporting )
+            {
+                // Get all the affected person ids
+                var personIds = personInfoList.Select( a => a.Id ).ToList();
+
+                // Load the phone numbers for these people
+                var phoneNumbers = new List<PhoneNumber>();
+                var homePhoneType = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_HOME );
+                var cellPhoneType = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE );
+                if ( homePhoneType != null && cellPhoneType != null )
+                {
+                    phoneNumbers = new PhoneNumberService( rockContext )
+                        .Queryable().AsNoTracking()
+                        .Where( n =>
+                            personIds.Contains( n.PersonId ) &&
+                            n.NumberTypeValueId.HasValue && (
+                                n.NumberTypeValueId.Value == homePhoneType.Id ||
+                                n.NumberTypeValueId.Value == cellPhoneType.Id
+                            ) )
+                        .ToList();
+                }
+
+                // Load the home addresses
+                var personLocations = new Dictionary<int, Location>();
+                var familyGroupType = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() );
+                var homeAddressDv = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME );
+                if ( familyGroupType != null && homeAddressDv != null )
+                {
+
+                    foreach ( var item in new GroupMemberService( rockContext )
+                        .Queryable().AsNoTracking()
+                        .Where( m =>
+                            personIds.Contains( m.PersonId ) &&
+                            m.Group.GroupTypeId == familyGroupType.Id )
+                        .Select( m => new
+                        {
+                            m.PersonId,
+                            Location = m.Group.GroupLocations
+                                .Where( l => l.GroupLocationTypeValueId == homeAddressDv.Id )
+                                .Select( l => l.Location )
+                                .FirstOrDefault()
+                        } )
+                        .Where( l =>
+                            l.Location != null &&
+                            l.Location.Street1 != "" &&
+                            l.Location.City != "" ) )
+                    {
+                        personLocations.AddOrIgnore( item.PersonId, item.Location );
+                    }
+                }
+
+                foreach ( var person in personInfoList )
+                {
+                    if ( phoneNumbers.Any() )
+                    {
+                        person.HomePhone = phoneNumbers
+                            .Where( p => p.PersonId == person.Id && p.NumberTypeValueId.Value == homePhoneType.Id )
+                            .Select( p => p.NumberFormatted )
+                            .FirstOrDefault();
+
+                        person.CellPhone = phoneNumbers
+                            .Where( p => p.PersonId == person.Id && p.NumberTypeValueId.Value == cellPhoneType.Id )
+                            .Select( p => p.NumberFormatted )
+                            .FirstOrDefault();
+                    }
+
+                    if ( personLocations.Any() )
+                    {
+                        person.HomeAddress = personLocations.ContainsKey( person.Id ) && personLocations[person.Id] != null ?
+                                personLocations[person.Id].FormattedAddress : string.Empty;
+                    }
+                }
+
+            }
+
             var qry = personInfoList.AsQueryable();
 
             if ( gGiversGifts.SortProperty != null )
@@ -1639,33 +1798,17 @@ function(item) {
         private void LogAndShowException( Exception exception )
         {
             LogException( exception );
-            string errorMessage = null;
-            string stackTrace = string.Empty;
-            while ( exception != null )
+
+            var sqlTimeoutException = ReportingHelper.FindSqlTimeoutException( exception );
+            if ( sqlTimeoutException != null)
             {
-                errorMessage = exception.Message;
-                stackTrace += exception.StackTrace;
-                if ( exception is System.Data.SqlClient.SqlException )
-                {
-                    // if there was a SQL Server Timeout, have the warning be a friendly message about that.
-                    if ( ( exception as System.Data.SqlClient.SqlException ).Number == -2 )
-                    {
-                        errorMessage = "The Giving Analytics report did not complete in a timely manner.";
-                        break;
-                    }
-                    else
-                    {
-                        exception = exception.InnerException;
-                    }
-                }
-                else
-                {
-                    exception = exception.InnerException;
-                }
+                nbGiversError.Text = "The Giving Analytics report did not complete in a timely manner.";
+                nbGiversError.Visible = true;
+                return;
             }
 
-            nbGiversError.Text = errorMessage;
-            nbGiversError.Details = stackTrace;
+            nbGiversError.Text = "An error occurred";
+            nbGiversError.Details = exception.Message;
             nbGiversError.Visible = true;
         }
 
@@ -1674,7 +1817,7 @@ function(item) {
         #region Enums
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         private enum ShowBy
         {
@@ -1690,7 +1833,7 @@ function(item) {
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         private enum GiversFilterBy
         {
@@ -1711,7 +1854,7 @@ function(item) {
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public enum GiversViewBy
         {
@@ -1782,6 +1925,9 @@ function(item) {
         public bool IsChild { get; set; }
         public decimal SortAmount { get; set; }
         public Dictionary<int, decimal> AccountAmounts { get; set; }
+        public string HomePhone { get; set; }
+        public string CellPhone { get; set; }
+        public string HomeAddress { get; set; }
 
         public string PersonName
         {

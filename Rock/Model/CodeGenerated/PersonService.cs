@@ -94,12 +94,15 @@ namespace Rock.Model
         public static void CopyPropertiesFrom( this Person target, Person source )
         {
             target.Id = source.Id;
+            target.AgeClassification = source.AgeClassification;
             target.AnniversaryDate = source.AnniversaryDate;
             target.BirthDay = source.BirthDay;
             target.BirthMonth = source.BirthMonth;
             target.BirthYear = source.BirthYear;
             target.CommunicationPreference = source.CommunicationPreference;
             target.ConnectionStatusValueId = source.ConnectionStatusValueId;
+            target.ContributionFinancialAccountId = source.ContributionFinancialAccountId;
+            target.DeceasedDate = source.DeceasedDate;
             target.Email = source.Email;
             target.EmailNote = source.EmailNote;
             target.EmailPreference = source.EmailPreference;
@@ -108,18 +111,20 @@ namespace Rock.Model
             target.ForeignKey = source.ForeignKey;
             target.Gender = source.Gender;
             target.GivingGroupId = source.GivingGroupId;
+            target.GivingLeaderId = source.GivingLeaderId;
             target.GraduationYear = source.GraduationYear;
             target.InactiveReasonNote = source.InactiveReasonNote;
             target.IsDeceased = source.IsDeceased;
             target.IsEmailActive = source.IsEmailActive;
+            target.IsLockedAsChild = source.IsLockedAsChild;
             target.IsSystem = source.IsSystem;
             target.LastName = source.LastName;
             target.MaritalStatusValueId = source.MaritalStatusValueId;
-            target.MetaPersonicxLifestageClusterId = source.MetaPersonicxLifestageClusterId;
-            target.MetaPersonicxLifestageGroupId = source.MetaPersonicxLifestageGroupId;
             target.MiddleName = source.MiddleName;
             target.NickName = source.NickName;
             target.PhotoId = source.PhotoId;
+            target.PrimaryCampusId = source.PrimaryCampusId;
+            target.PrimaryFamilyId = source.PrimaryFamilyId;
             target.RecordStatusLastModifiedDateTime = source.RecordStatusLastModifiedDateTime;
             target.RecordStatusReasonValueId = source.RecordStatusReasonValueId;
             target.RecordStatusValueId = source.RecordStatusValueId;
@@ -129,6 +134,9 @@ namespace Rock.Model
             target.SuffixValueId = source.SuffixValueId;
             target.SystemNote = source.SystemNote;
             target.TitleValueId = source.TitleValueId;
+            target.TopSignalColor = source.TopSignalColor;
+            target.TopSignalIconCssClass = source.TopSignalIconCssClass;
+            target.TopSignalId = source.TopSignalId;
             target.ViewedCount = source.ViewedCount;
             target.CreatedDateTime = source.CreatedDateTime;
             target.ModifiedDateTime = source.ModifiedDateTime;

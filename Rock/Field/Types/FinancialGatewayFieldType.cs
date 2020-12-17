@@ -16,7 +16,9 @@
 //
 using System;
 using System.Collections.Generic;
+using System.Data.Entity;
 using System.Web.UI;
+using System.Linq;
 
 using Rock.Data;
 using Rock.Model;
@@ -25,10 +27,11 @@ using Rock.Web.UI.Controls;
 namespace Rock.Field.Types
 {
     /// <summary>
-    /// Field Type used to display a dropdown list of binary file types
+    /// Field Type used to display a dropdown list of Financial Gateways.
+    /// Stored as FinancialGateway.Guid
     /// </summary>
     [Serializable]
-    public class FinancialGatewayFieldType : FieldType
+    public class FinancialGatewayFieldType : FieldType, IEntityFieldType
     {
 
         #region Formatting
@@ -50,11 +53,8 @@ namespace Rock.Field.Types
             {
                 using ( var rockContext = new RockContext() )
                 {
-                    var financialGateway = new FinancialGatewayService( rockContext ).Get( financialGatewayGuid.Value );
-                    if ( financialGateway != null )
-                    {
-                        formattedValue = financialGateway.Name;
-                    }
+                    var financialGatewayName = new FinancialGatewayService( rockContext ).GetSelect( financialGatewayGuid.Value, s => s.Name );
+                    formattedValue = financialGatewayName;
                 }
             }
 
@@ -76,61 +76,117 @@ namespace Rock.Field.Types
         /// </returns>
         public override Control EditControl( Dictionary<string, ConfigurationValue> configurationValues, string id )
         {
-            return new FinancialGatewayPicker { ID = id, ShowAll = false }; 
+            return new FinancialGatewayPicker { ID = id, ShowAll = false };
         }
 
         /// <summary>
-        /// Reads new values entered by the user for the field
+        /// Gets the value of the selected FinancialGateway as the FinancialGateway.Guid as a string
         /// </summary>
         /// <param name="control">Parent control that controls were added to in the CreateEditControl() method</param>
         /// <param name="configurationValues"></param>
         /// <returns></returns>
         public override string GetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues )
         {
-            if ( control != null && control is FinancialGatewayPicker )
+            var picker = control as FinancialGatewayPicker;
+            if ( picker != null )
             {
-                int id = int.MinValue;
-                if ( Int32.TryParse( ( (FinancialGatewayPicker)control ).SelectedValue, out id ) )
+                int? itemId = picker.SelectedValue.AsIntegerOrNull();
+                Guid? itemGuid = null;
+                if ( itemId.HasValue )
                 {
                     using ( var rockContext = new RockContext() )
                     {
-                        var financialGateway = new FinancialGatewayService( rockContext ).Get( id );
-                        if ( financialGateway != null )
-                        {
-                            return financialGateway.Guid.ToString();
-                        }
+                        itemGuid = new FinancialGatewayService( rockContext ).Queryable().AsNoTracking().Where( a => a.Id == itemId.Value ).Select( a => ( Guid? ) a.Guid ).FirstOrDefault();
                     }
                 }
+
+                return itemGuid?.ToString() ?? string.Empty;
             }
+
             return null;
         }
 
         /// <summary>
-        /// Sets the value.
+        /// Sets the value where the value is a FinancialGateway.Guid (or null)
         /// </summary>
         /// <param name="control">The control.</param>
         /// <param name="configurationValues"></param>
         /// <param name="value">The value.</param>
         public override void SetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
-            Guid financialGatewayGuid = Guid.Empty;
-            if (Guid.TryParse( value, out financialGatewayGuid ))
+            var picker = control as FinancialGatewayPicker;
+            if ( picker != null )
             {
-                if ( control != null && control is FinancialGatewayPicker )
+                int? itemId = null;
+                Guid? itemGuid = value.AsGuidOrNull();
+                if ( itemGuid.HasValue )
                 {
                     using ( var rockContext = new RockContext() )
                     {
-                        var financialGateway = new FinancialGatewayService( rockContext ).Get( financialGatewayGuid );
-                        if ( financialGateway != null )
-                        {
-                            ( (FinancialGatewayPicker)control ).SetValue( financialGateway.Id.ToString() );
-                        }
+                        itemId = new FinancialGatewayService( rockContext ).Queryable().Where( a => a.Guid == itemGuid.Value ).Select( a => ( int? ) a.Id ).FirstOrDefault();
                     }
                 }
+
+                picker.SetValue( itemId );
             }
         }
 
         #endregion
 
+        #region IEntityFieldType
+        /// <summary>
+        /// Gets the edit value as the IEntity.Id
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <returns></returns>
+        public int? GetEditValueAsEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues )
+        {
+            var guid = GetEditValue( control, configurationValues ).AsGuid();
+            var item = new FinancialGatewayService( new RockContext() ).Get( guid );
+            return item != null ? item.Id : ( int? ) null;
+        }
+
+        /// <summary>
+        /// Sets the edit value from IEntity.Id value
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <param name="id">The identifier.</param>
+        public void SetEditValueFromEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues, int? id )
+        {
+            var item = new FinancialGatewayService( new RockContext() ).Get( id ?? 0 );
+            var guidValue = item != null ? item.Guid.ToString() : string.Empty;
+            SetEditValue( control, configurationValues, guidValue );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value )
+        {
+            return GetEntity( value, null );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value, RockContext rockContext )
+        {
+            var guid = value.AsGuidOrNull();
+            if ( guid.HasValue )
+            {
+                rockContext = rockContext ?? new RockContext();
+                return new FinancialGatewayService( rockContext ).Get( guid.Value );
+            }
+
+            return null;
+        }
+        #endregion
     }
 }

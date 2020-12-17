@@ -178,7 +178,7 @@ namespace RockWeb.Blocks.Core
                 // Get the existing attributes for this entity type and qualifier value
                 var attributeService = new AttributeService( rockContext );
                 var regFieldService = new RegistrationTemplateFormFieldService( rockContext );
-                var attributes = attributeService.Get( entityTypeIdAttributeMatrix, "AttributeMatrixTemplateId", attributeMatrixTemplate.Id.ToString() );
+                var attributes = attributeService.GetByEntityTypeQualifier( entityTypeIdAttributeMatrix, "AttributeMatrixTemplateId", attributeMatrixTemplate.Id.ToString(), true );
 
                 // Delete any of those attributes that were removed in the UI
                 var selectedAttributeGuids = AttributesState.Select( a => a.Guid );
@@ -191,7 +191,6 @@ namespace RockWeb.Blocks.Core
 
                     attributeService.Delete( attr );
                     rockContext.SaveChanges();
-                    Rock.Web.Cache.AttributeCache.Flush( attr.Id );
                 }
 
                 // Update the Attributes that were assigned in the UI
@@ -199,8 +198,6 @@ namespace RockWeb.Blocks.Core
                 {
                     Helper.SaveAttributeEdits( attributeState, entityTypeIdAttributeMatrix, "AttributeMatrixTemplateId", attributeMatrixTemplate.Id.ToString(), rockContext );
                 }
-
-                Rock.Web.Cache.AttributeCache.FlushEntityAttributes();
             } );
 
             NavigateToParentPage();
@@ -258,7 +255,7 @@ namespace RockWeb.Blocks.Core
             ceFormattedLava.Text = attributeMatrixTemplate.FormattedLava;
 
             var attributeService = new AttributeService( rockContext );
-            AttributesState = attributeService.Get( new AttributeMatrixItem().TypeId, "AttributeMatrixTemplateId", attributeMatrixTemplate.Id.ToString() ).AsQueryable()
+            AttributesState = attributeService.GetByEntityTypeQualifier( new AttributeMatrixItem().TypeId, "AttributeMatrixTemplateId", attributeMatrixTemplate.Id.ToString(), true ).AsQueryable()
                 .OrderBy( a => a.Order )
                 .ThenBy( a => a.Name )
                 .ToList();
@@ -325,7 +322,7 @@ namespace RockWeb.Blocks.Core
             if ( attributeGuid.Equals( Guid.Empty ) )
             {
                 attribute = new Attribute();
-                attribute.FieldTypeId = FieldTypeCache.Read( Rock.SystemGuid.FieldType.TEXT ).Id;
+                attribute.FieldTypeId = FieldTypeCache.Get( Rock.SystemGuid.FieldType.TEXT ).Id;
                 edtAttributes.ActionTitle = ActionTitle.Add( "attribute for matrix attributes that use matrix template " + tbName.Text );
             }
             else
@@ -338,7 +335,7 @@ namespace RockWeb.Blocks.Core
             AttributesState.Where( a => !a.Guid.Equals( attributeGuid ) ).Select( a => a.Key ).ToList().ForEach( a => reservedKeyNames.Add( a ) );
             edtAttributes.ReservedKeyNames = reservedKeyNames.ToList();
 
-            edtAttributes.ExcludedFieldTypes = new FieldTypeCache[] { FieldTypeCache.Read<MatrixFieldType>() };
+            edtAttributes.ExcludedFieldTypes = new FieldTypeCache[] { FieldTypeCache.Get<MatrixFieldType>() };
             edtAttributes.SetAttributeProperties( attribute, typeof( AttributeMatrixTemplate ) );
 
             dlgAttribute.Show();
@@ -418,26 +415,15 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void dlgAttribute_SaveClick( object sender, EventArgs e )
         {
-            Rock.Model.Attribute attribute = new Rock.Model.Attribute();
-            edtAttributes.GetAttributeProperties( attribute );
+#pragma warning disable 0618 // Type or member is obsolete
+            var attribute = SaveChangesToStateCollection( edtAttributes, AttributesState );
+#pragma warning restore 0618 // Type or member is obsolete
 
             // Controls will show warnings
             if ( !attribute.IsValid )
             {
                 return;
             }
-
-            if ( AttributesState.Any( a => a.Guid.Equals( attribute.Guid ) ) )
-            {
-                attribute.Order = AttributesState.Where( a => a.Guid.Equals( attribute.Guid ) ).FirstOrDefault().Order;
-                AttributesState.RemoveEntity( attribute.Guid );
-            }
-            else
-            {
-                attribute.Order = AttributesState.Any() ? AttributesState.Max( a => a.Order ) + 1 : 0;
-            }
-
-            AttributesState.Add( attribute );
 
             BindAttributesGrid();
             dlgAttribute.Hide();
@@ -464,6 +450,50 @@ namespace RockWeb.Blocks.Core
             SetAttributeListOrder( AttributesState );
             gAttributes.DataSource = AttributesState.OrderBy( a => a.Order ).ThenBy( a => a.Name ).ToList();
             gAttributes.DataBind();
+        }
+
+        #endregion
+
+        #region Obsolete Code
+
+        /// <summary>
+        /// Add or update the saved state of an Attribute using values from the AttributeEditor.
+        /// Non-editable system properties of the existing Attribute state are preserved.
+        /// </summary>
+        /// <param name="editor">The AttributeEditor that holds the updated Attribute values.</param>
+        /// <param name="attributeStateCollection">The stored state collection.</param>
+        [RockObsolete( "1.11" )]
+        [Obsolete( "This method is required for backward-compatibility - new blocks should use the AttributeEditor.SaveChangesToStateCollection() extension method instead." )]
+        private Rock.Model.Attribute SaveChangesToStateCollection( AttributeEditor editor, List<Rock.Model.Attribute> attributeStateCollection )
+        {
+            // Load the editor values into a new Attribute instance.
+            Rock.Model.Attribute attribute = new Rock.Model.Attribute();
+
+            editor.GetAttributeProperties( attribute );
+
+            // Get the stored state of the Attribute, and copy the values of the non-editable properties.
+            var attributeState = attributeStateCollection.Where( a => a.Guid.Equals( attribute.Guid ) ).FirstOrDefault();
+
+            if ( attributeState != null )
+            {
+                attribute.Order = attributeState.Order;
+                attribute.CreatedDateTime = attributeState.CreatedDateTime;
+                attribute.CreatedByPersonAliasId = attributeState.CreatedByPersonAliasId;
+                attribute.ForeignGuid = attributeState.ForeignGuid;
+                attribute.ForeignId = attributeState.ForeignId;
+                attribute.ForeignKey = attributeState.ForeignKey;
+
+                attributeStateCollection.RemoveEntity( attribute.Guid );
+            }
+            else
+            {
+                // Set the Order of the new entry as the last item in the collection.
+                attribute.Order = attributeStateCollection.Any() ? attributeStateCollection.Max( a => a.Order ) + 1 : 0;
+            }
+
+            attributeStateCollection.Add( attribute );
+
+            return attribute;
         }
 
         #endregion

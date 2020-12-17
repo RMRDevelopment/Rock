@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
@@ -26,10 +27,19 @@ using Rock.Web.Cache;
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select a schedule
     /// </summary>
     public class SchedulePicker : ItemPicker
     {
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to allow selection of inactive schedules.  Default is true.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [allow inactive selection]; otherwise, <c>false</c>.
+        /// </value>
+        public bool AllowInactiveSelection { get; set; } = true;
+
         #region Controls
 
         /// <summary>
@@ -46,15 +56,18 @@ namespace Rock.Web.UI.Controls
         {
             base.CreateChildControls();
 
-            _cbShowInactiveSchedules = new RockCheckBox();
-            _cbShowInactiveSchedules.ContainerCssClass = "pull-right";
-            _cbShowInactiveSchedules.SelectedIconCssClass = "fa fa-check-square-o";
-            _cbShowInactiveSchedules.UnSelectedIconCssClass = "fa fa-square-o";
-            _cbShowInactiveSchedules.ID = this.ID + "_cbShowInactiveSchedules";
-            _cbShowInactiveSchedules.Text = "Show Inactive";
-            _cbShowInactiveSchedules.AutoPostBack = true;
-            _cbShowInactiveSchedules.CheckedChanged += _cbShowInactiveSchedules_CheckedChanged;
-            this.Controls.Add( _cbShowInactiveSchedules );
+            if ( AllowInactiveSelection )
+            {
+                _cbShowInactiveSchedules = new RockCheckBox();
+                _cbShowInactiveSchedules.ContainerCssClass = "pull-right";
+                _cbShowInactiveSchedules.SelectedIconCssClass = "fa fa-check-square-o";
+                _cbShowInactiveSchedules.UnSelectedIconCssClass = "fa fa-square-o";
+                _cbShowInactiveSchedules.ID = this.ID + "_cbShowInactiveSchedules";
+                _cbShowInactiveSchedules.Text = "Show Inactive";
+                _cbShowInactiveSchedules.AutoPostBack = true;
+                _cbShowInactiveSchedules.CheckedChanged += _cbShowInactiveSchedules_CheckedChanged;
+                this.Controls.Add( _cbShowInactiveSchedules );
+            }
         }
 
         /// <summary>
@@ -77,10 +90,17 @@ namespace Rock.Web.UI.Controls
         {
             if ( schedule != null )
             {
+                // If setting the value to an inactive schedule, enable the "Show Inactive Schedules" checkbox.
+                if ( AllowInactiveSelection && !schedule.IsActive )
+                {
+                    _cbShowInactiveSchedules.Checked = true;
+                    SetExtraRestParams( true );
+                }
+
                 ItemId = schedule.Id.ToString();
 
                 string parentCategoryIds = string.Empty;
-                var parentCategory = schedule.Category;
+                var parentCategory = schedule.CategoryId.HasValue ? CategoryCache.Get( schedule.CategoryId.Value ) : null;
                 while ( parentCategory != null )
                 {
                     parentCategoryIds = parentCategory.Id + "," + parentCategoryIds;
@@ -115,6 +135,13 @@ namespace Rock.Web.UI.Controls
                 {
                     if ( schedule != null )
                     {
+                        // If setting the value to an inactive schedule, enable the "Show Inactive Schedules" checkbox.
+                        if ( AllowInactiveSelection && !schedule.IsActive )
+                        {
+                            _cbShowInactiveSchedules.Checked = true;
+                            SetExtraRestParams( true );
+                        }
+
                         ids.Add( schedule.Id.ToString() );
                         names.Add( schedule.Name );
                         var parentCategory = schedule.Category;
@@ -162,10 +189,7 @@ namespace Rock.Web.UI.Controls
         /// <value>
         /// The item rest URL.
         /// </value>
-        public override string ItemRestUrl
-        {
-            get { return "~/api/Categories/GetChildren/"; }
-        }
+        public override string ItemRestUrl => "~/api/Categories/GetChildren/";
 
         /// <summary>
         /// Render any additional picker actions
@@ -175,7 +199,10 @@ namespace Rock.Web.UI.Controls
         {
             base.RenderCustomPickerActions( writer );
 
-            _cbShowInactiveSchedules.RenderControl( writer );
+            if ( AllowInactiveSelection )
+            {
+                _cbShowInactiveSchedules.RenderControl( writer );
+            }
         }
 
         /// <summary>
@@ -184,8 +211,9 @@ namespace Rock.Web.UI.Controls
         private void SetExtraRestParams( bool includeInactiveSchedules = false )
         {
             ItemRestUrlExtraParams = "?getCategorizedItems=true&showUnnamedEntityItems=false&showCategoriesThatHaveNoChildren=false";
-            ItemRestUrlExtraParams += "&entityTypeId=" + EntityTypeCache.Read( Rock.SystemGuid.EntityType.SCHEDULE.AsGuid() ).Id;
+            ItemRestUrlExtraParams += "&entityTypeId=" + EntityTypeCache.Get( Rock.SystemGuid.EntityType.SCHEDULE.AsGuid() ).Id;
             ItemRestUrlExtraParams += "&includeInactiveItems=" + includeInactiveSchedules.ToTrueFalse();
+            ItemRestUrlExtraParams += "&lazyLoad=false";
         }
 
         /// <summary>

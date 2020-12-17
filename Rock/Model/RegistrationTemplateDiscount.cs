@@ -16,7 +16,6 @@
 //
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity.ModelConfiguration;
@@ -25,7 +24,6 @@ using System.Runtime.Serialization;
 using Newtonsoft.Json;
 
 using Rock.Data;
-using Rock.Security;
 
 namespace Rock.Model
 {
@@ -131,6 +129,15 @@ namespace Rock.Model
         /// </value>
         [DataMember]
         public DateTime? EndDate { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the discount applies automatically.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if this discount applies automatically; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool AutoApplyDiscount { get; set; }
 
         #endregion
 

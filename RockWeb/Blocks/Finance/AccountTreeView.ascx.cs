@@ -66,7 +66,7 @@ namespace RockWeb.Blocks.Finance
 
             var detailPageReference = new Rock.Web.PageReference( GetAttributeValue( "DetailPage" ) );
 
-            // NOTE: if the detail page is the current page, use the current route instead of route specified in the DetailPage (to preserve old behavoir)
+            // NOTE: if the detail page is the current page, use the current route instead of route specified in the DetailPage (to preserve old behavior)
             if ( detailPageReference == null || detailPageReference.PageId == this.RockPage.PageId )
             {
                 hfPageRouteTemplate.Value = ( this.RockPage.RouteData.Route as System.Web.Routing.Route ).Url;
@@ -75,7 +75,7 @@ namespace RockWeb.Blocks.Finance
             else
             {
                 hfPageRouteTemplate.Value = string.Empty;
-                var pageCache = PageCache.Read( detailPageReference.PageId );
+                var pageCache = PageCache.Get( detailPageReference.PageId );
                 if ( pageCache != null )
                 {
                     var route = pageCache.PageRoutes.FirstOrDefault( a => a.Id == detailPageReference.RouteId );
@@ -98,13 +98,13 @@ namespace RockWeb.Blocks.Finance
 
             if ( pnlConfigPanel.Visible )
             {
-                var hideInactiveGroups = this.GetUserPreference( "HideInactiveGroups" ).AsBooleanOrNull();
-                if ( !hideInactiveGroups.HasValue )
+                var hideInactiveAccounts = this.GetUserPreference( "HideInactiveAccounts" ).AsBooleanOrNull();
+                if ( !hideInactiveAccounts.HasValue )
                 {
-                    hideInactiveGroups = this.GetAttributeValue( "InitialActiveSetting" ) == "1";
+                    hideInactiveAccounts = this.GetAttributeValue( "InitialActiveSetting" ) == "1";
                 }
 
-                tglHideInactiveAccounts.Checked = hideInactiveGroups ?? true;
+                tglHideInactiveAccounts.Checked = hideInactiveAccounts ?? true;
             }
             else
             {
@@ -300,13 +300,13 @@ namespace RockWeb.Blocks.Finance
         #region Methods
 
         /// <summary>
-        /// Handles the CheckedChanged event of the tglHideInactiveGroups control.
+        /// Handles the CheckedChanged event of the tglHideInactiveAccounts control.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void tglHideInactiveAccounts_CheckedChanged( object sender, EventArgs e )
         {
-            this.SetUserPreference( "HideInactiveGroups", tglHideInactiveAccounts.Checked.ToTrueFalse() );
+            this.SetUserPreference( "HideInactiveAccounts", tglHideInactiveAccounts.Checked.ToTrueFalse() );
 
             // reload the whole page
             NavigateToPage( this.RockPage.Guid, new Dictionary<string, string>() );

@@ -15,9 +15,9 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
 
@@ -34,7 +34,7 @@ namespace Rock.Model
     [NotAudited]
     [Table( "EntityType" )]
     [DataContract]
-    public partial class EntityType : Entity<EntityType>
+    public partial class EntityType : Entity<EntityType>, ICacheable
     {
 
         #region Entity Properties
@@ -128,6 +128,24 @@ namespace Rock.Model
         public bool IsIndexingEnabled { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether this instance has achievements enabled.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this instance is achievements enabled; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool IsAchievementsEnabled { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether attributes of this entity type support a Pre-HTML and Post-HTML option.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [attributes support pre post HTML]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool AttributesSupportPrePostHtml { get; set; }
+
+        /// <summary>
         /// Gets a value indicating whether this entity supports indexing.
         /// </summary>
         /// <value>
@@ -140,12 +158,24 @@ namespace Rock.Model
                 Type type = null;
                 if ( !string.IsNullOrWhiteSpace( this.AssemblyName ) )
                 {
-                    type = Type.GetType( this.AssemblyName );
+                    try
+                    {
+                        type = Type.GetType( this.AssemblyName, false );
+                    }
+                    catch
+                    {
+                        /* 2020-05-22 MDP
+                         * GetType (string typeName, bool throwOnError) can throw exceptions even if throwOnError is false!
+                         * see https://docs.microsoft.com/en-us/dotnet/api/system.type.gettype?view=netframework-4.5.2#System_Type_GetType_System_String_System_Boolean_
+
+                          so, if this happens, we'll ignore any error it returns in those cases too
+                         */
+                    }
                 }
 
-                if (type != null )
+                if ( type != null )
                 {
-                    return typeof( IRockIndexable ).IsAssignableFrom( type ); 
+                    return typeof( IRockIndexable ).IsAssignableFrom( type );
                 }
 
                 return false;
@@ -158,22 +188,12 @@ namespace Rock.Model
         /// <value>
         /// <c>true</c> if this instance is analytic supported; otherwise, <c>false</c>.
         /// </value>
-        [Obsolete( "Use EntityTypeCache.IsAnalyticsSupported(..) instead") ]
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use EntityTypeCache.IsAnalyticsSupported(..) instead", true )]
         public bool IsAnalyticSupported
         {
             get
             {
-                Type type = null;
-                if ( !string.IsNullOrWhiteSpace( this.AssemblyName ) )
-                {
-                    type = Type.GetType( this.AssemblyName );
-                }
-
-                if ( type != null )
-                {
-                    return typeof( IAnalytic ).IsAssignableFrom( type );
-                }
-
                 return false;
             }
         }
@@ -184,22 +204,12 @@ namespace Rock.Model
         /// <value>
         /// <c>true</c> if this instance is analytic historical supported; otherwise, <c>false</c>.
         /// </value>
-        [Obsolete( "Use EntityTypeCache.IsAnalyticHistoricalSupported(..) instead" )]
+        [RockObsolete( "1.8" )]
+        [Obsolete( "Use EntityTypeCache.IsAnalyticHistoricalSupported(..) instead", true )]
         public bool IsAnalyticHistoricalSupported
         {
             get
             {
-                Type type = null;
-                if ( !string.IsNullOrWhiteSpace( this.AssemblyName ) )
-                {
-                    type = Type.GetType( this.AssemblyName );
-                }
-
-                if ( type != null )
-                {
-                    return typeof( IAnalyticHistorical ).IsAssignableFrom( type );
-                }
-
                 return false;
             }
         }
@@ -230,7 +240,7 @@ namespace Rock.Model
 
                         if ( method != null )
                         {
-                            var indexModelType = (Type)method.Invoke( instance, null );
+                            var indexModelType = ( Type ) method.Invoke( instance, null );
                             return indexModelType;
                         }
                     }
@@ -263,6 +273,12 @@ namespace Rock.Model
         /// The link URL.
         /// </value>
         public string LinkUrlLavaTemplate { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether attributes of this entity type support displaying on bulk entry forms.
+        /// </summary>
+        [DataMember]
+        public bool AttributesSupportShowOnBulk { get; set; }
 
         #endregion
 
@@ -326,7 +342,7 @@ namespace Rock.Model
                 object entity = null;
                 try
                 {
-                    var type = EntityTypeCache.Read( this ).GetEntityType();
+                    var type = EntityTypeCache.Get( this ).GetEntityType();
                     entity = System.Activator.CreateInstance( type );
                 }
                 catch
@@ -337,13 +353,36 @@ namespace Rock.Model
 
                 if ( entity is Rock.Security.ISecured )
                 {
-                    Rock.Security.ISecured iSecured = (Rock.Security.ISecured)entity;
+                    Rock.Security.ISecured iSecured = ( Rock.Security.ISecured ) entity;
                     return iSecured.IsAuthorized( action, person );
                 }
             }
 
             return true;
         }
+        #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return EntityTypeCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            EntityTypeCache.UpdateCachedEntity( this.Id, entityState );
+        }
+
         #endregion
 
     }

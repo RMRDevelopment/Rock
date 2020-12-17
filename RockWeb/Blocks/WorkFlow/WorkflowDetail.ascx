@@ -37,7 +37,7 @@
                     </li>
                 </ul>
 
-                <asp:ValidationSummary ID="vsDetails" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                <asp:ValidationSummary ID="vsDetails" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                 <div class="tab-content">
 
@@ -167,7 +167,6 @@
                                 <Columns>
                                     <Rock:DateTimeField DataField="LogDateTime" HeaderText="When" FormatAsElapsedTime="true" />
                                     <Rock:RockBoundField DataField="LogText" HeaderText="Message" />
-                                    <Rock:RockBoundField DataField="CreatedByPersonAlias.Person.FullName" HeaderText="By" />
                                 </Columns>
                             </Rock:Grid>
                         </div>

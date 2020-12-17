@@ -7,14 +7,14 @@
         <asp:Panel ID="pnlDetails" CssClass="panel panel-block" runat="server" Visible="false">
 
             <div class="panel-heading">
-                <h1 class="panel-title"><i class="fa fa fa-pencil-square-o"></i>
+                <h1 class="panel-title"><i class="fa fa-file-signature"></i>
                     <asp:Literal ID="lTitle" runat="server" /></h1>
             </div>
             <div class="panel-body">
 
                 <div id="pnlEditDetails" runat="server">
 
-                    <asp:ValidationSummary ID="vsDetails" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                    <asp:ValidationSummary ID="vsDetails" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
                     <Rock:NotificationBox ID="nbError" runat="server" Text="Error Occurred trying to retrieve templates" NotificationBoxType="Danger" Visible="false"></Rock:NotificationBox>
 
                     <div class="row">
@@ -37,7 +37,7 @@
                             <Rock:RockDropDownList ID="ddlTemplate" runat="server" Label="Template" Help="A template that has been created with your digital signature provider" Required="true" />
                         </div>
                         <div class="col-md-6">
-                            <Rock:BinaryFileTypePicker ID="bftpFileType" runat="server" Label="File Type" Required="true" 
+                            <Rock:BinaryFileTypePicker ID="bftpFileType" runat="server" Label="File Type" Required="true"
                                 Help="The file type to use when saving signed documents of this type." />
                             <Rock:RockDropDownList ID="ddlSystemEmail" runat="server" Label="Invite Email" Required="true" Visible="false"
                                 Help="The System Email that should be sent when requesting a signature for documents of this type." />

@@ -16,6 +16,7 @@
 //
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Web.UI;
 
 using Rock.Data;
@@ -29,7 +30,7 @@ namespace Rock.Field.Types
     /// Field Type to select a single (or null) MergeTemplate
     /// Stored as MergeTemplate's Guid
     /// </summary>
-    public class MergeTemplateFieldType : FieldType
+    public class MergeTemplateFieldType : FieldType, IEntityFieldType
     {
         #region Formatting
 
@@ -47,10 +48,13 @@ namespace Rock.Field.Types
 
             if ( !string.IsNullOrWhiteSpace( value ) )
             {
-                var mergeTemplate = new MergeTemplateService( new RockContext() ).Get( value.AsGuid() );
-                if ( mergeTemplate != null )
+                using ( var rockContext = new RockContext() )
                 {
-                    formattedValue = mergeTemplate.Name;
+                    var mergeTemplate = new MergeTemplateService( rockContext ).GetNoTracking( value.AsGuid() );
+                    if ( mergeTemplate != null )
+                    {
+                        formattedValue = mergeTemplate.Name;
+                    }
                 }
             }
 
@@ -84,22 +88,23 @@ namespace Rock.Field.Types
         /// <returns></returns>
         public override string GetEditValue( System.Web.UI.Control control, Dictionary<string, ConfigurationValue> configurationValues )
         {
-            MergeTemplatePicker mergeTemplatePicker = control as MergeTemplatePicker;
-
-            if ( mergeTemplatePicker != null )
+            var picker = control as MergeTemplatePicker;
+            if ( picker != null )
             {
-                int? mergeTemplateId = mergeTemplatePicker.SelectedValue.AsIntegerOrNull();
-                if ( mergeTemplateId.HasValue )
+                int? itemId = picker.SelectedValue.AsIntegerOrNull();
+                Guid? itemGuid = null;
+                if ( itemId.HasValue )
                 {
-                    var mergeTemplate = new MergeTemplateService( new RockContext() ).Get( mergeTemplateId.Value );
-                    if ( mergeTemplate != null )
+                    using ( var rockContext = new RockContext() )
                     {
-                        return mergeTemplate.Guid.ToString();
+                        itemGuid = new MergeTemplateService( rockContext ).Queryable().Where( a => a.Id == itemId.Value ).Select( a => ( Guid? ) a.Guid ).FirstOrDefault();
                     }
                 }
+
+                return itemGuid?.ToString() ?? string.Empty;
             }
 
-            return string.Empty;
+            return null;
         }
 
         /// <summary>
@@ -111,15 +116,23 @@ namespace Rock.Field.Types
         /// <param name="value">The value.</param>
         public override void SetEditValue( System.Web.UI.Control control, Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
-            MergeTemplatePicker mergeTemplatePicker = control as MergeTemplatePicker;
-
-            if ( mergeTemplatePicker != null )
+            var picker = control as MergeTemplatePicker;
+            if ( picker != null )
             {
-                Guid guid = value.AsGuid();
-
-                // get the item (or null) and set it
-                var mergeTemplate = new MergeTemplateService( new RockContext() ).Get( guid );
-                mergeTemplatePicker.SetValue( mergeTemplate );
+                MergeTemplate item = null;
+                Guid? itemGuid = value.AsGuidOrNull();
+                if ( itemGuid.HasValue )
+                {
+                    using ( var rockContext = new RockContext() )
+                    {
+                        item = new MergeTemplateService( rockContext ).Get( itemGuid.Value );
+                        picker.SetValue( item );
+                    }
+                }
+                else
+                {
+                    picker.SetValue( null );
+                }
             }
         }
 
@@ -149,6 +162,62 @@ namespace Rock.Field.Types
             return false;
         }
 
+        #endregion
+
+        #region IEntityFieldType
+        /// <summary>
+        /// Gets the edit value as the IEntity.Id
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <returns></returns>
+        public int? GetEditValueAsEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues )
+        {
+            var guid = GetEditValue( control, configurationValues ).AsGuid();
+            var item = new MergeTemplateService( new RockContext() ).Get( guid );
+            return item != null ? item.Id : ( int? ) null;
+        }
+
+        /// <summary>
+        /// Sets the edit value from IEntity.Id value
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <param name="id">The identifier.</param>
+        public void SetEditValueFromEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues, int? id )
+        {
+            var item = new MergeTemplateService( new RockContext() ).Get( id ?? 0 );
+            var guidValue = item != null ? item.Guid.ToString() : string.Empty;
+            SetEditValue( control, configurationValues, guidValue );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value )
+        {
+            return GetEntity( value, null );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value, RockContext rockContext )
+        {
+            var guid = value.AsGuidOrNull();
+            if ( guid.HasValue )
+            {
+                rockContext = rockContext ?? new RockContext();
+                return new MergeTemplateService( rockContext ).Get( guid.Value );
+            }
+
+            return null;
+        }
         #endregion
     }
 }

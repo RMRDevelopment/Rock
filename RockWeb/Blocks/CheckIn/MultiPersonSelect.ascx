@@ -2,7 +2,7 @@
 
 <script type="text/javascript">
     Sys.Application.add_load(function () {
-        $('a.btn-checkin-select').click(function () {
+        $('a.btn-checkin-select').on('click', function () {
             $(this).siblings().attr('onclick', 'return false;');
         });
     });
@@ -27,25 +27,26 @@
 
                             <div class="control-group checkin-body-container">
                                 <label class="control-label"><asp:Literal ID="lCaption" runat="server" /></label>
+                                <asp:LinkButton CssClass="btn btn-link pull-right" ID="lbEditFamily" runat="server" OnClick="lbEditFamily_Click" Text="<i class='fa fa-pencil-alt'></i> Edit Family" />
                                 <div class="controls checkin-person-list">
                                     <asp:Repeater ID="rSelection" runat="server">
                                         <ItemTemplate>
-                                            <div class="row">
-                                                <asp:Panel ID="pnlPersonButton" runat="server" CssClass="col-xs-12">
-                                                    <a data-person-id='<%# Eval("Person.Id") %>' class="btn btn-primary btn-checkin-select btn-block js-person-select" style="text-align: left">
+                                            <div class="row row-no-gutters row-eq-height row-checkin-item">
+                                                <asp:Panel ID="pnlPersonButton" runat="server" CssClass="col-xs-12 checkin-person">
+                                                    <a data-person-id='<%# Eval("Person.Id") %>' class="btn btn-primary btn-checkin-select btn-block js-person-select <%# GetSelectedClass( (bool)Eval("PreSelected") ) %>">
                                                         <div class="row">
-                                                            <div class="col-md-1 col-sm-2 col-xs-3">
+                                                            <div class="checkbox-container">
                                                                 <i class='fa fa-3x <%# GetCheckboxClass( (bool)Eval("PreSelected") ) %>'></i>
                                                             </div>
-                                                            <asp:Panel ID="pnlPhoto" runat="server" CssClass="col-md-1 col-sm-2 col-xs-3">
+                                                            <asp:Panel ID="pnlPhoto" runat="server" CssClass="photo-container">
                                                                 <div class="photo-round photo-round-md pull-left" style="display: block; background-image: url('<%# GetPersonImageTag( Eval("Person") ) %>');"></div>
                                                             </asp:Panel>
-                                                            <asp:Panel ID="pnlPerson" runat="server"><asp:Literal ID="lPersonButton" runat="server"></asp:Literal></asp:Panel>
+                                                            <asp:Panel ID="pnlPerson" CssClass="name-container" runat="server"><asp:Literal ID="lPersonButton" runat="server"></asp:Literal></asp:Panel>
                                                         </div>
                                                     </a>
                                                 </asp:Panel>
-                                                <asp:Panel ID="pnlChangeButton" runat="server" CssClass="col-xs-9 col-sm-3 col-md-2" Visible="false">
-                                                    <asp:LinkButton ID="lbChange" runat="server" CssClass="btn btn-default btn-checkin-select btn-block" CommandArgument='<%# Eval("Person.Id") %>' CommandName="Change">Change</asp:LinkButton>
+                                                <asp:Panel ID="pnlChangeButton" runat="server" CssClass="col-xs-12 col-sm-3 col-md-2 checkin-change" Visible="false">
+                                                    <asp:LinkButton ID="lbChange" runat="server" CssClass="btn btn-default btn-checkin-select btn-block btn-checkin-change" CommandArgument='<%# Eval("Person.Id") %>' CommandName="Change">Change</asp:LinkButton>
                                                 </asp:Panel>
                                             </div>
                                         </ItemTemplate>
@@ -62,9 +63,10 @@
 
                 <div class="checkin-footer">
                     <div class="checkin-actions">
-                        <asp:LinkButton CssClass="btn btn-default" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
-                        <asp:LinkButton CssClass="btn btn-default" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
-                        <asp:LinkButton CssClass="btn btn-primary pull-right" ID="lbSelect" runat="server" OnClientClick="return GetPersonSelection();" OnClick="lbSelect_Click" Text="Next" />
+                        <asp:LinkButton CssClass="btn btn-primary " ID="lbSelect" runat="server" OnClientClick="return GetPersonSelection();" OnClick="lbSelect_Click" Text="Next" data-loading-text="Loading..." />
+                        <asp:LinkButton CssClass="btn btn-default btn-back" ID="lbBack" runat="server" OnClick="lbBack_Click" Text="Back" />
+                        <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbCancel" runat="server" OnClick="lbCancel_Click" Text="Cancel" />
+
                     </div>
                 </div>
             </asp:Panel>
@@ -90,13 +92,13 @@
                                 <div class="controls checkin-option-list">
                                     <asp:Repeater ID="rOptions" runat="server">
                                         <ItemTemplate>
-                                            <a data-key='<%# Eval("Key") %>' data-schedule-id='<%# Eval("Schedule.Schedule.Id") %>' 
+                                            <a data-key='<%# Eval("Key") %>' data-schedule-id='<%# Eval("Schedule.Schedule.Id") %>'
                                                 class='btn btn-primary btn-checkin-select btn-block js-option-select <%# (bool)Eval("Disabled") ? "btn-dimmed" : "" %>' style="text-align: left">
                                                 <div class="row">
-                                                    <div class="col-md-1 col-sm-2 col-xs-3">
+                                                    <div class="checkbox-container">
                                                         <i class='fa fa-2x <%# GetCheckboxClass( (bool)Eval("Selected") ) %>'></i>
                                                     </div>
-                                                    <asp:Panel ID="pnlOption" runat="server"><%# GetOptionText( Container.DataItem ) %></asp:Panel>
+                                                    <asp:Panel ID="pnlOption" CssClass="col" runat="server"><%# GetOptionText( Container.DataItem ) %></asp:Panel>
                                                 </div>
                                             </a>
                                         </ItemTemplate>
@@ -113,8 +115,10 @@
 
                 <div class="checkin-footer">
                     <div class="checkin-actions">
-                        <asp:LinkButton CssClass="btn btn-default" ID="lbOptionCacncel" runat="server" OnClick="lbOptionCancel_Click" Text="Cancel" />
+                        <asp:LinkButton CssClass="btn btn-default btn-cancel" ID="lbOptionCacncel" runat="server" OnClick="lbOptionCancel_Click" Text="Cancel" />
                         <asp:LinkButton CssClass="btn btn-primary pull-right" ID="lbOptionSelect" runat="server" OnClientClick="return GetOptionSelection();" OnClick="lbOptionSelect_Click" Text="Ok" />
+
+
                     </div>
                 </div>
 

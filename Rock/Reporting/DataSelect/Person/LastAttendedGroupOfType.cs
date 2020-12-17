@@ -135,7 +135,7 @@ namespace Rock.Reporting.DataSelect.Person
             if ( groupTypeGuid != Guid.Empty )
             {
                 AttendanceService attendanceService = new AttendanceService( context );
-                var groupAttendanceQry = attendanceService.Queryable().Where( a => a.Group.GroupType.Guid == groupTypeGuid);
+                var groupAttendanceQry = attendanceService.Queryable().Where( a => a.Occurrence.Group.GroupType.Guid == groupTypeGuid);
 
                 var qry = new PersonService( context ).Queryable()
                     .Select( p => groupAttendanceQry.Where( xx => xx.PersonAlias.PersonId == p.Id && xx.DidAttend == true ).Max( xx => xx.StartDateTime ));
@@ -148,10 +148,6 @@ namespace Rock.Reporting.DataSelect.Person
             return null;
         }
 
-        /// <summary>
-        /// The GroupTypePicker
-        /// </summary>
-        private GroupTypePicker groupTypePicker = null;
 
         /// <summary>
         /// Creates the child controls.
@@ -160,18 +156,11 @@ namespace Rock.Reporting.DataSelect.Person
         /// <returns></returns>
         public override System.Web.UI.Control[] CreateChildControls( System.Web.UI.Control parentControl )
         {
-            int? selectedGroupTypeId = null;
-            if (groupTypePicker != null)
-            {
-                selectedGroupTypeId = groupTypePicker.SelectedGroupTypeId;
-            }
-            
-            groupTypePicker = new GroupTypePicker();
+            var groupTypePicker = new GroupTypePicker();
             groupTypePicker.ID = parentControl.ID + "_0";
             groupTypePicker.Label = "Group Type";
             groupTypePicker.GroupTypes = new GroupTypeService( new RockContext() ).Queryable().OrderBy( a => a.Order ).ThenBy( a => a.Name ).ToList();
             groupTypePicker.AutoPostBack = true;
-            groupTypePicker.SelectedGroupTypeId = selectedGroupTypeId;
             parentControl.Controls.Add( groupTypePicker );
 
             return new Control[1] { groupTypePicker };
@@ -202,7 +191,7 @@ namespace Rock.Reporting.DataSelect.Person
 
             if (groupTypeId > 0)
             {
-                var groupType = GroupTypeCache.Read(groupTypeId);
+                var groupType = GroupTypeCache.Get(groupTypeId);
                 value1 = (groupType == null) ? string.Empty : groupType.Guid.ToString();
             }
 

@@ -16,6 +16,7 @@
                     <Rock:HighlightLabel ID="hlblSiteName" runat="server" />
                 </div>
             </div>
+            <Rock:PanelDrawer ID="pdAuditDetails" runat="server"></Rock:PanelDrawer>
             <asp:Panel ID="pnlBody" runat="server" CssClass="panel-body">
 
                 <asp:HiddenField ID="hfPageId" runat="server" />
@@ -37,12 +38,12 @@
 
                         <div class="tabContent">
 
-                            <asp:ValidationSummary ID="valSummaryTop" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                            <asp:ValidationSummary ID="valSummaryTop" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                             <asp:Panel ID="pnlBasicProperty" runat="server" Visible="true">
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <Rock:PagePicker ID="ppParentPage" runat="server" Label="Parent Page" Required="false" />
+                                        <Rock:PagePicker ID="ppParentPage" runat="server" Label="Parent Page" Required="false" ShowSelectCurrentPage="false" />
                                         <Rock:DataTextBox ID="tbPageName" runat="server" SourceTypeName="Rock.Model.Page, Rock" PropertyName="InternalName" Required="true"
                                             Help="The internal page name to use when administering this page" />
                                         <Rock:DataTextBox ID="tbPageTitle" runat="server" SourceTypeName="Rock.Model.Page, Rock" PropertyName="PageTitle"
@@ -97,11 +98,11 @@
                                         <Rock:RockCheckBox ID="cbEnableViewState" runat="server" Text="Enable ViewState" />
                                         <Rock:RockCheckBox ID="cbIncludeAdminFooter" runat="server" Text="Allow Configuration" />
                                         <Rock:RockCheckBox ID="cbAllowIndexing" runat="server" Text="Allow Indexing" />
-                                        <Rock:DataTextBox ID="tbCacheDuration" runat="server" Label="Cache Duration" SourceTypeName="Rock.Model.Page, Rock" PropertyName="OutputCacheDuration" />
+                                        <Rock:DataTextBox ID="tbCacheDuration" runat="server" Label="Cache Duration" Help="The length of time, in seconds, to cache the results of the page. This is cached on the individuals browser using the Expires header in the HTTP response." SourceTypeName="Rock.Model.Page, Rock" PropertyName="OutputCacheDuration" />
                                     </div>
                                     <div class="col-md-6">
                                         <Rock:DataTextBox ID="tbBodyCssClass" runat="server" SourceTypeName="Rock.Model.Page, Rock" PropertyName="BodyCssClass" Label="Body CSS Class"
-                                            Help="The CSS class to add to the body tag (if theme support it)." />
+                                            Help="The CSS class to add to the body tag (if theme and layout supports it)." />
                                         <fieldset>
                                             <Rock:NotificationBox ID="nbPageRouteWarning" runat="server" />
                                             <Rock:RockTextBox ID="tbPageRoute" runat="server" TextMode="MultiLine" Rows="3" Label="Page Routes" Help="A unique, friendly route name for the page (e.g. 'Login' or 'Community/GetInvolved')" />
@@ -139,7 +140,7 @@
                                                     <p><i class="fa fa-bolt"></i><strong>Sweet!</strong> Your package was imported successfully.</p>
                                                     <asp:Repeater ID="rptImportWarnings" runat="server" Visible="False">
                                                         <HeaderTemplate>
-                                                            <p><i class="fa fa-exclamation-triangle"></i>Just a quick head's up...</p>
+                                                            <p><i class="fa fa-exclamation-triangle"></i>Just a quick heads up...</p>
                                                             <ul>
                                                         </HeaderTemplate>
                                                         <ItemTemplate>
@@ -215,6 +216,15 @@
                             <asp:Literal ID="lblMainDetailsCol1" runat="server" />
                         </div>
                         <div class="col-md-6">
+                            <dl class="margin-b-md">
+                                <dt>Median Time To Serve</dt>
+                                <dd>
+                                    <asp:Literal runat="server" ID="lMedianTime" />
+                                    <asp:LinkButton runat="server" ID="lbMedianTimeDetails" CssClass="small" OnClick="lbMedianTimeDetails_Click">
+                                        Details
+                                    </asp:LinkButton>
+                                </dd>
+                            </dl>
                             <asp:Literal ID="lblMainDetailsCol2" runat="server" />
                         </div>
                     </div>
@@ -224,16 +234,24 @@
                         <Rock:ModalAlert ID="mdDeleteWarning" runat="server" />
                         <asp:LinkButton ID="btnDelete" runat="server" Text="Delete" CssClass="btn btn-link" OnClick="btnDelete_Click" />
                         <div class="pull-right">
-                            <a title="Child Pages" class="btn btn-default btn-sm page-child-pages" runat="server" id="aChildPages"><i class="fa fa-sitemap"></i></a>
-                            <asp:LinkButton ID="btnCopy" runat="server" Tooltip="Copy Page" CssClass="btn btn-default btn-sm" OnClick="btnCopy_Click"><i class="fa fa-clone"></i></asp:LinkButton>
-                            <Rock:SecurityButton ID="btnSecurity" runat="server" class="btn btn-sm btn-security" />
+                            <a title="Child Pages" class="btn btn-default btn-sm btn-square page-child-pages" runat="server" id="aChildPages"><i class="fa fa-sitemap"></i></a>
+                            <asp:LinkButton ID="btnCopy" runat="server" Tooltip="Copy Page" CssClass="btn btn-default btn-sm btn-square" OnClick="btnCopy_Click"><i class="fa fa-clone"></i></asp:LinkButton>
+                            <Rock:SecurityButton ID="btnSecurity" runat="server" class="btn btn-sm btn-square btn-security" />
                         </div>
                     </asp:Panel>
                 </fieldset>
 
                 <Rock:ModalDialog ID="mdCopyPage" runat="server" ValidationGroup="vgCopyPage" Title="Copy Page" OnSaveClick="mdCopyPage_SaveClick" SaveButtonText="Copy" Visible="false">
                     <Content>
+                        <Rock:NotificationBox ID="mdCopyWarning" runat="server" NotificationBoxType="Warning" Text="Verify all the block setting's values because they are not duplicates but point to the exact same item. You may want to create copies of certain things like images, so block copies are not referencing the same items."  />
                         <Rock:RockCheckBox ID="cbCopyPageIncludeChildPages" runat="server" Text="Include Child Pages" Checked="true" />
+                    </Content>
+                </Rock:ModalDialog>
+
+                <Rock:ModalDialog ID="mdDeleteModal" runat="server" ValidationGroup="vgDeleteModal" Title="Are you sure?" OnSaveClick="mdDeleteModal_DeleteClick" SaveButtonText="Delete" Visible="false">
+                    <Content>
+                        <p>Are you sure you want to delete this page?</p>
+                        <Rock:RockCheckBox ID="cbDeleteInteractions" runat="server" Text="Delete any interactions for this page" Checked="true" />
                     </Content>
                 </Rock:ModalDialog>
                 

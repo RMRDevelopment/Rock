@@ -20,7 +20,7 @@ using System.Linq;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
-using Rock;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
@@ -130,7 +130,7 @@ namespace Rock.Web.UI.Controls
 
             string script = @"
 // action animation
-$('.workflow-action > header').click(function () {
+$('.workflow-action > header').on('click', function () {
     $(this).siblings('.panel-body').slideToggle();
 
     $expanded = $(this).children('input.filter-expanded');
@@ -140,13 +140,13 @@ $('.workflow-action > header').click(function () {
     $('i.workflow-action-state', this).toggleClass('fa-chevron-up');
 });
 
-// fix so that the Remove button will fire its event, but not the parent event 
-$('.workflow-action a.js-action-delete').click(function (event) {
+// fix so that the Remove button will fire its event, but not the parent event
+$('.workflow-action a.js-action-delete').on('click', function (event) {
     event.stopImmediatePropagation();
     return Rock.dialogs.confirmDelete(event, 'Action Type', 'This will also delete all the actions of this type from any existing persisted workflows!');
 });
 
-$('.workflow-action a.js-workflow-action-criteria').click(function (event) {
+$('.workflow-action a.js-workflow-action-criteria').on('click', function (event) {
     event.stopImmediatePropagation();
     $(this).closest('.workflow-action').find('div.conditional-run-criteria').slideToggle();
 });
@@ -168,12 +168,12 @@ $('.js-action-criteria-comparison').change( function (event) {
     }
 });
 
-// fix so that the Reorder button will fire its event, but not the parent event 
-$('.workflow-action a.workflow-action-reorder').click(function (event) {
+// fix so that the Reorder button will fire its event, but not the parent event
+$('.workflow-action a.workflow-action-reorder').on('click', function (event) {
     event.stopImmediatePropagation();
 });
 
-$('a.workflow-formfield-reorder').click(function (event) {
+$('a.workflow-formfield-reorder').on('click', function (event) {
     event.stopImmediatePropagation();
 });
 
@@ -235,7 +235,7 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
             EnsureChildControls();
             WorkflowActionType result = new WorkflowActionType();
             result.Guid = new Guid( _hfActionTypeGuid.Value );
-            
+
             result.CriteriaAttributeGuid = _ddlCriteriaAttribute.SelectedValueAsGuid();
             result.CriteriaComparisonType = _ddlCriteriaComparisonType.SelectedValueAsEnum<ComparisonType>();
             result.CriteriaValue = _tbddlCriteriaValue.SelectedValue;
@@ -245,7 +245,7 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
             result.IsActionCompletedOnSuccess = _cbIsActionCompletedOnSuccess.Checked;
             result.IsActivityCompletedOnSuccess = _cbIsActivityCompletedOnSuccess.Checked;
 
-            var entityType = EntityTypeCache.Read( result.EntityTypeId );
+            var entityType = EntityTypeCache.Get( result.EntityTypeId );
             if ( entityType != null && entityType.Name == typeof( Rock.Workflow.Action.UserEntryForm ).FullName )
             {
                 result.WorkflowForm = _formEditor.GetForm();
@@ -253,10 +253,10 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
                 {
                     result.WorkflowForm = new WorkflowActionForm();
                     result.WorkflowForm.Actions = "Submit^^^Your information has been submitted successfully.";
-                    var systemEmail = new SystemEmailService(new RockContext()).Get(SystemGuid.SystemEmail.WORKFLOW_FORM_NOTIFICATION.AsGuid());
+                    var systemEmail = new SystemCommunicationService(new RockContext()).Get(SystemGuid.SystemCommunication.WORKFLOW_FORM_NOTIFICATION.AsGuid());
                     if ( systemEmail != null )
                     {
-                        result.WorkflowForm.NotificationSystemEmailId = systemEmail.Id;
+                        result.WorkflowForm.NotificationSystemCommunicationId = systemEmail.Id;
                     }
                 }
             }
@@ -294,7 +294,7 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
             foreach ( var attribute in workflowTypeAttributes )
             {
                 var li = new ListItem( attribute.Value.Name, attribute.Key.ToString() );
-                li.Selected = value.CriteriaAttributeGuid.HasValue && value.CriteriaAttributeGuid.Value.ToString() == li.Value; 
+                li.Selected = value.CriteriaAttributeGuid.HasValue && value.CriteriaAttributeGuid.Value.ToString() == li.Value;
                 _ddlCriteriaAttribute.Items.Add( li );
 
                 _tbddlCriteriaValue.DropDownList.Items.Add( new ListItem( attribute.Value.Name, attribute.Key.ToString() ) );
@@ -304,20 +304,20 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
             _tbddlCriteriaValue.SelectedValue = value.CriteriaValue;
 
             _tbActionTypeName.Text = value.Name;
-            _wfatpEntityType.SetValue( EntityTypeCache.Read( value.EntityTypeId ) );
+            _wfatpEntityType.SetValue( EntityTypeCache.Get( value.EntityTypeId ) );
             _cbIsActivityCompletedOnSuccess.Checked = value.IsActivityCompletedOnSuccess;
 
-            var entityType = EntityTypeCache.Read( value.EntityTypeId );
+            var entityType = EntityTypeCache.Get( value.EntityTypeId );
             if ( entityType != null && entityType.Name == typeof( Rock.Workflow.Action.UserEntryForm ).FullName )
             {
                 if (value.WorkflowForm == null)
                 {
                     value.WorkflowForm = new WorkflowActionForm();
                     value.WorkflowForm.Actions = "Submit^^^Your information has been submitted successfully.";
-                    var systemEmail = new SystemEmailService( new RockContext() ).Get( SystemGuid.SystemEmail.WORKFLOW_FORM_NOTIFICATION.AsGuid() );
+                    var systemEmail = new SystemCommunicationService( new RockContext() ).Get( SystemGuid.SystemCommunication.WORKFLOW_FORM_NOTIFICATION.AsGuid() );
                     if ( systemEmail != null )
                     {
-                        value.WorkflowForm.NotificationSystemEmailId = systemEmail.Id;
+                        value.WorkflowForm.NotificationSystemCommunicationId = systemEmail.Id;
                     }
                 }
                 _formEditor.SetForm( value.WorkflowForm, workflowTypeAttributes );
@@ -361,7 +361,7 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
             Controls.Add( _lbDeleteActionType );
             _lbDeleteActionType.CausesValidation = false;
             _lbDeleteActionType.ID = this.ID + "_lbDeleteActionType";
-            _lbDeleteActionType.CssClass = "btn btn-xs btn-danger js-action-delete";
+            _lbDeleteActionType.CssClass = "btn btn-xs btn-square btn-danger js-action-delete";
             _lbDeleteActionType.Click += lbDeleteActionType_Click;
 
             var iDelete = new HtmlGenericControl( "i" );
@@ -387,7 +387,7 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
             _tbddlCriteriaValue = new RockTextOrDropDownList();
             Controls.Add( _tbddlCriteriaValue );
             _tbddlCriteriaValue.ID = this.ID + "_tbddlCriteriaValue";
-            _tbddlCriteriaValue.EnableViewState = false; 
+            _tbddlCriteriaValue.EnableViewState = false;
             _tbddlCriteriaValue.TextBox.Label = "Text Value";
             _tbddlCriteriaValue.DropDownList.Label = "Attribute Value";
 
@@ -508,7 +508,7 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
             writer.AddAttribute( HtmlTextWriterAttribute.Class, "col-lg-6" );
             writer.RenderBeginTag( HtmlTextWriterTag.Div );
 
-            writer.AddAttribute( HtmlTextWriterAttribute.Class, "row" );
+            writer.AddAttribute( HtmlTextWriterAttribute.Class, "form-row" );
             writer.RenderBeginTag( HtmlTextWriterTag.Div );
 
             writer.AddAttribute( HtmlTextWriterAttribute.Class, "col-xs-7" );
@@ -535,7 +535,7 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
             writer.RenderEndTag();
 
             // action edit fields
-            writer.AddAttribute( HtmlTextWriterAttribute.Class, "row" );
+            writer.AddAttribute( HtmlTextWriterAttribute.Class, "form-row" );
             writer.RenderBeginTag( HtmlTextWriterTag.Div );
 
             writer.AddAttribute( HtmlTextWriterAttribute.Class, "col-md-6" );
@@ -571,7 +571,7 @@ $('.workflow-action > .panel-body').on('validation-error', function() {
             int? entityTypeId = _wfatpEntityType.SelectedValueAsInt();
             if ( entityTypeId.HasValue )
             {
-                entityType = EntityTypeCache.Read( entityTypeId.Value );
+                entityType = EntityTypeCache.Get( entityTypeId.Value );
                 if ( entityType != null )
                 {
                     var component = ActionContainer.GetComponent( entityType.Name );

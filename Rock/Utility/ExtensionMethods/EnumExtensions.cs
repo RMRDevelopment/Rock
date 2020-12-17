@@ -15,7 +15,9 @@
 // </copyright>
 //
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 
 namespace Rock
 {
@@ -45,12 +47,15 @@ namespace Rock
         }
 
         /// <summary>
-        /// Gets the enum description.
+        /// Gets the <see cref="System.Attribute"/>s of the specified type.
         /// </summary>
+        /// <typeparam name="TAttribute">The type of the <see cref="System.Attribute"/>.</typeparam>
         /// <param name="value">The value.</param>
-        /// <returns></returns>
-        public static string GetDescription( this Enum value )
+        /// <returns>The <see cref="System.Attribute"/>s of the specified type, or an empty array if <paramref name="value"/> is a valid Enum but no matching <see cref="System.Attribute"/>s are found, or <see langword="null"/> if <paramref name="value"/> is not a valid Enum.</returns>
+        public static TAttribute[] GetAttributes<TAttribute>( this Enum value ) where TAttribute : class
         {
+            TAttribute[] attrs = null;
+
             var type = value.GetType();
             string name = Enum.GetName( type, value );
             if ( name != null )
@@ -58,14 +63,39 @@ namespace Rock
                 System.Reflection.FieldInfo field = type.GetField( name );
                 if ( field != null )
                 {
-                    var attr = System.Attribute.GetCustomAttribute( field,
-                        typeof( DescriptionAttribute ) ) as DescriptionAttribute;
-                    if ( attr != null )
-                    {
-                        return attr.Description;
-                    }
+                    attrs = System.Attribute.GetCustomAttributes( field,
+                        typeof( TAttribute ) ) as TAttribute[];
                 }
             }
+
+            return attrs;
+        }
+
+        /// <summary>
+        /// Gets the first <see cref="System.Attribute"/> of the specified type.
+        /// </summary>
+        /// <typeparam name="TAttribute">The type of the <see cref="System.Attribute"/>.</typeparam>
+        /// <param name="value">The value.</param>
+        /// <returns>The first <see cref="System.Attribute"/> of the specified type, or <see langword="null"/> if <paramref name="value"/> is not a valid Enum or no matching <see cref="System.Attribute"/>s are found.</returns>
+        public static TAttribute GetAttribute<TAttribute>( this Enum value ) where TAttribute : class
+        {
+            return GetAttributes<TAttribute>( value )?.FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Gets the enum description.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns></returns>
+        public static string GetDescription( this Enum value )
+        {
+            var attr = GetAttribute<DescriptionAttribute>( value );
+
+            if ( attr != null )
+            {
+                return attr.Description;
+            }
+
             return null;
         }
 
@@ -80,7 +110,7 @@ namespace Rock
         }
 
         /// <summary>
-        /// Converts a string value to an enum value.
+        /// Converts a string value to an enum value, first using a case-sensitive match, but also trying a case-insensitive match
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="enumValue">The enum value.</param>
@@ -100,7 +130,7 @@ namespace Rock
         }
 
         /// <summary>
-        /// Converts to enum or null.
+        /// Converts a string to an enum value, first using a case-sensitive match, but also trying a case-insensitive match
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="enumValue">The enum value.</param>
@@ -111,6 +141,12 @@ namespace Rock
             T result;
             if ( Enum.TryParse<T>( ( enumValue ?? "" ).Replace( " ", "" ), out result ) && Enum.IsDefined( typeof( T ), result ) )
             {
+                // a regular case-sensitive parse found it, so we got it
+                return result;
+            }
+            else if ( Enum.TryParse<T>( ( enumValue ?? "" ).Replace( " ", "" ), true, out result ) && Enum.IsDefined( typeof( T ), result ) )
+            {
+                // case-sensitive parse didn't work, but parsing again with ignoreCase = true got it for us
                 return result;
             }
             else
@@ -122,6 +158,25 @@ namespace Rock
                 else
                 {
                     return null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the individual enum values of a Flags enumeration value.
+        /// </summary>
+        /// <typeparam name="T">The Enum type of enumValue.</typeparam>
+        /// <param name="enumValue">The enum value whose flags should be retrieved.</param>
+        /// <returns>An enumerable collection of the individual flag values.</returns>
+        public static IEnumerable<T> GetFlags<T>( this Enum enumValue )
+        {
+            foreach ( var value in Enum.GetValues( enumValue.GetType() ).Cast<T>() )
+            {
+                Enum flag = ( Enum ) Enum.Parse( typeof( T ), value.ToString() );
+
+                if ( enumValue.HasFlag( flag ) )
+                {
+                    yield return value;
                 }
             }
         }

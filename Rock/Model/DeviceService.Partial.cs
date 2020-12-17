@@ -15,20 +15,16 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.Data.Entity.Spatial;
 using System.Linq;
 using System.Net.Sockets;
-using System.Text.RegularExpressions;
-
-using Rock.Data;
 
 namespace Rock.Model
 {
     /// <summary>
     /// Data access/service class for the <see cref="Rock.Model.Device"/> entity objects
     /// </summary>
-    public partial class DeviceService 
+    public partial class DeviceService
     {
         /// <summary>
         /// Returns a queryable collection of <see cref="Rock.Model.Device">Devices</see> by the Guid of their Device Type <see cref="Rock.Model.DefinedValue"/>.
@@ -41,7 +37,7 @@ namespace Rock.Model
         }
 
         /// <summary>
-        /// Finds the matching device for the given lat/long coordinates. The given coordinates
+        /// Finds the first matching device for the given lat/long coordinates. The given coordinates
         /// must intersect one of the stored GeoFence values to be a match.  Use the deviceTypeValueId
         /// to constrain matching to only certain device types.
         /// </summary>
@@ -51,28 +47,61 @@ namespace Rock.Model
         /// <returns>a single matching Device kiosk or null if nothing was matched</returns>
         public Device GetByGeocode( double latitude, double longitude, int deviceTypeValueId )
         {
-            Device device = null;
-            DbGeography aLocation = DbGeography.FromText( string.Format("POINT({0} {1})", longitude, latitude) );
+            /* 2020-06-08 MDP
+              If more than one device is found, we'll have to pick one somehow
+              since there doesn't seem to be a way to determine which geofence to choose
+              if the geofences are overlapping at the specific latitude/longitude.
 
-            device = Queryable()
-                .Where( d => 
-                    d.DeviceTypeValueId == deviceTypeValueId &&
-                    d.Location != null &&
-                    aLocation.Intersects( d.Location.GeoFence ) )
-                .FirstOrDefault();
+              So if there this problem due to overlapping geofences, that would be a configuration issue.
 
-            return device;
+              We'll just deal with it by choosing the one with the lowest Id.
+           */
+
+            var deviceQueryable = GetDevicesByGeocode( latitude, longitude, deviceTypeValueId );
+
+            return deviceQueryable.OrderBy( a => a.Id ).FirstOrDefault();
         }
 
         /// <summary>
-        /// Gets the device by IP address.
+        /// Returns a queryable of matching devices for the given lat/long coordinate
+        /// The given coordinates must intersect one of the stored GeoFence values to be a match.
+        /// Use the deviceTypeValueId to constrain matching to only certain device types.
+        /// NOTE: If more than one device is found, the caller will have to pick which one they want
+        /// since there doesn't seem to be a way to determine which geofence to choose
+        /// if the geofences are overlapping at the specific latitude/longitude
+        /// </summary>
+        /// <param name="latitude">Latitude of the mobile phone/kiosk.</param>
+        /// <param name="longitude">Longitude of the mobile phone/kiosk.</param>
+        /// <param name="deviceTypeValueId">Longitude of the mobile phone/kiosk.</param>
+        /// <returns>a single matching Device kiosk or null if nothing was matched</returns>
+        public IQueryable<Device> GetDevicesByGeocode( double latitude, double longitude, int deviceTypeValueId )
+        {
+            DbGeography geoLocation = Location.GetGeoPoint( latitude, longitude );
+
+            var deviceQueryable = Queryable()
+                .Where( d =>
+                    d.DeviceTypeValueId == deviceTypeValueId &&
+                    d.Location != null &&
+                    geoLocation.Intersects( d.Location.GeoFence )
+                    );
+
+            return deviceQueryable;
+        }
+
+        /// <summary>
+        /// Gets the device by IP address. If skipReverseLookup is disabled and no kiosk was found by a
+        /// simple match (given IP to the IpAddress field), a reverse lookup (IP to DNS host name)
+        /// is performed to get the DNS host name.  This is then used to find a match in either the
+        /// device's IpAddress field or the Name field. In all cases if no match is found a null
+        /// Device is returned.
         /// </summary>
         /// <param name="ipAddress">A <see cref="System.String" /> representing the ip address.</param>
         /// <param name="deviceTypeValueId">A <see cref="System.Int32"/> representing the DeviceType <see cref="Rock.Model.DefinedValue"/> of the device that you are searching for.</param>
-        /// <param name="skipReverseLookup">A <see cref="System.Boolean"/> indicating if a reverse lookup will be skipped. If <c>true</c> a DNS reverse lookup for the name of the system
-        /// that belongs to the provided IP address will not be performed, otherwise <c>false</c> and a DNS reverse lookup will be performed.</param>
+        /// <param name="skipReverseLookup">A <see cref="System.Boolean"/> indicating if a reverse lookup will be skipped. If <c>true</c> a DNS reverse 
+        /// lookup for the name of the system that belongs to the provided IP address will not be performed, otherwise <c>false</c> and a DNS reverse
+        /// lookup will be performed.</param>
         /// <returns>
-        /// A <see cref="Rock.Model.Device"/> that is associated with the provided IP address.
+        /// A <see cref="Rock.Model.Device"/> that is associated with the provided IP address or null if no match.
         /// </returns>
         public Device GetByIPAddress( string ipAddress, int deviceTypeValueId, bool skipReverseLookup = true )
         {
@@ -93,13 +122,28 @@ namespace Rock.Model
             try
             {
                 string hostValue = System.Net.Dns.GetHostEntry( ipAddress ).HostName;
-                if ( hostValue.IsNotNullOrWhitespace() )
+                if ( hostValue.IsNotNullOrWhiteSpace() )
                 {
-                    return Queryable()
+                    // Find by name in the IP address field (why are people putting the name in the IP Address field?)
+                    device = Queryable()
                         .Where( d =>
                             d.DeviceTypeValueId == deviceTypeValueId &&
                             d.IPAddress == hostValue )
                         .FirstOrDefault();
+
+                    if ( device == null )
+                    {
+                        // Find by name by looking at the device name (original behavior)
+                        // (Note: Don't combine this query into the above. They are not 
+                        // functionally equivalent.)
+                        device = Queryable()
+                            .Where( d =>
+                                d.DeviceTypeValueId == deviceTypeValueId &&
+                                d.Name == hostValue )
+                            .FirstOrDefault();
+                    }
+
+                    return device;
                 }
                 else
                 {

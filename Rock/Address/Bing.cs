@@ -22,12 +22,9 @@ using System.Linq;
 using System.Net;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
-using System.ServiceModel.Web;
 using System.Web;
 
-using Rock;
 using Rock.Attribute;
-using Rock.Web.UI;
 
 namespace Rock.Address
 {
@@ -50,7 +47,7 @@ namespace Rock.Address
         /// <param name="location">The location.</param>
         /// <param name="resultMsg">The result MSG.</param>
         /// <returns>
-        /// True/False value of whether the verification was successfull or not
+        /// True/False value of whether the verification was successful or not
         /// </returns>
         public override VerificationResult Verify( Rock.Model.Location location, out string resultMsg )
         {

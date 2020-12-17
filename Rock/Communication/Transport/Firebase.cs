@@ -21,11 +21,11 @@ using System.ComponentModel.Composition;
 using System.Linq;
 using System.Net.Mail;
 
+using FCM.Net;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
-using FCM.Net;
 
 namespace Rock.Communication.Transport
 {
@@ -65,7 +65,7 @@ namespace Rock.Communication.Transport
                     mergeFields.AddOrReplace( mergeField.Key, mergeField.Value );
                 }
 
-                var recipients = rockMessage.GetRecipientData();
+                var recipients = rockMessage.GetRecipients();
 
                 if ( pushMessage.SendSeperatelyToEachRecipient )
                 {
@@ -78,7 +78,7 @@ namespace Rock.Communication.Transport
                                 recipient.MergeFields.AddOrIgnore( mergeField.Key, mergeField.Value );
                             }
 
-                            PushMessage( sender, new List<string> { recipient.To }, pushMessage, recipient.MergeFields );
+                            PushMessage( sender, recipient.To.SplitDelimitedValues( "," ).ToList(), pushMessage, recipient.MergeFields );
                         }
                         catch ( Exception ex )
                         {
@@ -91,7 +91,7 @@ namespace Rock.Communication.Transport
                 {
                     try
                     {
-                        PushMessage( sender, recipients.Select( r => r.To ).ToList(), pushMessage, mergeFields );
+                        PushMessage( sender, recipients.SelectMany( r => r.To.SplitDelimitedValues( "," ).ToList() ).ToList(), pushMessage, mergeFields );
                     }
                     catch ( Exception ex )
                     {
@@ -143,16 +143,16 @@ namespace Rock.Communication.Transport
                 if ( hasPendingRecipients )
                 {
                     var currentPerson = communication.CreatedByPersonAlias?.Person;
-                    var globalAttributes = GlobalAttributesCache.Read();
-                    string publicAppRoot = globalAttributes.GetValue( "PublicApplicationRoot" ).EnsureTrailingForwardslash();
+                    var globalAttributes = GlobalAttributesCache.Get();
+                    string publicAppRoot = globalAttributes.GetValue( "PublicApplicationRoot" );
                     var mergeFields = Lava.LavaHelper.GetCommonMergeFields( null, currentPerson );
 
                     string serverKey = GetAttributeValue( "ServerKey" );
                     var sender = new Sender( serverKey );
 
-                    var personEntityTypeId = EntityTypeCache.Read( "Rock.Model.Person" ).Id;
-                    var communicationEntityTypeId = EntityTypeCache.Read( "Rock.Model.Communication" ).Id;
-                    var communicationCategoryId = CategoryCache.Read( Rock.SystemGuid.Category.HISTORY_PERSON_COMMUNICATIONS.AsGuid(), communicationRockContext ).Id;
+                    var personEntityTypeId = EntityTypeCache.Get( "Rock.Model.Person" ).Id;
+                    var communicationEntityTypeId = EntityTypeCache.Get( "Rock.Model.Communication" ).Id;
+                    var communicationCategoryId = CategoryCache.Get( Rock.SystemGuid.Category.HISTORY_PERSON_COMMUNICATIONS.AsGuid(), communicationRockContext ).Id;
 
                     bool recipientFound = true;
                     while ( recipientFound )
@@ -170,11 +170,11 @@ namespace Rock.Communication.Transport
 
                                     var service = new PersonalDeviceService( recipientRockContext );
                                     List<string> devices = service.Queryable()
-                                        .Where( p => p.PersonAliasId.HasValue && p.PersonAliasId.Value == personAlias && p.NotificationsEnabled )
+                                        .Where( p => p.PersonAliasId.HasValue && p.PersonAliasId.Value == personAlias && p.NotificationsEnabled && !string.IsNullOrEmpty( p.DeviceRegistrationId ) )
                                         .Select( p => p.DeviceRegistrationId )
                                         .ToList();
 
-                                    if ( devices != null )
+                                    if ( devices.Any() )
                                     {
                                         // Create merge field dictionary
                                         var mergeObjects = recipient.CommunicationMergeValues( mergeFields );
@@ -203,6 +203,10 @@ namespace Rock.Communication.Transport
                                         {
                                             recipient.StatusNote = "Firebase failed to notify devices";
                                         }
+                                        else
+                                        {
+                                            recipient.SendDateTime = RockDateTime.Now;
+                                        }
 
                                         recipient.Status = status;
                                         recipient.TransportEntityTypeName = this.GetType().FullName;
@@ -217,7 +221,9 @@ namespace Rock.Communication.Transport
                                                 EntityTypeId = personEntityTypeId,
                                                 CategoryId = communicationCategoryId,
                                                 EntityId = recipient.PersonAlias.PersonId,
-                                                Summary = "Sent push notification.",
+                                                Verb = History.HistoryVerb.Sent.ConvertToString().ToUpper(),
+                                                ChangeType = History.HistoryChangeType.Record.ToString(),
+                                                ValueName = "Push Notification",
                                                 Caption = message.Truncate( 200 ),
                                                 RelatedEntityTypeId = communicationEntityTypeId,
                                                 RelatedEntityId = communication.Id
@@ -280,111 +286,5 @@ namespace Rock.Communication.Transport
 
             Utility.AsyncHelpers.RunSync( () => sender.SendAsync( notification ) );
         }
-
-        #region Obsolete
-
-        /// <summary>
-        /// Sends the specified communication.
-        /// </summary>
-        /// <param name="communication">The communication.</param>
-        /// <exception cref="System.NotImplementedException"></exception>
-        [Obsolete( "Use Send( Communication communication, Dictionary<string, string> mediumAttributes ) instead" )]
-        public override void Send( Rock.Model.Communication communication )
-        {
-            int mediumEntityId = EntityTypeCache.Read( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_PUSH_NOTIFICATION.AsGuid() )?.Id ?? 0;
-            Send( communication, mediumEntityId, null );
-        }
-
-        /// <summary>
-        /// Sends the specified medium data to the specified list of recipients.
-        /// </summary>
-        /// <param name="mediumData">The medium data.</param>
-        /// <param name="recipients">The recipients.</param>
-        /// <param name="appRoot">The application root.</param>
-        /// <param name="themeRoot">The theme root.</param>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public override void Send(Dictionary<string, string> mediumData, List<string> recipients, string appRoot, string themeRoot)
-        {
-            var message = new RockPushMessage();
-            message.Title = mediumData.GetValueOrNull( "Title" ) ?? string.Empty;
-            message.Message = mediumData.GetValueOrNull( "Message" ) ?? string.Empty;
-            message.Sound = mediumData.GetValueOrNull( "Sound" ) ?? string.Empty;
-            message.SetRecipients( recipients );
-            message.SendSeperatelyToEachRecipient = false;
-            message.ThemeRoot = themeRoot;
-            message.AppRoot = appRoot;
-
-            var errorMessages = new List<string>();
-            int mediumEntityId = EntityTypeCache.Read( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_PUSH_NOTIFICATION.AsGuid() )?.Id ?? 0;
-            Send( message, mediumEntityId, null, out errorMessages );
-        }
-
-        /// <summary>
-        /// Sends the specified template.
-        /// </summary>
-        /// <param name="template">The template.</param>
-        /// <param name="recipients">The recipients.</param>
-        /// <param name="appRoot">The application root.</param>
-        /// <param name="themeRoot">The theme root.</param>
-        /// <exception cref="NotImplementedException"></exception>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public override void Send(SystemEmail template, List<RecipientData> recipients, string appRoot, string themeRoot)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Sends the specified recipients.
-        /// </summary>
-        /// <param name="recipients">The recipients.</param>
-        /// <param name="from">From.</param>
-        /// <param name="subject">The subject.</param>
-        /// <param name="body">The body.</param>
-        /// <param name="appRoot">The application root.</param>
-        /// <param name="themeRoot">The theme root.</param>
-        /// <exception cref="NotImplementedException"></exception>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public override void Send(List<string> recipients, string from, string subject, string body, string appRoot = null, string themeRoot = null)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Sends the specified recipients.
-        /// </summary>
-        /// <param name="recipients">The recipients.</param>
-        /// <param name="from">From.</param>
-        /// <param name="subject">The subject.</param>
-        /// <param name="body">The body.</param>
-        /// <param name="appRoot">The application root.</param>
-        /// <param name="themeRoot">The theme root.</param>
-        /// <param name="attachments">Attachments.</param>
-        /// <exception cref="NotImplementedException"></exception>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public override void Send(List<string> recipients, string from, string subject, string body, string appRoot = null, string themeRoot = null, List<Attachment> attachments = null)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Sends the specified recipients.
-        /// </summary>
-        /// <param name="recipients">The recipients.</param>
-        /// <param name="from">From.</param>
-        /// <param name="fromName">From name.</param>
-        /// <param name="subject">The subject.</param>
-        /// <param name="body">The body.</param>
-        /// <param name="appRoot">The application root.</param>
-        /// <param name="themeRoot">The theme root.</param>
-        /// <param name="attachments">The attachments.</param>
-        /// <exception cref="NotImplementedException"></exception>
-        [Obsolete( "Use Send( RockMessage message, out List<string> errorMessage ) method instead" )]
-        public override void Send(List<string> recipients, string from, string fromName, string subject, string body, string appRoot = null, string themeRoot = null, List<Attachment> attachments = null)
-        {
-            throw new NotImplementedException();
-        }
-
-        #endregion
-
     }
 }

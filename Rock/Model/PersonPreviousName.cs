@@ -14,16 +14,14 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.Infrastructure;
 using System.Data.Entity.ModelConfiguration;
 using System.Linq;
 using System.Runtime.Serialization;
-using System.Text;
-using System.Threading.Tasks;
+
 using Rock.Data;
 
 namespace Rock.Model
@@ -91,7 +89,7 @@ namespace Rock.Model
         /// The history changes.
         /// </value>
         [NotMapped]
-        private List<string> HistoryChanges { get; set; }
+        private History.HistoryChangeList HistoryChanges { get; set; }
 
         /// <summary>
         /// Gets or sets the history person identifier.
@@ -111,7 +109,7 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext"></param>
         /// <param name="entry"></param>
-        public override void PreSaveChanges( DbContext dbContext, DbEntityEntry entry )
+        public override void PreSaveChanges( Data.DbContext dbContext, DbEntityEntry entry )
         {
             var rockContext = (RockContext)dbContext;
 
@@ -127,23 +125,23 @@ namespace Rock.Model
 
             if ( HistoryPersonId.HasValue )
             {
-                HistoryChanges = new List<string>();
+                HistoryChanges = new History.HistoryChangeList();
 
                 switch ( entry.State )
                 {
-                    case System.Data.Entity.EntityState.Added:
+                    case EntityState.Added:
                         {
                             History.EvaluateChange( HistoryChanges, "Previous Name", string.Empty, LastName );
                             break;
                         }
 
-                    case System.Data.Entity.EntityState.Modified:
+                    case EntityState.Modified:
                         {
                             History.EvaluateChange( HistoryChanges, "Previous Name", entry.OriginalValues["LastName"].ToStringSafe(), LastName );
                             break;
                         }
 
-                    case System.Data.Entity.EntityState.Deleted:
+                    case EntityState.Deleted:
                         {
                             History.EvaluateChange( HistoryChanges, "Previous Name", entry.OriginalValues["LastName"].ToStringSafe(), string.Empty );
                             return;
@@ -160,7 +158,7 @@ namespace Rock.Model
         /// <param name="dbContext">The database context.</param>
         public override void PostSaveChanges( Data.DbContext dbContext )
         {
-            if ( HistoryChanges != null && HistoryChanges.Any() && HistoryPersonId.HasValue )
+            if ( HistoryChanges?.Any() == true && HistoryPersonId.HasValue )
             {
                 HistoryService.SaveChanges( (RockContext)dbContext, typeof( Person ), Rock.SystemGuid.Category.HISTORY_PERSON_DEMOGRAPHIC_CHANGES.AsGuid(), HistoryPersonId.Value, HistoryChanges, true, this.ModifiedByPersonAliasId );
             }

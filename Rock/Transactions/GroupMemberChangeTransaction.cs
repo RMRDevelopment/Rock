@@ -19,8 +19,10 @@ using System.Collections.Generic;
 using System.Data.Entity;
 using System.Data.Entity.Infrastructure;
 using System.Linq;
+
 using Rock.Data;
 using Rock.Model;
+using Rock.Web.Cache;
 
 namespace Rock.Transactions
 {
@@ -38,6 +40,8 @@ namespace Rock.Transactions
         private int GroupMemberRoleId;
         private GroupMemberStatus PreviousGroupMemberStatus;
         private int PreviousGroupMemberRoleId;
+        private bool IsArchived;
+        private bool PreviousIsArchived;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GroupMemberChangeTransaction"/> class.
@@ -54,6 +58,7 @@ namespace Rock.Transactions
                 PersonId = groupMember.PersonId;
                 GroupMemberStatus = groupMember.GroupMemberStatus;
                 GroupMemberRoleId = groupMember.GroupRoleId;
+                IsArchived = groupMember.IsArchived;
 
                 if ( groupMember.Group != null )
                 {
@@ -66,12 +71,18 @@ namespace Rock.Transactions
                     var dbStatusProperty = entry.Property( "GroupMemberStatus" );
                     if ( dbStatusProperty != null )
                     {
-                        PreviousGroupMemberStatus = (GroupMemberStatus)dbStatusProperty.OriginalValue;
+                        PreviousGroupMemberStatus = ( GroupMemberStatus ) dbStatusProperty.OriginalValue;
                     }
                     var dbRoleProperty = entry.Property( "GroupRoleId" );
                     if ( dbRoleProperty != null )
                     {
-                        PreviousGroupMemberRoleId = (int)dbRoleProperty.OriginalValue;
+                        PreviousGroupMemberRoleId = ( int ) dbRoleProperty.OriginalValue;
+                    }
+
+                    var dbIsArchived = entry.Property( "IsArchived" );
+                    if ( dbIsArchived != null )
+                    {
+                        PreviousIsArchived = ( bool ) dbIsArchived.OriginalValue;
                     }
                 }
 
@@ -89,7 +100,7 @@ namespace Rock.Transactions
         public void Execute()
         {
             // if a GroupMember is getting added, call CalculateRequirements to make sure that group member requirements are calculated (if the group has requirements)
-            if ( State == EntityState.Added )
+            if ( State == EntityState.Added || ( PreviousIsArchived && IsArchived != PreviousIsArchived ) )
             {
                 if ( GroupMemberGuid.HasValue )
                 {
@@ -115,19 +126,21 @@ namespace Rock.Transactions
                 // If any triggers exist
                 if ( cachedTriggers != null && cachedTriggers.Any() )
                 {
-                    // Get the triggers associated to the group 
+                    // Get the ACTIVE group member triggers associated to the group 
                     var groupTriggers = cachedTriggers
                         .Where( w =>
                             groupMemberWorkflowChangeTriggers.Contains( w.TriggerType ) &&
+                            w.IsActive &&
                             w.GroupId.HasValue &&
                             w.GroupId.Value == GroupId.Value )
                         .OrderBy( w => w.Order )
                         .ToList();
 
-                    // Get any triggers associated to a group type ( if any are found, will then filter by group type )
+                    // Get any ACTIVE triggers associated to a group type ( if any are found, will then filter by group type )
                     var groupTypeTriggers = cachedTriggers
                         .Where( w =>
                             groupMemberWorkflowChangeTriggers.Contains( w.TriggerType ) &&
+                            w.IsActive &&
                             w.GroupTypeId.HasValue )
                         .OrderBy( w => w.Order )
                         .ToList();
@@ -137,10 +150,10 @@ namespace Rock.Transactions
                         using ( var rockContext = new RockContext() )
                         {
                             // If there were any group type triggers, will now need to read the group's group type id
-                            // and then further filter these triggers by the current txn's group type
+                            // and then further filter these triggers by the current transaction's group type
                             if ( groupTypeTriggers.Any() )
                             {
-                                // Get the current txn's group type id
+                                // Get the current transaction's group type id
                                 if ( !GroupTypeId.HasValue )
                                 {
                                     GroupTypeId = new GroupService( rockContext )
@@ -159,13 +172,13 @@ namespace Rock.Transactions
                                     .ToList();
                             }
 
-                            // Combine group and grouptype trigers
+                            // Combine group and group type triggers
                             var triggers = groupTriggers.Union( groupTypeTriggers ).ToList();
 
                             // If any triggers were found
                             if ( triggers.Any() )
                             {
-                                // Loop through triggers and lauch appropriate workflow
+                                // Loop through triggers and launch appropriate workflow
                                 foreach ( var trigger in triggers )
                                 {
                                     switch ( trigger.TriggerType )
@@ -188,7 +201,7 @@ namespace Rock.Transactions
                                             }
                                         case GroupMemberWorkflowTriggerType.MemberRoleChanged:
                                             {
-                                                if ( State == EntityState.Modified && QualifiersMatch( rockContext, trigger, PreviousGroupMemberRoleId, GroupMemberRoleId ) )
+                                                if ( State == EntityState.Modified && PreviousGroupMemberRoleId != GroupMemberRoleId && QualifiersMatch( rockContext, trigger, PreviousGroupMemberRoleId, GroupMemberRoleId ) )
                                                 {
                                                     LaunchWorkflow( rockContext, trigger.WorkflowTypeId, trigger.Name );
                                                 }
@@ -196,7 +209,7 @@ namespace Rock.Transactions
                                             }
                                         case GroupMemberWorkflowTriggerType.MemberStatusChanged:
                                             {
-                                                if ( State == EntityState.Modified && QualifiersMatch( rockContext, trigger, PreviousGroupMemberStatus, GroupMemberStatus ) )
+                                                if ( State == EntityState.Modified && PreviousGroupMemberStatus != GroupMemberStatus && QualifiersMatch( rockContext, trigger, PreviousGroupMemberStatus, GroupMemberStatus ) )
                                                 {
                                                     LaunchWorkflow( rockContext, trigger.WorkflowTypeId, trigger.Name );
                                                 }
@@ -286,7 +299,7 @@ namespace Rock.Transactions
                 groupMember = new GroupMemberService( rockContext ).Get( GroupMemberGuid.Value );
             }
 
-            var workflowType = Web.Cache.WorkflowTypeCache.Read( workflowTypeId );
+            var workflowType = WorkflowTypeCache.Get( workflowTypeId );
             if ( workflowType != null && ( workflowType.IsActive ?? true ) )
             {
                 var workflow = Rock.Model.Workflow.Activate( workflowType, name );

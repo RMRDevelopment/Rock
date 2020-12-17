@@ -18,12 +18,10 @@ using System;
 using System.Web.UI;
 using System.Web.UI.WebControls;
 
-using Rock;
-
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     [ToolboxData( "<{0}:DateField runat=server></{0}:DateField>" )]
     public class DateField : RockBoundField
@@ -41,13 +39,26 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
+        /// Gets or sets a value indicating whether value should be treated as a birth date and
+        /// the age displayed (i.e. "xx/xx/xxxx (37 yr)").
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if the age will be included; otherwise, <c>false</c>.
+        /// </value>
+        public bool IncludeAge
+        {
+            get { return ViewState["IncludeAge"] as bool? ?? false; }
+            set { ViewState["IncludeAge"] = value; }
+        }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="DateField" /> class.
         /// </summary>
         public DateField()
             : base()
         {
-            // Let the Header be left aligned (that's how Bootstrap wants it), but have the item be right-aligned
             this.ItemStyle.HorizontalAlign = HorizontalAlign.Right;
+            this.HeaderStyle.HorizontalAlign = HorizontalAlign.Right;
             this.DataFormatString = "{0:d}";
         }
 
@@ -63,7 +74,7 @@ namespace Rock.Web.UI.Controls
         {
             string script = @"
     $('.grid-table tr td span.date-field').tooltip({html: true, container: 'body', delay: { show: 100, hide: 100 }});
-    $('.grid-table tr td span.date-field').click( function(){ $(this).tooltip('hide'); });;
+    $('.grid-table tr td span.date-field').on('click', function(){ $(this).tooltip('hide'); });;
 ";
             ScriptManager.RegisterStartupScript( control, control.GetType(), "date-field-popover", script, true );
 
@@ -85,23 +96,29 @@ namespace Rock.Web.UI.Controls
             {
                 dataValue = ( dataValue as string ).AsDateTime();
             }
-            
-            if ( FormatAsElapsedTime )
+
+            DateTime dateValue = DateTime.MinValue;
+            if ( dataValue is DateTime )
             {
-                DateTime dateValue = DateTime.MinValue;
-                if ( dataValue is DateTime )
-                {
-                    dateValue = ( (DateTime)dataValue );
-                }
+                dateValue = ( ( DateTime ) dataValue );
+            }
 
-                if ( dataValue is DateTime? )
-                {
-                    dateValue = ( (DateTime?)dataValue ) ?? DateTime.MinValue; ;
-                }
+            if ( dataValue is DateTime? )
+            {
+                dateValue = ( ( DateTime? ) dataValue ) ?? DateTime.MinValue;
+            }
 
-                if ( dateValue != DateTime.MinValue )
+            if ( dateValue != DateTime.MinValue )
+            {
+                if ( FormatAsElapsedTime )
                 {
                     return string.Format( "<span class='date-field' title='{0}'>{1}</span>", dateValue.ToString(), dateValue.ToElapsedString() );
+                }
+
+                DateTime now = RockDateTime.Now;
+                if ( IncludeAge && dateValue < now )
+                {
+                    return string.Format( "{0} ({1})", base.FormatDataValue( dataValue, encode ), dateValue .GetFormattedAge());
                 }
             }
 

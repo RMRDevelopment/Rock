@@ -15,11 +15,11 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 
 namespace Rock.Web.UI.Controls
@@ -276,7 +276,7 @@ namespace Rock.Web.UI.Controls
                 int groupId = value ?? 0;
                 if ( _ddlGroup.SelectedValue != groupId.ToString() )
                 {
-                    if ( !GroupTypeId.HasValue )
+                    if ( !GroupTypeId.HasValue || GroupTypeId.Value == 0 )
                     {
                         var group = new Rock.Model.GroupService( new RockContext() ).Get( groupId );
                         if ( group != null &&

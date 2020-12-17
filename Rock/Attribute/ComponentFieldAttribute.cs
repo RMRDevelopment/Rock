@@ -15,9 +15,7 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
+
 using Rock.Web.Cache;
 
 namespace Rock.Attribute
@@ -50,7 +48,7 @@ namespace Rock.Attribute
                 try
                 {
                     Type containerType = Type.GetType( mefContainerAssemblyName );
-                    var entityType = EntityTypeCache.Read( containerType );
+                    var entityType = EntityTypeCache.Get( containerType );
                     if ( entityType != null )
                     {
                         Name = entityType.FriendlyName;

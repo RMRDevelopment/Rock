@@ -16,23 +16,28 @@
 //
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data.Entity;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Web;
+
 using Quartz;
+
 using Rock.Attribute;
 using Rock.Communication;
 using Rock.Data;
 using Rock.Model;
-using Rock.Web.Cache;
 
 namespace Rock.Jobs
 {
     /// <summary>
-    /// Sends out reminders to group leaders when group members do not meet all requirements.
+    /// This job sends out reminders to group leaders when group members do not meet all requirements.
     /// </summary>
-    [SystemEmailField( "Notification Email Template", required: true, order: 0 )]
+    [DisplayName( "Send Group Requirements Notification" )]
+    [Description( "This job sends out reminders to group leaders when group members do not meet all requirements." )]
+
+    [SystemCommunicationField( "Notification Email Template", required: true, order: 0 )]
     [GroupTypesField( "Group Types", "Group types use to check the group requirements on.", order: 1 )]
     [EnumField( "Notify Parent Leaders", "", typeof( NotificationOption ), true, "None", order: 2 )]
     [GroupField( "Accountability Group", "Optional group that will receive a list of all group members that do not meet requirements.", false, order: 3 )]
@@ -59,6 +64,7 @@ namespace Rock.Jobs
         /// <param name="context">The context.</param>
         public void Execute( IJobExecutionContext context )
         {
+            var errors = new List<string>();
             var rockContext = new RockContext();
 
             JobDataMap dataMap = context.JobDetail.JobDataMap;
@@ -127,8 +133,17 @@ namespace Rock.Jobs
                             groupMember.GroupMemberRole = groupMemberIssue.Key.GroupRole.Name;
 
                             List<MissingRequirement> missingRequirements = new List<MissingRequirement>();
+
+                            // Now find exactly which ISSUE corresponds to the group member based on their role
                             foreach ( var issue in groupMemberIssue.Value )
                             {
+                                // If the issue is tied to a role, does it match the person's role?
+                                // If it does not, skip it.
+                                if ( issue.Key.GroupRequirement.GroupRoleId != null && issue.Key.GroupRequirement.GroupRoleId != groupMemberIssue.Key.GroupRoleId )
+                                {
+                                    continue;
+                                }
+
                                 MissingRequirement missingRequirement = new MissingRequirement();
                                 missingRequirement.Id = issue.Key.GroupRequirement.GroupRequirementType.Id;
                                 missingRequirement.Name = issue.Key.GroupRequirement.GroupRequirementType.Name;
@@ -181,7 +196,7 @@ namespace Rock.Jobs
                             }
                             else
                             {
-                                // all parents in the heirarchy
+                                // all parents in the hierarchy
                                 var parentIds = groupService.GetAllAncestorIds( group.Id );
                                 parentLeaders = parentLeaders.Where( m => parentIds.Contains( m.GroupId ) );
                             }
@@ -197,12 +212,17 @@ namespace Rock.Jobs
                     }
                 }
 
-                // send out notificatons
+                // send out notifications
                 int recipients = 0;
                 var notificationRecipients = _notificationList.GroupBy( p => p.Person.Id ).ToList();
                 foreach ( var recipientId in notificationRecipients )
                 {
                     var recipient = _notificationList.Where( n => n.Person.Id == recipientId.Key ).Select( n => n.Person ).FirstOrDefault();
+
+                    if ( !recipient.IsEmailActive || recipient.Email.IsNullOrWhiteSpace() || recipient.EmailPreference == EmailPreference.DoNotEmail )
+                    {
+                        continue;
+                    }
 
                     var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( null );
                     mergeFields.Add( "Person", recipient );
@@ -214,8 +234,10 @@ namespace Rock.Jobs
                     mergeFields.Add( "GroupsMissingRequirements", missingRequirements );
 
                     var emailMessage = new RockEmailMessage( systemEmailGuid.Value );
-                    emailMessage.AddRecipient( new RecipientData( recipient.Email, mergeFields ) );
-                    emailMessage.Send();
+                    emailMessage.AddRecipient( new RockEmailMessageRecipient( recipient, mergeFields ) );
+                    var emailErrors = new List<string>();
+                    emailMessage.Send( out emailErrors );
+                    errors.AddRange( emailErrors );
 
                     recipients++;
                 }
@@ -233,14 +255,29 @@ namespace Rock.Jobs
                         var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( null );
                         mergeFields.Add( "Person", person );
                         mergeFields.Add( "GroupsMissingRequirements", _groupsMissingRequriements );
-                        emailMessage.AddRecipient( new RecipientData( person.Email, mergeFields ) );
+                        emailMessage.AddRecipient( new RockEmailMessageRecipient( person, mergeFields ) );
                         recipients++;
                     }
-                    emailMessage.Send();
+                    var emailErrors = new List<string>();
+                    emailMessage.Send(out emailErrors);
+                    errors.AddRange( emailErrors );
                 }
 
                 context.Result = string.Format( "{0} requirement notification {1} sent", recipients, "email".PluralizeIf( recipients != 1 ) );
 
+                if ( errors.Any() )
+                {
+                    StringBuilder sb = new StringBuilder();
+                    sb.AppendLine();
+                    sb.Append( string.Format( "{0} Errors: ", errors.Count() ) );
+                    errors.ForEach( e => { sb.AppendLine(); sb.Append( e ); } );
+                    string errorMessage = sb.ToString();
+                    context.Result += errorMessage;
+                    var exception = new Exception( errorMessage );
+                    HttpContext context2 = HttpContext.Current;
+                    ExceptionLogService.LogException( exception, context2 );
+                    throw exception;
+                }
             }
             else
             {

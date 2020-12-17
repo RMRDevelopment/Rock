@@ -23,6 +23,8 @@ using System.Reflection;
 using System.Runtime.Serialization;
 
 using Newtonsoft.Json;
+using Rock.Model;
+using Rock.Web.Cache;
 
 namespace Rock.Data
 {
@@ -121,7 +123,7 @@ namespace Rock.Data
             get
             {
                 // Read should never return null since it will create entity type if it doesn't exist
-                return Rock.Web.Cache.EntityTypeCache.Read( typeof( T ) ).Id;
+                return EntityTypeCache.Get( typeof( T ) ).Id;
             }
         }
 
@@ -161,7 +163,7 @@ namespace Rock.Data
         }
 
         /// <summary>
-        /// Gets the validation results for the entity
+        /// Gets the validation results for the entity. This is initialized by calling IsValid
         /// </summary>
         [NotMapped]
         public virtual List<ValidationResult> ValidationResults
@@ -312,7 +314,7 @@ namespace Rock.Data
 
             foreach ( var propInfo in this.GetType().GetProperties() )
             {
-                if ( !propInfo.GetGetMethod().IsVirtual || virtualPropsWhiteList.Contains(propInfo.Name) )
+                if ( ( propInfo.GetGetMethod() != null && !propInfo.GetGetMethod().IsVirtual ) || virtualPropsWhiteList.Contains(propInfo.Name) )
                 {
                     dictionary.Add( propInfo.Name, propInfo.GetValue( this, null ) );
                 }
@@ -350,7 +352,7 @@ namespace Rock.Data
         }
 
         /// <summary>
-        /// Gets the available keys (for debuging info).
+        /// Gets the available keys (for debugging info).
         /// </summary>
         /// <value>
         /// The available keys.
@@ -462,6 +464,10 @@ namespace Rock.Data
             return false;
         }
 
+        /// <summary>
+        /// Gets the type of the base.
+        /// </summary>
+        /// <returns></returns>
         private Type GetBaseType()
         {
             Type entityType = this.GetType();
@@ -473,29 +479,14 @@ namespace Rock.Data
             return entityType;
         }
 
+        /// <summary>
+        /// Determines whether the property is available to Lava
+        /// </summary>
+        /// <param name="propInfo">The property information.</param>
+        /// <returns></returns>
         private bool LiquidizableProperty( PropertyInfo propInfo )
         {
-            // If property has a [LavaIgnore] attribute return false
-            if ( propInfo.GetCustomAttributes( typeof( Rock.Data.LavaIgnoreAttribute ) ).Count() > 0 )
-            {
-                return false;
-            }
-
-            // If property has a [DataMember] attribute return true
-            if ( propInfo.GetCustomAttributes( typeof( System.Runtime.Serialization.DataMemberAttribute ) ).Count() > 0 )
-            {
-                return true;
-            }
-
-            // If property has a [LavaInclude] attribute return true
-            if ( propInfo.GetCustomAttributes( typeof( Rock.Data.LavaIncludeAttribute ) ).Count() > 0 )
-            {
-                return true;
-            }
-
-            // otherwise return false
-            return false;
-
+            return Rock.Lava.LavaHelper.IsLavaProperty( propInfo );
         }
 
         /// <summary>
@@ -570,7 +561,7 @@ namespace Rock.Data
         /// </value>
         public static string GetIndexResultTemplate()
         {
-            return Rock.Web.Cache.EntityTypeCache.Read( typeof( T ) ).IndexResultTemplate;
+            return EntityTypeCache.Get( typeof( T ) ).IndexResultTemplate;
         }
 
         #endregion
@@ -585,12 +576,21 @@ namespace Rock.Data
     internal class KeyEntity
     {
         public string Key { get; set; }
-        public int Id { get; set; }
+
+        public int? Id { get; set; }
+
+        public Guid? Guid { get; set; }
+
         public IEntity Entity { get; set; }
 
         public KeyEntity( int id )
         {
             Id = id;
+        }
+
+        public KeyEntity( Guid guid )
+        {
+            Guid = guid;
         }
 
         public KeyEntity( string key )

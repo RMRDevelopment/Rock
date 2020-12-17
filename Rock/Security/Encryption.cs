@@ -15,13 +15,13 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
+using System.Web;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Rock.Security
 {
@@ -75,10 +75,41 @@ namespace Rock.Security
         }
 
         /// <summary>
-        /// The _key bytes created new for each thread/session
+        /// The _key bytes created new for each Request
+        /// </summary>
+        private static byte[] _keyBytes
+        {
+            get
+            {
+                if ( HttpContext.Current != null )
+                {
+                    return HttpContext.Current.Items[$"{typeof( Encryption ).FullName}:_keyBytes"] as byte[];
+                }
+
+                return _nonHttpContext_keyBytes;
+            }
+
+            set
+            {
+                if ( HttpContext.Current != null )
+                {
+                    HttpContext.Current.Items[$"{typeof( Encryption ).FullName}:_keyBytes"] = value;
+                }
+                else
+                {
+                    _nonHttpContext_keyBytes = value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The _keyBytes when HttpContext.Current is null
+        /// NOTE: ThreadStatic is per thread, but ASP.NET threads are ThreadPool threads, so they will be used again.
+        /// see https://www.hanselman.com/blog/ATaleOfTwoTechniquesTheThreadStaticAttributeAndSystemWebHttpContextCurrentItems.aspx
+        /// So be careful and only use the [ThreadStatic] trick if absolutely necessary
         /// </summary>
         [ThreadStatic]
-        private static byte[] _keyBytes = null;
+        private static byte[] _nonHttpContext_keyBytes;
 
         /// <summary>
         /// Encrypt the given string using AES.  The string can be decrypted using 
@@ -163,6 +194,9 @@ namespace Rock.Security
         /// Decrypt the given string.  Assumes the string was encrypted using 
         /// EncryptString(), using an identical sharedSecret.
         /// </summary>
+        /// <returns>
+        ///  decrypted string ; otherwise, null.
+        /// </returns>
         /// <param name="cipherText">The text to decrypt.</param>
         public static string DecryptString( string cipherText )
         {

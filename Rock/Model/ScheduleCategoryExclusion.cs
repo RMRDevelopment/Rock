@@ -17,19 +17,22 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Runtime.Serialization;
+
 using Rock.Data;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     [RockDomain( "Core" )]
     [Table( "ScheduleCategoryExclusion" )]
     [DataContract]
-    public partial class ScheduleCategoryExclusion : Model<ScheduleCategoryExclusion>
+    public partial class ScheduleCategoryExclusion : Model<ScheduleCategoryExclusion>, ICacheable
     {
         #region Entity Properties
 
@@ -88,10 +91,36 @@ namespace Rock.Model
         public virtual Category Category { get; set; }
 
         #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            // doesn't apply
+            return null;
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are dependent on this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            // Tell the CategoryCache that is has been modified since its ScheduleExclusions modified
+            CategoryCache.UpdateCachedEntity( this.CategoryId, EntityState.Modified );
+        }
+
+        #endregion
+
     }
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public partial class ScheduleCategoryExclusionConfiguration : EntityTypeConfiguration<ScheduleCategoryExclusion>
     {

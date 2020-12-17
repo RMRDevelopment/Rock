@@ -18,13 +18,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web.UI;
-using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
+
 using Rock;
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
-using Rock.Workflow;
 
 namespace Rock.Web.UI.Controls
 {
@@ -74,7 +73,7 @@ namespace Rock.Web.UI.Controls
             form.Guid = _hfFormGuid.Value.AsGuid();
             if ( form.Guid != Guid.Empty )
             {
-                form.NotificationSystemEmailId = _ddlNotificationSystemEmail.SelectedValueAsId();
+                form.NotificationSystemCommunicationId = _ddlNotificationSystemEmail.SelectedValueAsId();
                 form.IncludeActionsInNotification = _cbIncludeActions.Checked;
                 form.Header = _ceHeaderText.Text;
                 form.Footer = _ceFooterText.Text;
@@ -115,7 +114,7 @@ namespace Rock.Web.UI.Controls
             if ( value != null )
             {
                 _hfFormGuid.Value = value.Guid.ToString();
-                _ddlNotificationSystemEmail.SetValue( value.NotificationSystemEmailId );
+                _ddlNotificationSystemEmail.SetValue( value.NotificationSystemCommunicationId );
                 _cbIncludeActions.Checked = value.IncludeActionsInNotification;
                 _ceHeaderText.Text = value.Header;
                 _ceFooterText.Text = value.Footer;
@@ -147,7 +146,7 @@ namespace Rock.Web.UI.Controls
                 _ddlActionAttribute.Items.Add( new ListItem() );
                 foreach ( var attributeItem in workflowTypeAttributes )
                 {
-                    var fieldType = FieldTypeCache.Read( attributeItem.Value.FieldTypeId );
+                    var fieldType = FieldTypeCache.Get( attributeItem.Value.FieldTypeId );
                     if ( fieldType != null && fieldType.Field is Rock.Field.Types.TextFieldType )
                     {
                         var li = new ListItem( attributeItem.Value.Name, attributeItem.Key.ToString() );
@@ -239,15 +238,20 @@ namespace Rock.Web.UI.Controls
             _ddlNotificationSystemEmail.ID = this.ID + "_ddlNotificationSystemEmail";
             Controls.Add( _ddlNotificationSystemEmail );
 
-            Guid? systemEmails = Rock.SystemGuid.Category.SYSTEM_EMAIL_WORKFLOW.AsGuid();
-            if ( systemEmails.HasValue )
+            var systemEmailCategory = CategoryCache.Get( Rock.SystemGuid.Category.SYSTEM_COMMUNICATION_WORKFLOW.AsGuid() );
+            if ( systemEmailCategory != null )
             {
-                _ddlNotificationSystemEmail.DataSource = new SystemEmailService( new RockContext() ).Queryable()
-                    .Where( e => e.Category.Guid.Equals( systemEmails.Value ) )
-                    .OrderBy( e => e.Title )
-                    .ToList();
-                _ddlNotificationSystemEmail.DataBind();
+                using ( var rockContext = new RockContext() )
+                {
+                    _ddlNotificationSystemEmail.DataSource = new SystemCommunicationService( rockContext ).Queryable()
+                        .Where( e => e.CategoryId == systemEmailCategory.Id )
+                        .OrderBy( e => e.Title )
+                        .Select( a => new { a.Id, a.Title } )
+                        .ToList();
+                    _ddlNotificationSystemEmail.DataBind();
+                }
             }
+
             _ddlNotificationSystemEmail.Items.Insert( 0, new ListItem( "None", "0" ) );
 
             _cbIncludeActions = new RockCheckBox();

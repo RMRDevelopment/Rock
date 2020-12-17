@@ -21,6 +21,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
@@ -115,7 +116,7 @@ function() {
             if ( selectionValues.Length >= 1 )
             {
                 int loginTypeId = selectionValues[0].AsInteger();
-                var loginType = EntityTypeCache.Read( loginTypeId );
+                var loginType = EntityTypeCache.Get( loginTypeId );
                 if ( loginType != null )
                 {
                     result = "Login Type: " + loginType.FriendlyName;
@@ -125,21 +126,19 @@ function() {
             return result;
         }
 
-        private RockDropDownList ddlLoginType = null;
-
         /// <summary>
         /// Creates the child controls.
         /// </summary>
         /// <returns></returns>
         public override Control[] CreateChildControls( Type entityType, FilterField filterControl )
         {
-            ddlLoginType = new RockDropDownList();
+            var ddlLoginType = new RockDropDownList();
             ddlLoginType.CssClass = "js-loginType-dropdown";
             ddlLoginType.ID = filterControl.ID + "_ddlLoginType";
             ddlLoginType.Label = "Login Type";
             ddlLoginType.Help = "Select a specific Login Type";
             filterControl.Controls.Add( ddlLoginType );
-            BindLoginType();
+            BindLoginType( ddlLoginType );
 
             return new Control[] { ddlLoginType };
         }
@@ -225,7 +224,7 @@ function() {
         /// <summary>
         /// Binds the Login Type.
         /// </summary>
-        private void BindLoginType()
+        private void BindLoginType( RockDropDownList ddlLoginType )
         {
             ddlLoginType.Items.Clear();
             foreach ( var item in AuthenticationContainer.Instance.Components.Values )

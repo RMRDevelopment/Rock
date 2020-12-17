@@ -23,7 +23,7 @@ using System.Web.UI.WebControls;
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    ///
     /// </summary>
     [ToolboxData( "<{0}:PanelWidget runat=server></{0}:PanelWidget>" )]
     public class PanelWidget : PlaceHolder, INamingContainer
@@ -188,7 +188,7 @@ namespace Rock.Web.UI.Controls
 
             string script = @"
 // activity animation
-$('.rock-panel-widget > header').click(function () {
+$('.rock-panel-widget > header').on('click', function () {
     $(this).siblings('.panel-body').slideToggle();
 
     if ( $(this).find('.js-header-controls').length ) {
@@ -203,8 +203,8 @@ $('.rock-panel-widget > header').click(function () {
     $('a.view-state > i', this).toggleClass('fa-chevron-up');
 });
 
-// fix so that certain controls will fire its event, but not the parent event 
-$('.js-stop-immediate-propagation').click(function (event) {
+// fix so that certain controls will fire its event, but not the parent event
+$('.js-stop-immediate-propagation').on('click', function (event) {
     event.stopImmediatePropagation();
 });
 
@@ -233,15 +233,15 @@ $('.js-stop-immediate-propagation').click(function (event) {
             _hfTitleDisableVrm = new HiddenField();
             _hfTitleDisableVrm.ID = _hfTitle.ID + "_dvrm";
             _hfTitleDisableVrm.Value = "True";
-            Controls.Add( _hfTitleDisableVrm ); 
+            Controls.Add( _hfTitleDisableVrm );
 
             _lbDelete = new LinkButton();
             _lbDelete.ID = "_lbDelete";
             Controls.Add( _lbDelete );
             _lbDelete.CausesValidation = false;
-            _lbDelete.CssClass = "btn btn-xs btn-danger js-stop-immediate-propagation";
+            _lbDelete.CssClass = "btn btn-xs btn-square btn-danger js-stop-immediate-propagation";
             _lbDelete.Click += lbDelete_Click;
-            _lbDelete.Controls.Add( new LiteralControl { Text = "<i class='fa fa fa-times'></i>" } );
+            _lbDelete.Controls.Add( new LiteralControl { Text = "<i class='fa fa-times'></i>" } );
         }
 
         /// <summary>
@@ -386,7 +386,7 @@ $('.js-stop-immediate-propagation').click(function (event) {
 
                 writer.RenderEndTag(); // pull-right
 
-                writer.RenderEndTag(); // Header                
+                writer.RenderEndTag(); // Header
 
                 // Body
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "panel-body" );

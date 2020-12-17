@@ -21,6 +21,7 @@ using System.ComponentModel.Composition;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Web.UI;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Utility;
@@ -36,7 +37,7 @@ namespace Rock.Reporting.DataFilter.GroupMember
     [Description( "Select Group Members according to their membership of Groups from a Group Data View." )]
     [Export( typeof( DataFilterComponent ) )]
     [ExportMetadata( "ComponentName", "Group Data View" )]
-    public class GroupDataViewFilter : DataFilterComponent
+    public class GroupDataViewFilter : DataFilterComponent, IRelatedChildDataView
     {
         #region Properties
 
@@ -95,7 +96,7 @@ function ()
 {    
     var result = 'Members of Groups in Data View';
     
-    var dataViewName = $('.rock-drop-down-list,select:first', $content).find(':selected').text();    
+    var dataViewName = $('.js-data-view-picker', $content).find('.js-item-name-value').val().trim();
     result += ' ""' + dataViewName + '""';
 
     var groupMemberStatus = $('.js-group-member-status option:selected', $content).text();    
@@ -138,7 +139,7 @@ function ()
             {
                 var dataView = new DataViewService( context ).Get( settings.DataViewGuid.GetValueOrDefault() );
 
-                result = string.Format( "Members of Groups in Data View \"{0}\"", (dataView != null ? dataView.ToString() : string.Empty ));
+                result = string.Format( "Members of Groups in Data View \"{0}\"", ( dataView != null ? dataView.ToString() : string.Empty ) );
             }
 
             return result;
@@ -158,18 +159,18 @@ function ()
         {
             var settings = new SelectSettings( selection );
 
-            var context = (RockContext)serviceInstance.Context;
+            var context = ( RockContext ) serviceInstance.Context;
 
             //
             // Evaluate the Data View that defines the candidate Groups.
             //
             var dataView = DataComponentSettingsHelper.GetDataViewForFilterComponent( settings.DataViewGuid, context );
-            
+
             var groupService = new GroupService( context );
 
             var groupQuery = groupService.Queryable();
 
-            if (dataView != null)
+            if ( dataView != null )
             {
                 groupQuery = DataComponentSettingsHelper.FilterByDataView( groupQuery, dataView, groupService );
             }
@@ -194,7 +195,7 @@ function ()
             return selectExpression;
         }
 
-        private const string _CtlDataView = "ddlDataView";
+        private const string _CtlDataView = "dvpDataView";
 
         /// <summary>
         /// Creates the model representation of the child controls used to display and edit the filter settings.
@@ -208,17 +209,18 @@ function ()
         public override Control[] CreateChildControls( Type entityType, FilterField filterControl )
         {
             // Define Control: Group Data View Picker
-            var ddlDataView = new DataViewPicker();
-            ddlDataView.ID = filterControl.GetChildControlInstanceName( _CtlDataView );
-            ddlDataView.Label = "Is Member of Group from Data View";
-            ddlDataView.Help = "A Data View that filters the Groups included in the result. If no value is selected, any Groups that would be visible in a Group List will be included.";
-            filterControl.Controls.Add( ddlDataView );
+            var dvpDataView = new DataViewItemPicker();
+            dvpDataView.ID = filterControl.GetChildControlInstanceName( _CtlDataView );
+            dvpDataView.CssClass = "js-data-view-picker";
+            dvpDataView.Label = "Is Member of Group from Data View";
+            dvpDataView.Help = "A Data View that filters the Groups included in the result. If no value is selected, any Groups that would be visible in a Group List will be included.";
+            filterControl.Controls.Add( dvpDataView );
 
             // Populate the Data View Picker
-            int entityTypeId = EntityTypeCache.Read( typeof( Model.Group ) ).Id;
-            ddlDataView.EntityTypeId = entityTypeId;
+            int entityTypeId = EntityTypeCache.Get( typeof( Model.Group ) ).Id;
+            dvpDataView.EntityTypeId = entityTypeId;
 
-            return new Control[] { ddlDataView };
+            return new Control[] { dvpDataView };
         }
 
         /// <summary>
@@ -232,11 +234,11 @@ function ()
         /// </returns>
         public override string GetSelection( Type entityType, Control[] controls )
         {
-            var ddlDataView = controls.GetByName<DataViewPicker>( _CtlDataView );
+            var dvpDataView = controls.GetByName<DataViewItemPicker>( _CtlDataView );
 
             var settings = new SelectSettings();
 
-            settings.DataViewGuid = DataComponentSettingsHelper.GetDataViewGuid( ddlDataView.SelectedValue );
+            settings.DataViewGuid = DataComponentSettingsHelper.GetDataViewGuid( dvpDataView.SelectedValue );
 
             return settings.ToSelectionString();
         }
@@ -250,7 +252,7 @@ function ()
         /// <param name="selection">The selection.</param>
         public override void SetSelection( Type entityType, Control[] controls, string selection )
         {
-            var ddlDataView = controls.GetByName<DataViewPicker>( _CtlDataView );
+            var dvpDataView = controls.GetByName<DataViewItemPicker>( _CtlDataView );
 
             var settings = new SelectSettings( selection );
 
@@ -267,11 +269,31 @@ function ()
 
                 if ( dataView != null )
                 {
-                    ddlDataView.SelectedValue = dataView.Id.ToString();
+                    dvpDataView.SetValue( dataView );
                 }
             }
         }
 
+        /// <summary>
+        /// Gets the related data view identifier.
+        /// </summary>
+        /// <param name="controls">The controls.</param>
+        /// <returns></returns>
+        public int? GetRelatedDataViewId( Control[] controls )
+        {
+            if ( controls == null )
+            {
+                return null;
+            }
+
+            var ddlDataView = controls.GetByName<DataViewItemPicker>( _CtlDataView );
+            if ( ddlDataView == null )
+            {
+                return null;
+            }
+
+            return ddlDataView.SelectedValueAsId();
+        }
         #endregion
 
         #region Settings
@@ -314,7 +336,7 @@ function ()
             {
                 var settings = new List<string>();
 
-                settings.Add( DataViewGuid.ToStringSafe() );                
+                settings.Add( DataViewGuid.ToStringSafe() );
 
                 return settings;
             }

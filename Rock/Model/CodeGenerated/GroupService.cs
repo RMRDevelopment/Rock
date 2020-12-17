@@ -58,6 +58,12 @@ namespace Rock.Model
                 return false;
             }  
  
+            if ( new Service<Campus>( Context ).Queryable().Any( a => a.TeamGroupId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Group.FriendlyTypeName, Campus.FriendlyTypeName );
+                return false;
+            }  
+ 
             if ( new Service<Communication>( Context ).Queryable().Any( a => a.ListGroupId == item.Id ) )
             {
                 errorMessage = string.Format( "This {0} is assigned to a {1}.", Group.FriendlyTypeName, Communication.FriendlyTypeName );
@@ -87,6 +93,30 @@ namespace Rock.Model
                 errorMessage = string.Format( "This {0} contains one or more child {1}.", Group.FriendlyTypeName, Group.FriendlyTypeName.Pluralize().ToLower() );
                 return false;
             }  
+ 
+            if ( new Service<GroupHistorical>( Context ).Queryable().Any( a => a.GroupId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Group.FriendlyTypeName, GroupHistorical.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<GroupHistorical>( Context ).Queryable().Any( a => a.ParentGroupId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} contains one or more child {1}.", Group.FriendlyTypeName, GroupHistorical.FriendlyTypeName.Pluralize().ToLower() );
+                return false;
+            }  
+ 
+            if ( new Service<GroupLocationHistorical>( Context ).Queryable().Any( a => a.GroupId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Group.FriendlyTypeName, GroupLocationHistorical.FriendlyTypeName );
+                return false;
+            }  
+ 
+            if ( new Service<GroupMemberHistorical>( Context ).Queryable().Any( a => a.GroupId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Group.FriendlyTypeName, GroupMemberHistorical.FriendlyTypeName );
+                return false;
+            }  
             
             // ignoring GroupRequirement,GroupId 
  
@@ -96,11 +126,19 @@ namespace Rock.Model
                 return false;
             }  
  
-            if ( new Service<Registration>( Context ).Queryable().Any( a => a.GroupId == item.Id ) )
+            if ( new Service<Person>( Context ).Queryable().Any( a => a.PrimaryFamilyId == item.Id ) )
             {
-                errorMessage = string.Format( "This {0} is assigned to a {1}.", Group.FriendlyTypeName, Registration.FriendlyTypeName );
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Group.FriendlyTypeName, Person.FriendlyTypeName );
                 return false;
             }  
+ 
+            if ( new Service<PersonScheduleExclusion>( Context ).Queryable().Any( a => a.GroupId == item.Id ) )
+            {
+                errorMessage = string.Format( "This {0} is assigned to a {1}.", Group.FriendlyTypeName, PersonScheduleExclusion.FriendlyTypeName );
+                return false;
+            }  
+            
+            // ignoring Registration,GroupId 
  
             if ( new Service<WorkflowActivity>( Context ).Queryable().Any( a => a.AssignedGroupId == item.Id ) )
             {
@@ -144,16 +182,23 @@ namespace Rock.Model
         public static void CopyPropertiesFrom( this Group target, Group source )
         {
             target.Id = source.Id;
-            target.AddUserAccountsDuringSync = source.AddUserAccountsDuringSync;
             target.AllowGuests = source.AllowGuests;
+            target.ArchivedByPersonAliasId = source.ArchivedByPersonAliasId;
+            target.ArchivedDateTime = source.ArchivedDateTime;
+            target.AttendanceRecordRequiredForCheckIn = source.AttendanceRecordRequiredForCheckIn;
             target.CampusId = source.CampusId;
             target.Description = source.Description;
-            target.ExitSystemEmailId = source.ExitSystemEmailId;
+            target.DisableScheduleToolboxAccess = source.DisableScheduleToolboxAccess;
+            target.DisableScheduling = source.DisableScheduling;
             target.ForeignGuid = source.ForeignGuid;
             target.ForeignKey = source.ForeignKey;
             target.GroupCapacity = source.GroupCapacity;
             target.GroupTypeId = source.GroupTypeId;
+            target.InactiveDateTime = source.InactiveDateTime;
+            target.InactiveReasonNote = source.InactiveReasonNote;
+            target.InactiveReasonValueId = source.InactiveReasonValueId;
             target.IsActive = source.IsActive;
+            target.IsArchived = source.IsArchived;
             target.IsPublic = source.IsPublic;
             target.IsSecurityRole = source.IsSecurityRole;
             target.IsSystem = source.IsSystem;
@@ -161,9 +206,12 @@ namespace Rock.Model
             target.Order = source.Order;
             target.ParentGroupId = source.ParentGroupId;
             target.RequiredSignatureDocumentTemplateId = source.RequiredSignatureDocumentTemplateId;
+            target.RSVPReminderOffsetDays = source.RSVPReminderOffsetDays;
+            target.RSVPReminderSystemCommunicationId = source.RSVPReminderSystemCommunicationId;
+            target.ScheduleCancellationPersonAliasId = source.ScheduleCancellationPersonAliasId;
             target.ScheduleId = source.ScheduleId;
-            target.SyncDataViewId = source.SyncDataViewId;
-            target.WelcomeSystemEmailId = source.WelcomeSystemEmailId;
+            target.SchedulingMustMeetRequirements = source.SchedulingMustMeetRequirements;
+            target.StatusValueId = source.StatusValueId;
             target.CreatedDateTime = source.CreatedDateTime;
             target.ModifiedDateTime = source.ModifiedDateTime;
             target.CreatedByPersonAliasId = source.CreatedByPersonAliasId;

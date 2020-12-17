@@ -20,8 +20,10 @@ using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Web;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Newtonsoft.Json;
 
 using Rock.Data;
@@ -88,7 +90,7 @@ namespace Rock.Reporting.DataFilter
         /// <returns></returns>
         public override string GetTitle( Type entityType )
         {
-            return EntityTypeCache.Read( entityType ).FriendlyName + " Fields";
+            return EntityTypeCache.Get( entityType ).FriendlyName + " Fields";
         }
 
         /// <summary>
@@ -121,7 +123,7 @@ namespace Rock.Reporting.DataFilter
             {
                 values = JsonConvert.DeserializeObject<List<string>>( selection );
             }
-            catch (Exception ex)
+            catch ( Exception ex )
             {
                 ExceptionLogService.LogException( ex, null );
                 return "Error";
@@ -132,12 +134,15 @@ namespace Rock.Reporting.DataFilter
                 // First value in array is always the name of the entity field being filtered
                 string fieldSelection = values[0];
 
-                var entityFields = EntityHelper.GetEntityFields( entityType );
+                var entityField = EntityHelper.FindFromFilterSelection( entityType, fieldSelection );
 
-                var entityField = entityFields.FindFromFilterSelection( fieldSelection );
                 if ( entityField != null )
                 {
                     result = entityField.FormattedFilterDescription( FixDelimination( values.Skip( 1 ).ToList() ) );
+                }
+                else
+                {
+                    result = $"Unknown Property: {fieldSelection}";
                 }
             }
 
@@ -170,8 +175,7 @@ namespace Rock.Reporting.DataFilter
                 // First value in array is always the name of the entity field being filtered
                 string fieldSelection = values[0];
 
-                var entityFields = EntityHelper.GetEntityFields( entityType );
-                var entityField = entityFields.FindFromFilterSelection( fieldSelection );
+                var entityField = EntityHelper.FindFromFilterSelection( entityType, fieldSelection );
                 if ( entityField != null )
                 {
                     return entityField.TitleWithoutQualifier;
@@ -196,27 +200,38 @@ namespace Rock.Reporting.DataFilter
             var ddlEntityField = new RockDropDownList();
             ddlEntityField.ID = string.Format( "{0}_ddlProperty", filterControl.ID );
             ddlEntityField.ClientIDMode = ClientIDMode.Predictable;
+
+            var entityTypeCache = EntityTypeCache.Get( entityType, true );
+            ddlEntityField.Attributes["EntityTypeId"] = entityTypeCache?.Id.ToString();
+
             containerControl.Controls.Add( ddlEntityField );
 
             // add Empty option first
             ddlEntityField.Items.Add( new ListItem() );
             var rockBlock = filterControl.RockBlock();
-            var entityTypeCache = EntityTypeCache.Read( entityType, true );
 
-            this.entityFields = EntityHelper.GetEntityFields( entityType );
-            foreach ( var entityField in this.entityFields.OrderBy(a => !a.IsPreviewable).ThenBy(a => a.FieldKind != FieldKind.Property ).ThenBy(a => a.Title) )
+
+            var entityFields = EntityHelper.GetEntityFields( entityType );
+            foreach ( var entityField in entityFields.OrderBy( a => !a.IsPreviewable ).ThenBy( a => a.FieldKind != FieldKind.Property ).ThenBy( a => a.Title ) )
             {
                 bool isAuthorized = true;
                 bool includeField = true;
-                if ( entityField.FieldKind == FieldKind.Attribute && entityField.AttributeGuid.HasValue)
+                if ( entityField.FieldKind == FieldKind.Attribute && entityField.AttributeGuid.HasValue )
                 {
-                    if ( entityType == typeof( Rock.Model.Workflow ) && !string.IsNullOrWhiteSpace(entityField.AttributeEntityTypeQualifierName) )
+                    if ( entityType == typeof( Rock.Model.Workflow ) && !string.IsNullOrWhiteSpace( entityField.AttributeEntityTypeQualifierName ) )
                     {
                         // Workflows can contain tons of Qualified Attributes, so let the WorkflowAttributeFilter take care of those
                         includeField = false;
                     }
-                    
-                    var attribute = AttributeCache.Read( entityField.AttributeGuid.Value );
+
+                    var attribute = AttributeCache.Get( entityField.AttributeGuid.Value );
+
+                    // Don't include the attribute if it isn't active
+                    if ( attribute.IsActive == false )
+                    {
+                        includeField = false;
+                    }
+
                     if ( includeField && attribute != null && rockBlock != null )
                     {
                         // only show the Attribute field in the drop down if they have VIEW Auth to it
@@ -232,7 +247,7 @@ namespace Rock.Reporting.DataFilter
                     {
                         listItem.Attributes["optiongroup"] = "Common";
                     }
-                    else if (entityField.FieldKind == FieldKind.Attribute)
+                    else if ( entityField.FieldKind == FieldKind.Attribute )
                     {
                         listItem.Attributes["optiongroup"] = string.Format( "{0} Attributes", entityType.Name );
                     }
@@ -241,10 +256,10 @@ namespace Rock.Reporting.DataFilter
                         listItem.Attributes["optiongroup"] = string.Format( "{0} Fields", entityType.Name );
                     }
 
-                    ddlEntityField.Items.Add( listItem  );
+                    ddlEntityField.Items.Add( listItem );
                 }
             }
-            
+
             ddlEntityField.AutoPostBack = true;
 
             // grab the currently selected value off of the request params since we are creating the controls after the Page Init
@@ -270,8 +285,19 @@ namespace Rock.Reporting.DataFilter
             var ddlEntityField = sender as RockDropDownList;
             var containerControl = ddlEntityField.FirstParentControlOfType<DynamicControlsPanel>();
             FilterField filterControl = ddlEntityField.FirstParentControlOfType<FilterField>();
-            
-            var entityField = this.entityFields.FirstOrDefault( a => a.UniqueName == ddlEntityField.SelectedValue );
+
+            int? entityTypeId = ddlEntityField.Attributes["EntityTypeId"]?.AsIntegerOrNull();
+            if ( !entityTypeId.HasValue )
+            {
+                // shouldn't happen;
+                return;
+            }
+
+            var entityType = EntityTypeCache.Get( entityTypeId.Value ).GetEntityType();
+
+            var entityFields = EntityHelper.GetEntityFields( entityType );
+
+            var entityField = entityFields.FirstOrDefault( a => a.UniqueName == ddlEntityField.SelectedValue );
             if ( entityField != null )
             {
                 string controlId = string.Format( "{0}_{1}", containerControl.ID, entityField.UniqueName );
@@ -287,8 +313,6 @@ namespace Rock.Reporting.DataFilter
             }
         }
 
-        private List<EntityField> entityFields = null;
-
         /// <summary>
         /// Renders the controls.
         /// </summary>
@@ -302,7 +326,7 @@ namespace Rock.Reporting.DataFilter
             if ( controls.Length > 0 )
             {
                 var containerControl = controls[0] as DynamicControlsPanel;
-                
+
                 var ddlEntityField = containerControl.Controls[0] as DropDownList;
                 var entityFields = EntityHelper.GetEntityFields( entityType );
                 RenderEntityFieldsControls( entityType, filterControl, writer, entityFields, ddlEntityField, containerControl.Controls.OfType<Control>().ToList(), containerControl.ID, filterMode );
@@ -323,12 +347,12 @@ namespace Rock.Reporting.DataFilter
             if ( controls.Length > 0 )
             {
                 var containerControl = controls[0] as DynamicControlsPanel;
-                
+
                 DropDownList ddlProperty = containerControl.Controls[0] as DropDownList;
                 ddlEntityField_SelectedIndexChanged( ddlProperty, new EventArgs() );
 
-                var entityFields = EntityHelper.GetEntityFields( entityType );
-                var entityField = entityFields.FirstOrDefault( f => f.UniqueName == ddlProperty.SelectedValue );
+                var uniqueName = ddlProperty.SelectedValue;
+                var entityField = EntityHelper.GetEntityField( entityType, uniqueName );
                 if ( entityField != null )
                 {
                     var control = containerControl.Controls.OfType<Control>().ToList().FirstOrDefault( c => c.ID.EndsWith( "_" + entityField.UniqueName ) );
@@ -345,6 +369,50 @@ namespace Rock.Reporting.DataFilter
         }
 
         /// <summary>
+        /// Optional: The Entity that should be used when determining which PropertyFields and Attributes to show (instead of just basing it off of EntityType)
+        /// </summary>
+        /// <value>
+        /// The entity.
+        /// </value>
+        [RockObsolete( "1.12" )]
+        [Obsolete( "Not Supported. Could cause inconsistent results." )]
+        public IEntity Entity
+        {
+            get
+            {
+                if ( HttpContext.Current != null )
+                {
+                    return HttpContext.Current.Items[$"{this.GetType().FullName}:Entity"] as IEntity;
+                }
+
+                return _nonHttpContextEntity;
+            }
+
+            set
+            {
+                if ( HttpContext.Current != null )
+                {
+                    HttpContext.Current.Items[$"{this.GetType().FullName}:Entity"] = value;
+                }
+                else
+                {
+                    _nonHttpContextEntity = value;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Thread safe storage of property when HttpContext.Current is null
+        /// NOTE: ThreadStatic is per thread, but ASP.NET threads are ThreadPool threads, so they will be used again.
+        /// see https://www.hanselman.com/blog/ATaleOfTwoTechniquesTheThreadStaticAttributeAndSystemWebHttpContextCurrentItems.aspx
+        /// So be careful and only use the [ThreadStatic] trick if absolutely necessary
+        /// </summary>
+        [ThreadStatic]
+        [RockObsolete( "1.12" )]
+        [Obsolete( "Not Supported. Could cause inconsistent results." )]
+        private static IEntity _nonHttpContextEntity;
+
+        /// <summary>
         /// Sets the selection.
         /// </summary>
         /// <param name="entityType">Type of the entity.</param>
@@ -358,13 +426,13 @@ namespace Rock.Reporting.DataFilter
                 var values = JsonConvert.DeserializeObject<List<string>>( selection );
                 var containerControl = controls[0] as DynamicControlsPanel;
                 var ddlEntityField = containerControl.Controls[0] as DropDownList;
-                
+
                 var entityFields = EntityHelper.GetEntityFields( entityType );
 
                 // set the selected Field, but not the filter values yet
                 var entityFieldControls = containerControl.Controls.OfType<Control>().ToList();
                 SetEntityFieldSelection( entityFields, ddlEntityField, values, entityFieldControls, false );
-                
+
                 // build the Field specific filter controls
                 ddlEntityField_SelectedIndexChanged( ddlEntityField, new EventArgs() );
 
@@ -386,30 +454,101 @@ namespace Rock.Reporting.DataFilter
         /// <returns></returns>
         public override Expression GetExpression( Type entityType, IService serviceInstance, ParameterExpression parameterExpression, string selection )
         {
-            if ( !string.IsNullOrWhiteSpace( selection ) )
-            {
-                var values = JsonConvert.DeserializeObject<List<string>>( selection );
+            /* 2020-08-17 MDP
+               'selection' should be a deserialized List<string> where list parts are
+               [0] - PropertyName or Attribute to filter on
+               [1] - Comparison Type
+               [2+] - Parts that the GetPropertyExpression or GetAttributeExpression interpret
+             */
 
-                if ( values.Count >= 2 )
-                {
-                    string selectedProperty = values[0];
-                    var entityFields = EntityHelper.GetEntityFields( entityType );
-                    var entityField = entityFields.FindFromFilterSelection( selectedProperty );
-                    if ( entityField != null )
-                    {
-                        if ( entityField.FieldKind == FieldKind.Property )
-                        {
-                            return GetPropertyExpression( serviceInstance, parameterExpression, entityField, FixDelimination( values.Skip( 1 ).ToList() ) );
-                        }
-                        else
-                        {
-                            return GetAttributeExpression( serviceInstance, parameterExpression, entityField, FixDelimination( values.Skip( 1 ).ToList() ) );
-                        }
-                    }
-                }
+
+            /* 2020-08-17 MDP
+            * If it isn't fully configured we will ignore it and won't filter. We can detect if the filter isn't configured if..
+            * 
+            *   1) There isn't a selection specified (null or whitespace)
+            *   2) Deserialized Selection (filterValues) is an empty list
+            *   3) There are less than 2 items in the filterValues (we need a PropertyName/Attribute, and a comparison type)
+            *   4) A comparisontype isn't specified (null, "" or "0" means not specified) 
+            *   5) A property/attribute is not specified
+            *   
+            *   If we have any of the above cases, we'll return Expression.Const(true), which means we won't filter on this)
+            *   
+            * An exception is returned if
+            *   1) A Property is specified, but the Property doesn't exist
+            *   2) An attribute is specified, but the Attribute doesn't exist
+            *   3) A Property is specified, but the property is [HideFromReporting]
+            */
+
+            if ( string.IsNullOrWhiteSpace( selection ) )
+            {
+                // if the Property Filter hasn't been configured, don't use it to filter the results.
+                return Expression.Constant( true );
             }
 
-            return null;
+
+            var filterValues = JsonConvert.DeserializeObject<List<string>>( selection );
+
+            if ( !filterValues.Any() )
+            {
+                // if the Property/Attribute Filter hasn't been configured, don't use it to filter the results.
+                return Expression.Constant( true );
+            }
+
+            if ( filterValues.Count < 2 )
+            {
+                // a Property/Attribute filter needs at least 2 parameters. If it doesn't, don't filter
+                return Expression.Constant( true );
+            }
+
+            string selectedPropertyOrAttribute = filterValues[0];
+            if ( selectedPropertyOrAttribute.IsNullOrWhiteSpace() )
+            {
+                // A property/attribute is not specified
+                return Expression.Constant( true );
+            }
+
+            var entityField = EntityHelper.FindFromFilterSelection( entityType, selectedPropertyOrAttribute );
+            if ( entityField != null )
+            {
+                /* 2020-08-17 MDP
+                  filterValues[0] is the PropertyName or Attribute, we used that to determine which property or attribute to filter on.
+                  filterValues[1]+ are the filterValues that GetPropertyExpression or GetAttributeExpression use, so we do a Skip(1) when passing those
+                */
+
+                if ( entityField.FieldKind == FieldKind.Property )
+                {
+                    return GetPropertyExpression( serviceInstance, parameterExpression, entityField, FixDelimination( filterValues.Skip( 1 ).ToList() ) );
+                }
+                else
+                {
+                    return GetAttributeExpression( serviceInstance, parameterExpression, entityField, FixDelimination( filterValues.Skip( 1 ).ToList() ) );
+                }
+            }
+            else
+            {
+                /* 2020-08-17 MDP
+                 Pre-v12 would ignore this situation. However, ignoring this will return incorrect results. So, v12+ will throw an exception instead.
+                 Here is an example where the Pre-v12 behavior would return incorrect results
+                   -- A 'FavoriteColor' attribute exists on Person, and they configure a DataView to filter on 'FavoriteColor is Blue'. DataView returns only people whose favorite color is blue
+                   -- Somebody removes the 'FavoriteColor' attribute
+                   -- Pre-v12 would return everybody since the FavoriteColor attribute no longer exists
+                   -- v12 will throw an exception to prevent unexpected results after an attribute is deleted.
+                 */
+
+
+                string formattedSelection;
+
+                try
+                {
+                    formattedSelection = this.FormatSelection( entityType, selection );
+                }
+                catch
+                {
+                    formattedSelection = "Property";
+                }
+
+                throw new RockDataViewFilterExpressionException( $"{formattedSelection} filter refers to a property or attribute that doesn't exist. Selection: {selection}" );
+            }
         }
 
         /// <summary>

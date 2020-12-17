@@ -27,10 +27,19 @@ using System.Text;
 using Rock.Data;
 using Rock.Reporting;
 using Rock.Security;
+using Rock.Utility;
 using Rock.Web.Cache;
 
 namespace Rock.Model
 {
+    /*
+	    06/12/2020 - MSB 
+        This class is not only used by dataviews, but also by content channel filters to filter which items from the content channels should be shown, 
+        and Registration Instance Group Placement for filtering purposes.
+        The above two places will add records to the DataViewFilter table, but no corresponding records will be added to the DataView table so
+        the DataViewFilter records will incorrectly appear to be orphans.
+    */
+
     /// <summary>
     /// Represents a filter on a <see cref="Rock.Model.DataView"/> in Rock.
     /// </summary>
@@ -63,7 +72,7 @@ namespace Rock.Model
         public int? ParentId { get; set; }
 
         /// <summary>
-        /// Gets or sets the EntityTypeId of the <see cref="Rock.Model.EntityType"/> that either is being filtered by or contains the property that the DataView is being filtered by.
+        /// Gets or sets the EntityTypeId of the <see cref="Rock.Reporting.DataFilterComponent"/> that this filter is using.
         /// </summary>
         /// <value>
         /// A <see cref="System.Int32"/> representing the EntityTypeId of the <see cref="Rock.Model.EntityType"/> that is being used in the filter.
@@ -80,6 +89,24 @@ namespace Rock.Model
         [DataMember]
         public string Selection { get; set; }
 
+        /// <summary>
+        /// Gets or sets the id of the Data View that owns this record.
+        /// </summary>
+        /// <value>
+        /// The data view identifier.
+        /// </value>
+        [DataMember]
+        [IgnoreCanDelete]
+        public int? DataViewId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the id of the data view that this record uses for filtering.
+        /// </summary>
+        /// <value>
+        /// The related data view identifier.
+        /// </value>
+        [DataMember]
+        public int? RelatedDataViewId { get; set; }
         #endregion
 
         #region Virtual Properties
@@ -94,10 +121,26 @@ namespace Rock.Model
         public virtual DataViewFilter Parent { get; set; }
 
         /// <summary>
-        /// Gets or sets the <see cref="Rock.Model.EntityType"/> that the DataView is being filtered by or that contains the property/properties that the DataView is being filtered by.
+        /// Gets or sets the data view that owns this record.
         /// </summary>
         /// <value>
-        /// The <see cref="Rock.Model.EntityType"/> that the DataView is being filtered by.
+        /// The data view.
+        /// </value>
+        public virtual DataView DataView { get; set; }
+
+        /// <summary>
+        /// Gets or sets the data view that this record uses to filter.
+        /// </summary>
+        /// <value>
+        /// The related data view.
+        /// </value>
+        public virtual DataView RelatedDataView { get; set; }
+
+        /// <summary>
+        /// Gets or sets the EntityType of the <see cref="Rock.Reporting.DataFilterComponent" /> that this filter is using.
+        /// </summary>
+        /// <value>
+        /// The DataFilterComponent EntityType
         /// </value>
         [DataMember]
         public virtual EntityType EntityType { get; set; }
@@ -133,7 +176,7 @@ namespace Rock.Model
         #region Methods
 
         /// <summary>
-        /// Determines whether the specified action is authorized.
+        /// Determines whether the person is authorized for the DataViewFilter and Child filters
         /// </summary>
         /// <param name="action">A <see cref="System.String" /> containing the action that is being performed.</param>
         /// <param name="person">the <see cref="Rock.Model.Person" /> who is trying to perform the action.</param>
@@ -191,9 +234,9 @@ namespace Rock.Model
             // and all the child models/components
             if ( authorized && string.Compare( action, Authorization.VIEW, true ) == 0 )
             {
-                if ( EntityType != null )
+                if ( EntityTypeId.HasValue )
                 {
-                    var filterComponent = Rock.Reporting.DataFilterContainer.GetComponent( EntityType.Name );
+                    var filterComponent = Rock.Reporting.DataFilterContainer.GetComponent( EntityTypeCache.Get( this.EntityTypeId.Value )?.Name );
                     if ( filterComponent != null )
                     {
                         authorized = filterComponent.IsAuthorized( action, person );
@@ -223,6 +266,8 @@ namespace Rock.Model
         /// <param name="parameter">A <see cref="System.Linq.Expressions.ParameterExpression"/> containing the parameter for the expression.</param>
         /// <param name="errorMessages">A <see cref="System.Collections.Generic.List{String}"/> that contains any error/exception messages that are returned.</param>
         /// <returns></returns>
+        [RockObsolete( "1.12" )]
+        [Obsolete( "Use GetExpression( Type dataViewEntityTypeType, IService serviceInstance, ParameterExpression parameter, DataViewFilterOverrides dataViewFilterOverrides )" )]
         public virtual Expression GetExpression( Type filteredEntityType, IService serviceInstance, ParameterExpression parameter, List<string> errorMessages )
         {
             return GetExpression( filteredEntityType, serviceInstance, parameter, null, errorMessages );
@@ -237,58 +282,116 @@ namespace Rock.Model
         /// <param name="dataViewFilterOverrides">The data view filter overrides.</param>
         /// <param name="errorMessages">The error messages.</param>
         /// <returns></returns>
+        [RockObsolete( "1.12" )]
+        [Obsolete( "Use GetExpression( Type dataViewEntityTypeType, IService serviceInstance, ParameterExpression parameter, DataViewFilterOverrides dataViewFilterOverrides )" )]
         public virtual Expression GetExpression( Type filteredEntityType, IService serviceInstance, ParameterExpression parameter, DataViewFilterOverrides dataViewFilterOverrides, List<string> errorMessages )
+        {
+            return GetExpression( filteredEntityType, serviceInstance, parameter, dataViewFilterOverrides );
+        }
+
+        /// <summary>
+        /// Gets the expression.
+        /// </summary>
+        /// <param name="dataViewEntityTypeType">Type of the data view entity type.</param>
+        /// <param name="serviceInstance">The service instance.</param>
+        /// <param name="parameter">The parameter.</param>
+        /// <returns></returns>
+        public virtual Expression GetExpression( Type dataViewEntityTypeType, IService serviceInstance, ParameterExpression parameter )
+        {
+            return GetExpression( dataViewEntityTypeType, serviceInstance, parameter, new DataViewFilterOverrides() );
+        }
+
+        /// <summary>
+        /// Gets the expression.
+        /// </summary>
+        /// <param name="dataViewEntityTypeType">Type of the data view entity type.</param>
+        /// <param name="serviceInstance">The service instance.</param>
+        /// <param name="parameter">The parameter.</param>
+        /// <param name="dataViewFilterOverrides">The data view filter overrides.</param>
+        /// <returns></returns>
+        /// <exception cref="Rock.Reporting.RockReportingException">
+        /// EntityTypeId not defined for {this}
+        /// or
+        /// Unable to determine EntityType not defined for EntityTypeId {EntityTypeId}
+        /// or
+        /// Unable to determine Component for EntityType {entityType.Name}
+        /// or
+        /// unable to determine expression for {filter}
+        /// or
+        /// Unexpected FilterExpressionType {ExpressionType}
+        /// </exception>
+        public Expression GetExpression( Type dataViewEntityTypeType, IService serviceInstance, ParameterExpression parameter, DataViewFilterOverrides dataViewFilterOverrides )
         {
             switch ( ExpressionType )
             {
                 case FilterExpressionType.Filter:
 
-                    if ( this.EntityTypeId.HasValue )
+                    if ( !this.EntityTypeId.HasValue )
                     {
-                        var entityType = Rock.Web.Cache.EntityTypeCache.Read( this.EntityTypeId.Value );
-                        if ( entityType != null )
-                        {
-                            var component = Rock.Reporting.DataFilterContainer.GetComponent( entityType.Name );
-                            if ( component != null )
-                            {
-                                try
-                                {
-                                    string selection;
-                                    var dataViewFilterOverride = dataViewFilterOverrides?.GetOverride( this.Guid );
-                                    if ( dataViewFilterOverride != null )
-                                    {
-                                        if ( dataViewFilterOverride.IncludeFilter == false )
-                                        {
-                                            return null;
-                                        }
-                                        else
-                                        {
-                                            selection = dataViewFilterOverride.Selection;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        selection = this.Selection;
-                                    }
+                        // if this happens, we want to throw an exception to prevent incorrect results
+                        throw new RockDataViewFilterExpressionException( this, $"EntityTypeId not defined for {this}" );
+                    }
 
-                                    if ( component is IDataFilterWithOverrides )
-                                    {
-                                        return ( component as IDataFilterWithOverrides ).GetExpressionWithOverrides( filteredEntityType, serviceInstance, parameter, dataViewFilterOverrides, selection );
-                                    }
-                                    else
-                                    {
-                                        return component.GetExpression( filteredEntityType, serviceInstance, parameter, selection );
-                                    }
-                                }
-                                catch (SystemException ex)
-                                {
-                                    ExceptionLogService.LogException( ex, System.Web.HttpContext.Current );
-                                    errorMessages.Add( string.Format( "{0}: {1}", component.FormatSelection( filteredEntityType, this.Selection ), ex.Message ) );
-                                }
-                            }
+                    var entityType = EntityTypeCache.Get( this.EntityTypeId.Value );
+                    if ( entityType == null )
+                    {
+                        // if this happens, we want to throw an exception to prevent incorrect results
+                        throw new RockDataViewFilterExpressionException( this, $"Unable to determine EntityType not defined for EntityTypeId {EntityTypeId}" );
+                    }
+
+                    var component = Rock.Reporting.DataFilterContainer.GetComponent( entityType.Name );
+                    if ( component == null )
+                    {
+                        // if this happens, we want to throw an exception to prevent incorrect results
+                        throw new RockDataViewFilterExpressionException( this, $"Unable to determine Component for EntityType {entityType.Name}" );
+                    }
+
+                    string selection; // A formatted string representing the filter settings: FieldName, <see cref="ComparisonType">Comparison Type</see>, (optional) Comparison Value(s)
+                    var dataViewFilterOverride = dataViewFilterOverrides?.GetOverride( this.Guid );
+                    if ( dataViewFilterOverride != null )
+                    {
+                        if ( dataViewFilterOverride.IncludeFilter == false )
+                        {
+                            // if the dataview filter should not be included, don't have this filter filter anything
+                            return Expression.Constant( true );
+                        }
+                        else
+                        {
+                            selection = dataViewFilterOverride.Selection;
                         }
                     }
-                    return null;
+                    else
+                    {
+                        selection = this.Selection;
+                    }
+
+                    Expression expression;
+
+                    try
+                    {
+                        if ( component is IDataFilterWithOverrides )
+                        {
+                            expression = ( component as IDataFilterWithOverrides ).GetExpressionWithOverrides( dataViewEntityTypeType, serviceInstance, parameter, dataViewFilterOverrides, selection );
+                        }
+                        else
+                        {
+                            expression = component.GetExpression( dataViewEntityTypeType, serviceInstance, parameter, selection );
+                        }
+                    }
+                    catch ( RockDataViewFilterExpressionException dex )
+                    {
+                        // components don't know which DataView/DataFilter they are working with, so if there was a RockDataViewFilterExpressionException, let's tell it what DataViewFilter/DataView it was using
+                        dex.SetDataFilterIfNotSet( this );
+                        throw;
+                    }
+
+                    if ( expression == null )
+                    {
+                        // If a DataFilter component returned a null expression, that probably means that it decided not to filter anything. So, we'll interpret that as "Don't Filter"
+                        expression = Expression.Constant( true );
+                    }
+
+                    return expression;
 
                 case FilterExpressionType.GroupAll:
                 case FilterExpressionType.GroupAnyFalse:
@@ -296,18 +399,21 @@ namespace Rock.Model
                     Expression andExp = null;
                     foreach ( var filter in this.ChildFilters )
                     {
-                        Expression exp = filter.GetExpression( filteredEntityType, serviceInstance, parameter, dataViewFilterOverrides, errorMessages );
-                        if ( exp != null )
+                        Expression exp = filter.GetExpression( dataViewEntityTypeType, serviceInstance, parameter, dataViewFilterOverrides );
+                        if ( exp == null )
                         {
-                            if ( andExp == null )
-                            {
-                                andExp = exp;
-                            }
-                            else
-                            {
+                            // If a DataFilter component returned a null expression, that probably means that it decided not to filter anything. So, we'll interpret that as "Don't Filter"
+                            exp = Expression.Constant( true );
+                        }
 
-                                andExp = Expression.AndAlso( andExp, exp );
-                            }
+                        if ( andExp == null )
+                        {
+                            andExp = exp;
+                        }
+                        else
+                        {
+
+                            andExp = Expression.AndAlso( andExp, exp );
                         }
                     }
 
@@ -318,25 +424,34 @@ namespace Rock.Model
                         andExp = Expression.Not( andExp );
                     }
 
+                    if ( andExp == null )
+                    {
+                        // if there aren't and child filters for a GroupAll/GroupAnyFalse. That is OK, so just don't filter anything
+                        return Expression.Constant( true );
+                    }
+
                     return andExp;
 
                 case FilterExpressionType.GroupAny:
                 case FilterExpressionType.GroupAllFalse:
 
                     Expression orExp = null;
-                    foreach ( var filter in this.ChildFilters )
+                    foreach ( DataViewFilter filter in this.ChildFilters )
                     {
-                        Expression exp = filter.GetExpression( filteredEntityType, serviceInstance, parameter, dataViewFilterOverrides, errorMessages );
-                        if ( exp != null )
+                        Expression exp = filter.GetExpression( dataViewEntityTypeType, serviceInstance, parameter, dataViewFilterOverrides );
+                        if ( exp == null )
                         {
-                            if ( orExp == null )
-                            {
-                                orExp = exp;
-                            }
-                            else
-                            {
-                                orExp = Expression.OrElse( orExp, exp );
-                            }
+                            // If a DataFilter component returned a null expression, that probably means that it decided not to filter anything. So, we'll interpret that as "Don't Filter"
+                            exp = Expression.Constant( true );
+                        }
+
+                        if ( orExp == null )
+                        {
+                            orExp = exp;
+                        }
+                        else
+                        {
+                            orExp = Expression.OrElse( orExp, exp );
                         }
                     }
 
@@ -347,10 +462,16 @@ namespace Rock.Model
                         orExp = Expression.Not( orExp );
                     }
 
-                    return orExp;
-            }
+                    if ( orExp == null )
+                    {
+                        // if there aren't and child filters for a GroupAny/GroupAllFalse. That is OK, so just don't filter anything
+                        return Expression.Constant( true );
+                    }
 
-            return null;
+                    return orExp;
+                default:
+                    throw new RockDataViewFilterExpressionException( this, $"Unexpected FilterExpressionType {ExpressionType} " );
+            }
         }
 
         /// <summary>
@@ -359,13 +480,13 @@ namespace Rock.Model
         /// <returns>
         /// A <see cref="System.String"/> that represents this instance.
         /// </returns>
-        public string ToString(Type filteredEntityType)
+        public string ToString( Type filteredEntityType )
         {
             if ( this.ExpressionType == FilterExpressionType.Filter )
             {
                 if ( EntityTypeId.HasValue )
                 {
-                    var entityType = EntityTypeCache.Read( EntityTypeId.Value );
+                    var entityType = EntityTypeCache.Get( EntityTypeId.Value );
                     var component = Rock.Reporting.DataFilterContainer.GetComponent( entityType.Name );
                     if ( component != null )
                     {
@@ -379,8 +500,8 @@ namespace Rock.Model
 
                 string conjunction;
 
-                if (this.ExpressionType == FilterExpressionType.GroupAny
-                    || this.ExpressionType == FilterExpressionType.GroupAllFalse)
+                if ( this.ExpressionType == FilterExpressionType.GroupAny
+                    || this.ExpressionType == FilterExpressionType.GroupAllFalse )
                 {
                     // If any of the conditions can be True or all of the conditions must be False, use a logical "OR" operation.
                     conjunction = " OR ";
@@ -390,8 +511,8 @@ namespace Rock.Model
                     conjunction = " AND ";
                 }
 
-                var children = this.ChildFilters.OrderBy( f => f.ExpressionType).ToList();
-                for(int i = 0; i < children.Count; i++)
+                var children = this.ChildFilters.OrderBy( f => f.ExpressionType ).ToList();
+                for ( int i = 0; i < children.Count; i++ )
                 {
                     string childString = children[i].ToString( filteredEntityType );
                     if ( !string.IsNullOrWhiteSpace( childString ) )
@@ -400,14 +521,14 @@ namespace Rock.Model
                     }
                 }
 
-                if (children.Count > 1 && Parent != null)
+                if ( children.Count > 1 && Parent != null )
                 {
-                    sb.Insert(0, "( ");
-                    sb.Append(" )");
+                    sb.Insert( 0, "( " );
+                    sb.Append( " )" );
                 }
 
-                if (this.ExpressionType == FilterExpressionType.GroupAllFalse
-                    || this.ExpressionType == FilterExpressionType.GroupAnyFalse)
+                if ( this.ExpressionType == FilterExpressionType.GroupAllFalse
+                    || this.ExpressionType == FilterExpressionType.GroupAnyFalse )
                 {
                     sb.Insert( 0, "NOT " );
                 }
@@ -428,9 +549,9 @@ namespace Rock.Model
         {
             if ( this.ExpressionType == FilterExpressionType.Filter && this.EntityTypeId.HasValue )
             {
-                return this.ToString( EntityTypeCache.Read( this.EntityTypeId.Value ).GetEntityType() );
+                return this.ToString( EntityTypeCache.Get( this.EntityTypeId.Value ).GetEntityType() );
             }
-            else 
+            else
             {
                 return this.ExpressionType.ConvertToString();
             }
@@ -452,8 +573,11 @@ namespace Rock.Model
         /// </summary>
         public DataViewFilterConfiguration()
         {
-            this.HasOptional( r => r.Parent ).WithMany( r => r.ChildFilters).HasForeignKey( r => r.ParentId ).WillCascadeOnDelete( false );
+            this.HasOptional( r => r.Parent ).WithMany( r => r.ChildFilters ).HasForeignKey( r => r.ParentId ).WillCascadeOnDelete( false );
             this.HasOptional( e => e.EntityType ).WithMany().HasForeignKey( e => e.EntityTypeId ).WillCascadeOnDelete( false );
+
+            this.HasOptional( r => r.DataView ).WithMany().HasForeignKey( r => r.DataViewId ).WillCascadeOnDelete( false );
+            this.HasOptional( e => e.RelatedDataView ).WithMany().HasForeignKey( e => e.RelatedDataViewId ).WillCascadeOnDelete( false );
         }
     }
 
@@ -462,14 +586,17 @@ namespace Rock.Model
     #region Classes
 
     /// <summary>
-    /// A Dictionary of DataViewFilterOverride where the Key is the DataViewFilter.Guid
+    /// DataViewFilterOverrides with a Dictionary of Filter Overrides where the Key is the DataViewFilter.Guid
     /// </summary>
+    [System.Diagnostics.DebuggerDisplay( "{DebuggerDisplay}" )]
     public class DataViewFilterOverrides : Dictionary<Guid, DataViewFilterOverride>
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="DataViewFilterOverrides"/> class.
         /// </summary>
-        public DataViewFilterOverrides() : base() { }
+        public DataViewFilterOverrides() : base()
+        {
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DataViewFilterOverrides"/> class.
@@ -478,6 +605,14 @@ namespace Rock.Model
         public DataViewFilterOverrides( List<DataViewFilterOverride> list ) :
             base( list.ToDictionary( k => k.DataFilterGuid, v => v ) )
         { }
+
+        /// <summary>
+        /// List of DataViewIds that should not use Persisted Values
+        /// </summary>
+        /// <value>
+        /// The ignore data view persisted values.
+        /// </value>
+        public HashSet<int> IgnoreDataViewPersistedValues { get; set; } = new HashSet<int>();
 
         /// <summary>
         /// Gets the override.
@@ -493,6 +628,20 @@ namespace Rock.Model
             else
             {
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets the debugger display.
+        /// </summary>
+        /// <value>
+        /// The debugger display.
+        /// </value>
+        private string DebuggerDisplay
+        {
+            get
+            {
+                return $@"IgnoreDataViewPersistedValues for DataViewIds: {IgnoreDataViewPersistedValues.ToList().AsDelimited( "," )},DataViewFilterOverrides.Count:{this.Count}";
             }
         }
     }
@@ -582,74 +731,93 @@ namespace Rock.Model
         /// <summary>
         /// Equal
         /// </summary>
+        [EnumOrder( 1 )]
         EqualTo = 0x1,
 
         /// <summary>
         /// Not equal
         /// </summary>
+        [EnumOrder( 2 )]
         NotEqualTo = 0x2,
 
         /// <summary>
         /// Starts with
         /// </summary>
+        /// <remarks>
+        /// The order for <see cref="StartsWith"/> is set so that it is displayed before <see cref="EndsWith"/>
+        /// </remarks>
+        [EnumOrder( 11 )]
         StartsWith = 0x4,
 
         /// <summary>
         /// Contains
         /// </summary>
+        [EnumOrder( 3 )]
         Contains = 0x8,
 
         /// <summary>
         /// Does not contain
         /// </summary>
+        [EnumOrder( 4 )]
         DoesNotContain = 0x10,
 
         /// <summary>
         /// Is blank
         /// </summary>
+        [EnumOrder( 5 )]
         IsBlank = 0x20,
 
         /// <summary>
         /// Is not blank
         /// </summary>
+        [EnumOrder( 6 )]
         IsNotBlank = 0x40,
 
         /// <summary>
         /// Greater than
         /// </summary>
+        [EnumOrder( 7 )]
         GreaterThan = 0x80,
 
         /// <summary>
         /// Greater than or equal
         /// </summary>
+        [EnumOrder( 8 )]
         GreaterThanOrEqualTo = 0x100,
 
         /// <summary>
         /// Less than
         /// </summary>
+        [EnumOrder( 9 )]
         LessThan = 0x200,
 
         /// <summary>
         /// Less than or equal
         /// </summary>
+        [EnumOrder( 10 )]
         LessThanOrEqualTo = 0x400,
 
         /// <summary>
         /// Ends with
         /// </summary>
+        /// /// <remarks>
+        /// The order for <see cref="StartsWith"/> is set so that it is displayed before <see cref="EndsWith"/>
+        /// </remarks>
+        [EnumOrder( 12 )]
         EndsWith = 0x800,
 
         /// <summary>
         /// Between
         /// </summary>
+        [EnumOrder( 13 )]
         Between = 0x1000,
 
         /// <summary>
         /// Regular Expression
         /// </summary>
+        [EnumOrder( 14 )]
         RegularExpression = 0x2000,
     }
 
     #endregion
-
 }

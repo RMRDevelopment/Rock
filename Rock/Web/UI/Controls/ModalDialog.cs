@@ -68,6 +68,7 @@ namespace Rock.Web.UI.Controls
         private HtmlAnchor _serverSaveLink;
         private HtmlAnchor _saveLink;
         private HtmlAnchor _cancelLink;
+        private HtmlAnchor _saveThenAddLink;
 
         /// <summary>
         /// Raises the <see cref="E:Init"/> event.
@@ -86,6 +87,7 @@ namespace Rock.Web.UI.Controls
                 sm.RegisterAsyncPostBackControl( _cancelLink );
                 sm.RegisterAsyncPostBackControl( _serverSaveLink );
                 sm.RegisterAsyncPostBackControl( _saveLink );
+                sm.RegisterAsyncPostBackControl( _saveThenAddLink );
             }
         }
 
@@ -147,8 +149,56 @@ namespace Rock.Web.UI.Controls
         /// <value>The save button text.</value>
         public string SaveButtonText
         {
-            get { return ViewState["SaveButtonText"] as string ?? "Save"; }
-            set { ViewState["SaveButtonText"] = value; }
+            get => ViewState["SaveButtonText"] as string ?? "Save";
+            set => ViewState["SaveButtonText"] = value;
+        }
+
+        /// <summary>
+        /// Gets or sets additional CSS classes for the modal save button.
+        /// If js hooks are needed this is the place to add them.
+        /// </summary>
+        /// <value>
+        /// The save button CSS class.
+        /// </value>
+        public string SaveButtonCssClass
+        {
+            get => ViewState["SaveButtonCSSClass"] as string ?? string.Empty;
+            set => ViewState["SaveButtonCSSClass"] = value;
+        }
+
+        /// <summary>
+        /// Gets or sets additional CSS classes for the modal
+        /// If js hooks are needed this is the place to add them.
+        /// </summary>
+        /// <value>
+        /// The modal CSS class.
+        /// </value>
+        public string ModalCssClass
+        {
+            get => ViewState["ModalCssClass"] as string ?? string.Empty;
+            set => ViewState["ModalCssClass"] = value;
+        }
+
+        /// <summary>
+        /// Gets the Control for the SaveButton
+        /// </summary>
+        /// <value>
+        /// The save button.
+        /// </value>
+        public bool SaveButtonCausesValidation
+        {
+            get => ViewState["SaveButtonCausesValidation"] as bool? ?? true;
+            set => ViewState["SaveButtonCausesValidation"] = value;
+        }
+
+        /// <summary>
+        /// Gets or sets the save then add button text.
+        /// </summary>
+        /// <value>The post save then add button text.</value>
+        public string SaveThenAddButtonText
+        {
+            get { return ViewState["SaveThenAddButtonText"] as string ?? "Save Then Add"; }
+            set { ViewState["SaveThenAddButtonText"] = value; }
         }
 
         /// <summary>
@@ -209,7 +259,7 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
-        /// Gets or sets a value indicating whether [close link visible].
+        /// Gets or sets a value indicating whether the close button (The X in the Header) is visible
         /// </summary>
         /// <value>
         ///   <c>true</c> if [close link visible]; otherwise, <c>false</c>.
@@ -277,15 +327,26 @@ namespace Rock.Web.UI.Controls
         /// </summary>
         public void Hide()
         {
+            Hide( null );
+        }
+
+        /// <summary>
+        /// Hides this instance.
+        /// </summary>
+        /// <param name="managerId">The ID of the modal's manager (HTML element).</param>
+        public void Hide( string managerId )
+        {
             EnsureChildControls();
             _hfModalVisible.Value = "0";
 
+            var managerSelector = managerId.IsNullOrWhiteSpace() ? GetModalManagerSelector() : $"#{managerId}";
+            var managerArg = !string.IsNullOrWhiteSpace( managerId ) ? $", $('{managerSelector}')" : string.Empty;
+
             // make sure the close script gets fired, even if the modal isn't rendered
-            string hideScript = string.Format("Rock.controls.modal.closeModalDialog($('#{0}'));", _dialogPanel.ClientID);
+            string hideScript = string.Format( "Rock.controls.modal.closeModalDialog($('#{0}'){1});", _dialogPanel.ClientID, managerArg );
             ScriptManager.RegisterStartupScript( this, this.GetType(), "modaldialog-hide-" + this.ClientID, hideScript, true );
 
             this.Visible = false;
-
         }
 
         /// <summary>
@@ -315,6 +376,7 @@ namespace Rock.Web.UI.Controls
 
             _hfModalVisible = new HiddenFieldWithClass();
             _hfModalVisible.CssClass = "js-modal-visible";
+            _hfModalVisible.ID = "hfModalVisible";
             _dialogPanel.Controls.Add( _hfModalVisible );
 
             // modal-header
@@ -370,16 +432,22 @@ namespace Rock.Web.UI.Controls
             _cancelLink.Attributes.Add( "data-dismiss", "modal" );
             _cancelLink.InnerText = "Cancel";
 
+            _saveThenAddLink = new HtmlAnchor();
+            _footerPanel.Controls.Add( _saveThenAddLink );
+            _saveThenAddLink.ID = "saveThenAddLink";
+            _saveThenAddLink.Attributes.Add( "class", "btn btn-link" );
+            _saveThenAddLink.ServerClick += SaveThenAdd_ServerClick;
+
             _serverSaveLink = new HtmlAnchor();
             _footerPanel.Controls.Add( _serverSaveLink );
             _serverSaveLink.ID = "serverSaveLink";
-            _serverSaveLink.Attributes.Add( "class", "btn btn-primary" );
+            _serverSaveLink.Attributes.Add( "class", $"btn btn-primary {SaveButtonCssClass}" );
             _serverSaveLink.ServerClick += SaveLink_ServerClick;
 
             _saveLink = new HtmlAnchor();
             _footerPanel.Controls.Add( _saveLink );
             _saveLink.ID = "saveLink";
-            _saveLink.Attributes.Add( "class", "btn btn-primary js-modaldialog-save-link" );
+            _saveLink.Attributes.Add( "class", $"btn btn-primary js-modaldialog-save-link {SaveButtonCssClass}" );
         }
 
         /// <summary>
@@ -392,11 +460,31 @@ namespace Rock.Web.UI.Controls
 
             _serverSaveLink.Visible = !string.IsNullOrWhiteSpace( SaveButtonText ) && SaveClick != null;
             _serverSaveLink.InnerText = SaveButtonText;
-            _serverSaveLink.ValidationGroup = this.ValidationGroup;
+            _serverSaveLink.AddCssClass( SaveButtonCssClass );
+            if ( ModalCssClass.IsNotNullOrWhiteSpace() )
+            {
+                _dialogPanel.AddCssClass( ModalCssClass );
+            }
+
+            if ( SaveButtonCausesValidation )
+            {
+                _serverSaveLink.CausesValidation = true;
+                _serverSaveLink.ValidationGroup = this.ValidationGroup;
+            }
+            else
+            {
+                _serverSaveLink.CausesValidation = false;
+                _serverSaveLink.ValidationGroup = "";
+            }
 
             _saveLink.Visible = !string.IsNullOrWhiteSpace( SaveButtonText ) && SaveClick == null && !string.IsNullOrWhiteSpace( OnOkScript );
             _saveLink.InnerText = SaveButtonText;
+            _saveLink.AddCssClass( SaveButtonCssClass );
             _saveLink.ValidationGroup = this.ValidationGroup;
+
+            _saveThenAddLink.Visible = !string.IsNullOrWhiteSpace( SaveThenAddButtonText ) && SaveThenAddClick != null;
+            _saveThenAddLink.InnerText = SaveThenAddButtonText;
+            _saveThenAddLink.ValidationGroup = this.ValidationGroup;
 
             if ( !_serverSaveLink.Visible && !_saveLink.Visible )
             {
@@ -411,34 +499,55 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
+        /// Gets the modal manager.
+        /// </summary>
+        /// <returns></returns>
+        protected string GetModalManagerSelector()
+        {
+            var parentPanel = this.ParentUpdatePanel();
+            return parentPanel != null ? "#" + parentPanel.ClientID : "body";
+        }
+
+        /// <summary>
         /// Registers the java script.
         /// </summary>
         protected void RegisterJavaScript()
         {
-            string scriptFormat = @"
-if ($('#{0}').find('.js-modal-visible').val() == '1') {{
-    Rock.controls.modal.showModalDialog($('#{0}'), '{3}');
-}} 
+            var modalManager = GetModalManagerSelector();
+
+            // if this is Modal is a child of a another Modal, make sure the parent modal stays visible if this modal is closed
+            var parentModal = this.FirstParentControlOfType<ModalDialog>();
+            string showParentModalOnCloseScript = null;
+            if ( parentModal != null )
+            {
+                showParentModalOnCloseScript = $@"Rock.controls.modal.showModalDialog($('#{parentModal._dialogPanel.ClientID}'), '{modalManager}');";
+            }
+
+            // if the Modal's manger is an UpdatePanel, provide the appropriate jQuery selector to the closeModalDialog function
+            var closeDialogManagerArg = modalManager != "body" ? $", $('{modalManager}')" : string.Empty;
+
+            string script = $@"
+if ($('#{_hfModalVisible.ClientID}').val() == '1') {{
+    Rock.controls.modal.showModalDialog($('#{_dialogPanel.ClientID}'), '{modalManager}');
+}}
 else {{
-    Rock.controls.modal.closeModalDialog($('#{0}'));
+    Rock.controls.modal.closeModalDialog($('#{_dialogPanel.ClientID}'){closeDialogManagerArg});
 }}
 
-$('#{0}').find('.js-modaldialog-close-link, .js-modaldialog-cancel-link').click(function () {{
-    {1}
-    $('#{0}').find('.js-modal-visible').val('0');
-    Rock.controls.modal.closeModalDialog($('#{0}'));
+$('#{_cancelLink.ClientID}, #{_closeLink.ClientID}').on('click', function () {{
+    {this.OnCancelScript}
+    $('#{_hfModalVisible.ClientID}').val('0');
+    Rock.controls.modal.closeModalDialog($('#{_dialogPanel.ClientID}'){closeDialogManagerArg});
+    {showParentModalOnCloseScript}
 }});
 
-$('#{0}').find('.js-modaldialog-save-link').click(function () {{
-    {2}
-    $('#{0}').find('.js-modal-visible').val('0');
-    Rock.controls.modal.closeModalDialog($('#{0}'));
+$('#{_saveLink.ClientID}').on('click', function () {{
+    {this.OnOkScript}
+    $('#{_hfModalVisible.ClientID}').val('0');
+    Rock.controls.modal.closeModalDialog($('#{_dialogPanel.ClientID}'){closeDialogManagerArg});
 }});
 
 ";
-            var parentPanel = this.ParentUpdatePanel();
-            var modalManager = parentPanel != null ? "#" + parentPanel.ClientID : "body";
-            var script = string.Format( scriptFormat, _dialogPanel.ClientID, this.OnCancelScript, this.OnOkScript, modalManager );
 
             ScriptManager.RegisterStartupScript( this, this.GetType(), "modaldialog-show-" + this.ClientID, script, true );
         }
@@ -457,8 +566,26 @@ $('#{0}').find('.js-modaldialog-save-link').click(function () {{
         }
 
         /// <summary>
+        /// Handles the ServerClick event of the SaveThenAddLink control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
+        public void SaveThenAdd_ServerClick( object sender, EventArgs e )
+        {
+            if ( SaveThenAddClick != null )
+            {
+                SaveThenAddClick( sender, e );
+            }
+        }
+
+        /// <summary>
         /// Occurs when the save button is clicked.
         /// </summary>
         public event EventHandler SaveClick;
+
+        /// <summary>
+        /// Occurs after the save then add button is clicked.
+        /// </summary>
+        public event EventHandler SaveThenAddClick;
     }
 }

@@ -20,7 +20,6 @@ using System.ComponentModel;
 using System.Data.Entity;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -29,41 +28,153 @@ using System.Web.UI.WebControls;
 
 using Rock;
 using Rock.Attribute;
+using Rock.Communication;
 using Rock.Data;
 using Rock.Model;
 using Rock.Security;
 using Rock.Web.Cache;
 using Rock.Web.UI;
 using Rock.Web.UI.Controls;
+using Rock.Web.UI.Controls.Communication;
 
 namespace RockWeb.Blocks.Communication
 {
     /// <summary>
-    /// 
+    /// A block for creating and sending a new communication such as email, SMS, etc. to recipients.
     /// </summary>
     [DisplayName( "Communication Entry Wizard" )]
     [Category( "Communication" )]
     [Description( "Used for creating and sending a new communications such as email, SMS, etc. to recipients." )]
 
+    #region Block Attributes
+
     [SecurityAction( Authorization.APPROVE, "The roles and/or users that have access to approve new communications." )]
 
-    [BinaryFileTypeField( "Image Binary File Type", "The FileType to use for images that are added to the email using the image component", true, Rock.SystemGuid.BinaryFiletype.COMMUNICATION_IMAGE, order: 1 )]
-    [BinaryFileTypeField( "Attachment Binary File Type", "The FileType to use for files that are attached to an sms or email communication", true, Rock.SystemGuid.BinaryFiletype.COMMUNICATION_ATTACHMENT, order: 2 )]
-    [IntegerField( "Character Limit", "Set this to show a character limit countdown for SMS communications. Set to 0 to disable", false, 160, order: 3 )]
+    [BinaryFileTypeField( "Image Binary File Type",
+        Key = AttributeKey.ImageBinaryFileType,
+        Description = "The FileType to use for images that are added to the email using the image component",
+        IsRequired = true,
+        DefaultBinaryFileTypeGuid = Rock.SystemGuid.BinaryFiletype.COMMUNICATION_IMAGE,
+        Order = 1 )]
 
-    [LavaCommandsField( "Enabled Lava Commands", "The Lava commands that should be enabled for this HTML block.", false, order: 4 )]
-    [CustomCheckboxListField( "Communication Types", "The communication types that should be available to user to send (If none are selected, all will be available).", "Recipient Preference,Email,SMS", false, order: 5 )]
-    [IntegerField( "Maximum Recipients", "The maximum number of recipients allowed before communication will need to be approved.", false, 300, "", order: 6 )]
-    [BooleanField( "Send When Approved", "Should communication be sent once it's approved (vs. just being queued for scheduled job to send)?", true, "", 7 )]
-    [IntegerField( "Max SMS Image Width", "The maximum width (in pixels) of an image attached to a mobile communication. If its width is over the max, Rock will automatically resize image to the max width.", false, 600, order: 8 )]
-    [DefinedValueField( Rock.SystemGuid.DefinedType.COMMUNICATION_SMS_FROM, "Allowed SMS Numbers", "Set the allowed FROM numbers to appear when in SMS mode (if none are selected all numbers will be included). ", false, true, order:9 )]
-    [LinkedPage( "Simple Communication Page", "The page to use if the 'Use Simple Editor' panel heading icon is clicked. Leave this blank to not show the 'Use Simple Editor' heading icon", false, order: 10 )]
+    [BinaryFileTypeField( "Attachment Binary File Type",
+        Key = AttributeKey.AttachmentBinaryFileType,
+        Description = "The FileType to use for files that are attached to an sms or email communication",
+        IsRequired = true,
+        DefaultBinaryFileTypeGuid = Rock.SystemGuid.BinaryFiletype.COMMUNICATION_ATTACHMENT,
+        Order = 2 )]
+
+    [IntegerField( "Character Limit",
+        Key = AttributeKey.CharacterLimit,
+        Description = "Set this to show a character limit countdown for SMS communications. Set to 0 to disable",
+        IsRequired = false,
+        DefaultIntegerValue = 160,
+        Order = 3 )]
+
+    [LavaCommandsField( "Enabled Lava Commands",
+        Key = AttributeKey.EnabledLavaCommands,
+        Description = "The Lava commands that should be enabled for this HTML block.",
+        IsRequired = false,
+        Order = 4 )]
+
+    [CustomCheckboxListField( "Communication Types",
+        Key = AttributeKey.CommunicationTypes,
+        Description = "The communication types that should be available to use for the communication (If none are selected, all will be available).",
+        ListSource = "Recipient Preference,Email,SMS,Push",
+        IsRequired = false,
+        Order = 5 )]
+
+    [IntegerField( "Maximum Recipients",
+        Key = AttributeKey.MaximumRecipients,
+        Description = "The maximum number of recipients allowed before communication will need to be approved.",
+        IsRequired = false,
+        DefaultIntegerValue = 300,
+        Order = 6 )]
+
+    [BooleanField( "Send When Approved",
+        Key = AttributeKey.SendWhenApproved,
+        Description = "Should communication be sent once it's approved (vs. just being queued for scheduled job to send)?",
+        DefaultBooleanValue = true,
+        Order = 7 )]
+
+    [IntegerField( "Max SMS Image Width",
+        Key = AttributeKey.MaxSMSImageWidth,
+        Description = "The maximum width (in pixels) of an image attached to a mobile communication. If its width is over the max, Rock will automatically resize image to the max width.",
+        IsRequired = false,
+        DefaultIntegerValue = 600,
+        Order = 8 )]
+
+    [DefinedValueField( "Allowed SMS Numbers",
+        Key = AttributeKey.AllowedSMSNumbers,
+        DefinedTypeGuid = Rock.SystemGuid.DefinedType.COMMUNICATION_SMS_FROM,
+        Description = "Set the allowed FROM numbers to appear when in SMS mode (if none are selected all numbers will be included). ",
+        IsRequired = false,
+        AllowMultiple = true,
+        Order = 9 )]
+
+    [LinkedPage( "Simple Communication Page",
+        Key = AttributeKey.SimpleCommunicationPage,
+        Description = "The page to use if the 'Use Simple Editor' panel heading icon is clicked. Leave this blank to not show the 'Use Simple Editor' heading icon",
+        IsRequired = false,
+        Order = 10 )]
+
+    [BooleanField( "Show Duplicate Prevention Option",
+        Key = AttributeKey.ShowDuplicatePreventionOption,
+        Description = "Set this to true to show an option to prevent communications from being sent to people with the same email/SMS addresses. Typically, in Rock you’d want to send two emails as each will be personalized to the individual.",
+        DefaultBooleanValue = false,
+        Order = 11 )]
+
+    [BooleanField( "Default As Bulk",
+        Key = AttributeKey.DefaultAsBulk,
+        Description = "Should new entries be flagged as bulk communication by default?",
+        DefaultBooleanValue = false,
+        Order = 12 )]
+
+    #endregion Block Attributes
     public partial class CommunicationEntryWizard : RockBlock, IDetailBlock
     {
+        #region Attribute Keys
+
+        /// <summary>
+        /// Keys to use for Block Attributes
+        /// </summary>
+        private static class AttributeKey
+        {
+            public const string ImageBinaryFileType = "ImageBinaryFileType";
+            public const string AttachmentBinaryFileType = "AttachmentBinaryFileType";
+            public const string CharacterLimit = "CharacterLimit";
+            public const string EnabledLavaCommands = "EnabledLavaCommands";
+            public const string CommunicationTypes = "CommunicationTypes";
+            public const string MaximumRecipients = "MaximumRecipients";
+            public const string SendWhenApproved = "SendWhenApproved";
+            public const string MaxSMSImageWidth = "MaxSMSImageWidth";
+            public const string AllowedSMSNumbers = "AllowedSMSNumbers";
+            public const string SimpleCommunicationPage = "SimpleCommunicationPage";
+            public const string ShowDuplicatePreventionOption = "ShowDuplicatePreventionOption";
+            public const string DefaultAsBulk = "DefaultAsBulk";
+        }
+
+        #endregion Attribute Keys
+
+        #region PageParameterKeys
+
+        private static class PageParameterKey
+        {
+            public const string CommunicationId = "CommunicationId";
+            public const string Edit = "Edit";
+            public const string Person = "Person";
+            public const string TemplateGuid = "TemplateGuid";
+        }
+
+        #endregion PageParameterKeys
+
         #region Fields
 
         private const string CATEGORY_COMMUNICATION_TEMPLATE = "CategoryCommunicationTemplate";
 
+        private bool _smsTransportEnabled = MediumContainer.HasActiveSmsTransport();
+        private bool _emailTransportEnabled = MediumContainer.HasActiveEmailTransport();
+        private bool _pushTransportEnabled = MediumContainer.HasActivePushTransport();
         #endregion
 
         #region Properties
@@ -115,19 +226,27 @@ namespace RockWeb.Blocks.Communication
             this.BlockUpdated += Block_BlockUpdated;
             this.AddConfigurationUpdateTrigger( upnlContent );
 
-            componentImageUploader.BinaryFileTypeGuid = this.GetAttributeValue( "ImageBinaryFileType" ).AsGuidOrNull() ?? Rock.SystemGuid.BinaryFiletype.DEFAULT.AsGuid();
-            fupEmailAttachments.BinaryFileTypeGuid = this.GetAttributeValue( "AttachmentBinaryFileType" ).AsGuidOrNull() ?? Rock.SystemGuid.BinaryFiletype.DEFAULT.AsGuid();
-            fupMobileAttachment.BinaryFileTypeGuid = this.GetAttributeValue( "AttachmentBinaryFileType" ).AsGuidOrNull() ?? Rock.SystemGuid.BinaryFiletype.DEFAULT.AsGuid();
+            componentImageUploader.BinaryFileTypeGuid = this.GetAttributeValue( AttributeKey.ImageBinaryFileType ).AsGuidOrNull() ?? Rock.SystemGuid.BinaryFiletype.DEFAULT.AsGuid();
+            fupEmailAttachments.BinaryFileTypeGuid = this.GetAttributeValue( AttributeKey.AttachmentBinaryFileType ).AsGuidOrNull() ?? Rock.SystemGuid.BinaryFiletype.DEFAULT.AsGuid();
+            fupMobileAttachment.BinaryFileTypeGuid = this.GetAttributeValue( AttributeKey.AttachmentBinaryFileType ).AsGuidOrNull() ?? Rock.SystemGuid.BinaryFiletype.DEFAULT.AsGuid();
 
-            hfSMSCharLimit.Value = ( this.GetAttributeValue( "CharacterLimit" ).AsIntegerOrNull() ?? 160 ).ToString();
+            hfSMSCharLimit.Value = ( this.GetAttributeValue( AttributeKey.CharacterLimit ).AsIntegerOrNull() ?? 160 ).ToString();
 
             gIndividualRecipients.DataKeyNames = new string[] { "Id" };
             gIndividualRecipients.GridRebind += gIndividualRecipients_GridRebind;
             gIndividualRecipients.Actions.ShowAdd = false;
             gIndividualRecipients.ShowActionRow = false;
 
-            btnUseSimpleEditor.Visible = !string.IsNullOrEmpty( this.GetAttributeValue( "SimpleCommunicationPage" ) );
+            btnUseSimpleEditor.Visible = !string.IsNullOrEmpty( this.GetAttributeValue( AttributeKey.SimpleCommunicationPage ) );
             pnlHeadingLabels.Visible = btnUseSimpleEditor.Visible;
+
+            var mediumControl = MediumControl.GetMediumControl( CommunicationType.PushNotification );
+
+            mediumControl.ID = "mediumControl";
+            mediumControl.IsTemplate = false;
+            mediumControl.ValidationGroup = vsPushEditor.ValidationGroup;
+
+            phPushControl.Controls.Add( mediumControl );
         }
 
         /// <summary>
@@ -145,7 +264,7 @@ namespace RockWeb.Blocks.Communication
             if ( !Page.IsPostBack )
             {
                 hfNavigationHistoryInstance.Value = Guid.NewGuid().ToString();
-                ShowDetail( PageParameter( "CommunicationId" ).AsInteger() );
+                ShowDetail( PageParameter( PageParameterKey.CommunicationId ).AsInteger() );
             }
 
             // set the email preview visible = false on every load so that it doesn't stick around after previewing then navigating
@@ -219,13 +338,14 @@ namespace RockWeb.Blocks.Communication
         {
             Rock.Model.Communication communication = null;
             var rockContext = new RockContext();
+            var pushCommunication = new CommunicationDetails();
 
             if ( communicationId != 0 )
             {
                 communication = new CommunicationService( rockContext ).Get( communicationId );
             }
 
-            var editingApproved = PageParameter( "Edit" ).AsBoolean() && IsUserAuthorized( "Approve" );
+            var editingApproved = PageParameter( PageParameterKey.Edit ).AsBoolean() && IsUserAuthorized( "Approve" );
 
             nbCommunicationNotWizardCompatible.Visible = false;
 
@@ -236,13 +356,8 @@ namespace RockWeb.Blocks.Communication
                 communication.CreatedByPersonAliasId = this.CurrentPersonAliasId;
                 communication.SenderPersonAlias = this.CurrentPersonAlias;
                 communication.SenderPersonAliasId = CurrentPersonAliasId;
-                communication.EnabledLavaCommands = GetAttributeValue( "EnabledLavaCommands" );
-
-                var allowedCommunicationTypes = GetAllowedCommunicationTypes();
-                if ( !allowedCommunicationTypes.Contains( communication.CommunicationType ) )
-                {
-                    communication.CommunicationType = allowedCommunicationTypes.First();
-                }
+                communication.EnabledLavaCommands = GetAttributeValue( AttributeKey.EnabledLavaCommands );
+                communication.IsBulkCommunication = GetAttributeValue( AttributeKey.DefaultAsBulk ).AsBoolean();
             }
             else
             {
@@ -250,15 +365,31 @@ namespace RockWeb.Blocks.Communication
                 {
                     if ( !communication.CommunicationTemplateId.HasValue || !communication.CommunicationTemplate.SupportsEmailWizard() )
                     {
-                        // If this communication was previously created, but doesn't have a CommunicationTemplateId or uses a template that doesn't suport the EmailWizard, 
-                        // it is a communication (or a copy of a communication) that was created created using the 'Simple Editor' or the editor prior to v7.
-                        // So, if they use the wizard, the main Html Content will be reset when they get to the Select Template step
+                        // If this communication was previously created, but doesn't have a CommunicationTemplateId or uses a template that doesn't support the EmailWizard,
+                        // it is a communication (or a copy of a communication) that was created using the 'Simple Editor' or the editor prior to v7.
+                        // So, if they use the wizard, the main HTML Content will be reset when they get to the Select Template step
                         // since the wizard requires that the communication uses a Template that supports the Email Wizard.
                         // So, if this is the case, warn them and explain that they can continue with the wizard but start over on the content,
                         // or to use the 'Use Simple Editor' to keep the content, but not use the wizard
                         nbCommunicationNotWizardCompatible.Visible = true;
                     }
                 }
+
+                pushCommunication = new CommunicationDetails
+                {
+                    PushData = communication.PushData,
+                    PushImageBinaryFileId = communication.PushImageBinaryFileId,
+                    PushMessage = communication.PushMessage,
+                    PushTitle = communication.PushTitle,
+                    PushOpenMessage = communication.PushOpenMessage,
+                    PushOpenAction = communication.PushOpenAction
+                };
+            }
+
+            var allowedCommunicationTypes = GetAllowedCommunicationTypes();
+            if ( !allowedCommunicationTypes.Contains( communication.CommunicationType ) )
+            {
+                communication.CommunicationType = allowedCommunicationTypes.First();
             }
 
             // If viewing a new, transient, draft, or are the approver of a pending-approval communication, use this block
@@ -272,7 +403,7 @@ namespace RockWeb.Blocks.Communication
                 bool isApprovalEditor = communication.Status == CommunicationStatus.PendingApproval && editingApproved;
                 if ( isAuthorizedEditor || isCreator || isApprovalEditor )
                 {
-                    // communication is either new or ok to edit
+                    // communication is either new or OK to edit
                 }
                 else
                 {
@@ -287,16 +418,16 @@ namespace RockWeb.Blocks.Communication
                 return;
             }
 
-            LoadDropDowns();
+            LoadDropDowns( communication );
 
             hfCommunicationId.Value = communication.Id.ToString();
             lTitle.Text = ( communication.Name ?? communication.Subject ?? "New Communication" ).FormatAsHtmlTitle();
+            cbDuplicatePreventionOption.Visible = this.GetAttributeValue( AttributeKey.ShowDuplicatePreventionOption ).AsBoolean();
 
             tbCommunicationName.Text = communication.Name;
             tglBulkCommunication.Checked = communication.IsBulkCommunication;
 
             tglRecipientSelection.Checked = communication.Id == 0 || communication.ListGroupId.HasValue;
-            ddlCommunicationGroupList.SetValue( communication.ListGroupId );
 
             var segmentDataviewGuids = communication.Segments.SplitDelimitedValues().AsGuidList();
             if ( segmentDataviewGuids.Any() )
@@ -305,9 +436,9 @@ namespace RockWeb.Blocks.Communication
                 cblCommunicationGroupSegments.SetValues( segmentDataviewIds );
             }
 
-            this.IndividualRecipientPersonIds = new CommunicationRecipientService( rockContext ).Queryable().Where( r => r.CommunicationId == communication.Id ).Select( a => a.PersonAlias.PersonId ).ToList();
+            this.IndividualRecipientPersonIds = new CommunicationRecipientService( rockContext ).Queryable().AsNoTracking().Where( r => r.CommunicationId == communication.Id ).Select( a => a.PersonAlias.PersonId ).ToList();
 
-            int? personId = PageParameter( "Person" ).AsIntegerOrNull();
+            int? personId = PageParameter( PageParameterKey.Person ).AsIntegerOrNull();
             if ( personId.HasValue && !communication.ListGroupId.HasValue )
             {
                 communication.IsBulkCommunication = false;
@@ -325,13 +456,13 @@ namespace RockWeb.Blocks.Communication
             }
 
             // If a template guid was passed in and this is a new communication, set that as the selected template
-            Guid? templateGuid = PageParameter( "templateGuid" ).AsGuidOrNull();
+            Guid? templateGuid = PageParameter( PageParameterKey.TemplateGuid ).AsGuidOrNull();
 
             if ( communication.Id > 0 && templateGuid.HasValue )
             {
                 var template = new CommunicationTemplateService( rockContext ).Get( templateGuid.Value );
 
-                // NOTE: Only set the selected template if the user has auth for this template 
+                // NOTE: Only set the selected template if the user has auth for this template
                 // and the template supports the Email Wizard
                 if ( template != null && template.IsAuthorized( Rock.Security.Authorization.VIEW, this.CurrentPerson ) && template.SupportsEmailWizard() )
                 {
@@ -340,8 +471,7 @@ namespace RockWeb.Blocks.Communication
                 }
             }
 
-            UpdateRecipientFromListCount();
-            UpdateIndividualRecipientsCountText();
+            UpdateRecipientListCount();
 
             // If there aren't any Communication Groups, hide the option and only show the Individual Recipient selection
             if ( ddlCommunicationGroupList.Items.Count <= 1 )
@@ -374,7 +504,7 @@ namespace RockWeb.Blocks.Communication
 
             tbEmailSubject.Text = communication.Subject;
 
-            //// NOTE: tbEmailPreview will be populated by parsing the Html of the Email/Template
+            //// NOTE: tbEmailPreview will be populated by parsing the HTML of the Email/Template
 
             hfEmailAttachedBinaryFileIds.Value = communication.GetAttachmentBinaryFileIds( CommunicationType.Email ).AsDelimited( "," );
             UpdateEmailAttachedFiles( false );
@@ -383,7 +513,7 @@ namespace RockWeb.Blocks.Communication
             var valueItem = ddlSMSFrom.Items.FindByValue( communication.SMSFromDefinedValueId.ToString() );
             if ( valueItem == null && communication.SMSFromDefinedValueId != null )
             {
-                var lookupDefinedValue = DefinedValueCache.Read( communication.SMSFromDefinedValueId.GetValueOrDefault() );
+                var lookupDefinedValue = DefinedValueCache.Get( communication.SMSFromDefinedValueId.GetValueOrDefault() );
                 ddlSMSFrom.Items.Add( new ListItem( lookupDefinedValue.Description, lookupDefinedValue.Id.ToString() ) );
             }
             ddlSMSFrom.SetValue( communication.SMSFromDefinedValueId );
@@ -400,27 +530,35 @@ namespace RockWeb.Blocks.Communication
             htmlEditor.MergeFields.Add( "Rock.Model.Person" );
             htmlEditor.MergeFields.Add( "Communication.Subject|Subject" );
             htmlEditor.MergeFields.Add( "Communication.FromName|From Name" );
-            htmlEditor.MergeFields.Add( "Communication.FromAddress|From Address" );
+            htmlEditor.MergeFields.Add( "Communication.FromEmail|From Address" );
             htmlEditor.MergeFields.Add( "Communication.ReplyTo|Reply To" );
             htmlEditor.MergeFields.Add( "UnsubscribeOption" );
             if ( communication.AdditionalMergeFields.Any() )
             {
                 htmlEditor.MergeFields.AddRange( communication.AdditionalMergeFields );
             }
+
+            var pushNotificationControl = phPushControl.Controls[0] as PushNotification;
+            if ( pushNotificationControl != null )
+            {
+                pushNotificationControl.SetFromCommunication( pushCommunication );
+                pushNotificationControl.AdditionalMergeFields = communication.AdditionalMergeFields;
+            }
         }
 
         /// <summary>
         /// Loads the drop downs.
         /// </summary>
-        private void LoadDropDowns()
+        /// <param name="communication">The communication.</param>
+        private void LoadDropDowns( Rock.Model.Communication communication )
         {
             var rockContext = new RockContext();
 
             // load communication group list
-            var groupTypeCommunicationGroupId = GroupTypeCache.Read( Rock.SystemGuid.GroupType.GROUPTYPE_COMMUNICATIONLIST.AsGuid() ).Id;
+            var groupTypeCommunicationGroupId = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_COMMUNICATIONLIST.AsGuid() ).Id;
             var groupService = new GroupService( rockContext );
 
-            var communicationGroupList = groupService.Queryable().Where( a => a.GroupTypeId == groupTypeCommunicationGroupId ).OrderBy( a => a.Order ).ThenBy( a => a.Name ).ToList();
+            var communicationGroupList = groupService.Queryable().AsNoTracking().Where( a => a.GroupTypeId == groupTypeCommunicationGroupId && a.IsActive ).OrderBy( a => a.Order ).ThenBy( a => a.Name ).ToList();
             var authorizedCommunicationGroupList = communicationGroupList.Where( g => g.IsAuthorized( Rock.Security.Authorization.VIEW, this.CurrentPerson ) ).ToList();
 
             ddlCommunicationGroupList.Items.Clear();
@@ -430,45 +568,36 @@ namespace RockWeb.Blocks.Communication
                 ddlCommunicationGroupList.Items.Add( new ListItem( communicationGroup.Name, communicationGroup.Id.ToString() ) );
             }
 
+            ddlCommunicationGroupList.SetValue( communication.ListGroupId );
+
             LoadCommunicationSegmentFilters();
 
             rblCommunicationGroupSegmentFilterType.Items.Clear();
-            rblCommunicationGroupSegmentFilterType.Items.Add( new ListItem( "All segment filters", SegmentCriteria.All.ToString() ) { Selected = true } );
-            rblCommunicationGroupSegmentFilterType.Items.Add( new ListItem( "Any segment filters", SegmentCriteria.Any.ToString() ) );
+            rblCommunicationGroupSegmentFilterType.Items.Add( new ListItem( "All segment filters", SegmentCriteria.All.ToString() ) { Selected = communication.SegmentCriteria == SegmentCriteria.All } );
+            rblCommunicationGroupSegmentFilterType.Items.Add( new ListItem( "Any segment filters", SegmentCriteria.Any.ToString() ) { Selected = communication.SegmentCriteria == SegmentCriteria.Any } );
 
-            UpdateRecipientFromListCount();
+            UpdateRecipientListCount();
 
-            btnMediumRecipientPreference.Attributes["data-val"] = Rock.Model.CommunicationType.RecipientPreference.ConvertToInt().ToString();
-            btnMediumEmail.Attributes["data-val"] = Rock.Model.CommunicationType.Email.ConvertToInt().ToString();
-            btnMediumSMS.Attributes["data-val"] = Rock.Model.CommunicationType.SMS.ConvertToInt().ToString();
-
-            var allowedCommunicationTypes = GetAllowedCommunicationTypes();
-            btnMediumRecipientPreference.Visible = allowedCommunicationTypes.Contains( CommunicationType.RecipientPreference );
-            btnMediumEmail.Visible = allowedCommunicationTypes.Contains( CommunicationType.Email );
-            btnMediumSMS.Visible = allowedCommunicationTypes.Contains( CommunicationType.SMS );
-
-            // only show the medium type selection if there is a choice
-            rcwMediumType.Visible = allowedCommunicationTypes.Count > 1;
-
-            var selectedNumberGuids = GetAttributeValue( "AllowedSMSNumbers" ).SplitDelimitedValues( true ).AsGuidList();
-            var smsFromDefinedType = DefinedTypeCache.Read( new Guid( Rock.SystemGuid.DefinedType.COMMUNICATION_SMS_FROM ) );
+            var selectedNumberGuids = GetAttributeValue( AttributeKey.AllowedSMSNumbers ).SplitDelimitedValues( true ).AsGuidList();
+            var smsFromDefinedType = DefinedTypeCache.Get( new Guid( Rock.SystemGuid.DefinedType.COMMUNICATION_SMS_FROM ) );
+            var smsDefinedValues = smsFromDefinedType.DefinedValues.ToList();
             if ( selectedNumberGuids.Any() )
             {
-                ddlSMSFrom.SelectedIndex = -1;
-                ddlSMSFrom.DataSource = smsFromDefinedType.DefinedValues.Where( v => selectedNumberGuids.Contains( v.Guid ) ).Select( v => new
-                {
-                    v.Description,
-                    v.Id
-                } );
-                ddlSMSFrom.DataTextField = "Description";
-                ddlSMSFrom.DataValueField = "Id";
-                ddlSMSFrom.DataBind();
-                ddlSMSFrom.Items.Insert( 0, new ListItem() );
+                smsDefinedValues = smsDefinedValues.Where( v => selectedNumberGuids.Contains( v.Guid ) ).ToList();
             }
-            else
+
+            ddlSMSFrom.Items.Clear();
+            ddlSMSFrom.Items.Add( new ListItem() );
+            foreach ( var item in smsDefinedValues )
             {
-                ddlSMSFrom.BindToDefinedType( smsFromDefinedType, true, true );
+                var description = string.IsNullOrWhiteSpace( item.Description )
+                    ? PhoneNumber.FormattedNumber( "", item.Value.Replace( "+", string.Empty ) )
+                    : item.Description;
+
+                ddlSMSFrom.Items.Add( new ListItem( description, item.Id.ToString() ) );
             }
+
+            ddlSMSFrom.SelectedIndex = -1;
         }
 
         /// <summary>
@@ -476,12 +605,12 @@ namespace RockWeb.Blocks.Communication
         /// </summary>
         private List<CommunicationType> GetAllowedCommunicationTypes()
         {
-            var communicationTypes = this.GetAttributeValue( "CommunicationTypes" ).SplitDelimitedValues();
+            var communicationTypes = this.GetAttributeValue( AttributeKey.CommunicationTypes ).SplitDelimitedValues( false );
             var result = new List<CommunicationType>();
             if ( communicationTypes.Any() )
             {
                 // Recipient Preference,Email,SMS
-                if ( communicationTypes.Contains( "RecipientPreference" ) )
+                if ( communicationTypes.Contains( "Recipient Preference" ) )
                 {
                     result.Add( CommunicationType.RecipientPreference );
                 }
@@ -495,12 +624,18 @@ namespace RockWeb.Blocks.Communication
                 {
                     result.Add( CommunicationType.SMS );
                 }
+
+                if ( communicationTypes.Contains( "Push" ) )
+                {
+                    result.Add( CommunicationType.PushNotification );
+                }
             }
             else
             {
                 result.Add( CommunicationType.RecipientPreference );
                 result.Add( CommunicationType.Email );
                 result.Add( CommunicationType.SMS );
+                result.Add( CommunicationType.PushNotification );
             }
 
             return result;
@@ -533,7 +668,7 @@ namespace RockWeb.Blocks.Communication
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnUseSimpleEditor_Click( object sender, EventArgs e )
         {
-            var simpleCommunicationPageRef = new Rock.Web.PageReference( this.GetAttributeValue( "SimpleCommunicationPage" ), this.CurrentPageReference.Parameters, this.CurrentPageReference.QueryString );
+            var simpleCommunicationPageRef = new Rock.Web.PageReference( this.GetAttributeValue( AttributeKey.SimpleCommunicationPage ), this.CurrentPageReference.Parameters, this.CurrentPageReference.QueryString );
             NavigateToPage( simpleCommunicationPageRef );
         }
 
@@ -559,8 +694,8 @@ namespace RockWeb.Blocks.Communication
 
             // load common communication segments (each communication list may have additional segments)
             var dataviewService = new DataViewService( rockContext );
-            var categoryIdCommunicationSegments = CategoryCache.Read( Rock.SystemGuid.Category.DATAVIEW_COMMUNICATION_SEGMENTS.AsGuid() ).Id;
-            var commonSegmentDataViewList = dataviewService.Queryable().Where( a => a.CategoryId == categoryIdCommunicationSegments ).OrderBy( a => a.Name ).ToList();
+            var categoryIdCommunicationSegments = CategoryCache.Get( Rock.SystemGuid.Category.DATAVIEW_COMMUNICATION_SEGMENTS.AsGuid() ).Id;
+            var commonSegmentDataViewList = dataviewService.Queryable().AsNoTracking().Where( a => a.CategoryId == categoryIdCommunicationSegments ).OrderBy( a => a.Name ).ToList();
 
             var selectedDataViewIds = cblCommunicationGroupSegments.Items.OfType<ListItem>().Where( a => a.Selected ).Select( a => a.Value ).AsIntegerList();
 
@@ -584,7 +719,7 @@ namespace RockWeb.Blocks.Communication
                 if ( communicationGroup != null )
                 {
                     communicationGroup.LoadAttributes();
-                    var segmentAttribute = AttributeCache.Read( Rock.SystemGuid.Attribute.GROUP_COMMUNICATION_LIST_SEGMENTS.AsGuid() );
+                    var segmentAttribute = AttributeCache.Get( Rock.SystemGuid.Attribute.GROUP_COMMUNICATION_LIST_SEGMENTS.AsGuid() );
                     segmentDataViewGuids = communicationGroup.GetAttributeValue( segmentAttribute.Key ).SplitDelimitedValues().AsGuidList();
                     var additionalSegmentDataViewList = dataviewService.GetByGuids( segmentDataViewGuids ).OrderBy( a => a.Name ).ToList();
 
@@ -592,6 +727,12 @@ namespace RockWeb.Blocks.Communication
                     {
                         if ( additionalSegmentDataView.IsAuthorized( Rock.Security.Authorization.VIEW, this.CurrentPerson ) )
                         {
+                            if ( commonSegmentDataViewList.Where( v => v.Guid == additionalSegmentDataView.Guid ).Any() )
+                            {
+                                // This was already added so just move along...
+                                continue;
+                            }
+
                             cblCommunicationGroupSegments.Items.Add( new ListItem( additionalSegmentDataView.Name, additionalSegmentDataView.Id.ToString() ) );
                         }
                     }
@@ -611,11 +752,16 @@ namespace RockWeb.Blocks.Communication
             nbRecipientsAlert.Visible = false;
             if ( tglRecipientSelection.Checked )
             {
-                if ( !GetRecipientFromListSelection().Any() )
+                var recipients = GetRecipientFromListSelection();
+                if ( !recipients.Any() )
                 {
-                    nbRecipientsAlert.Text = "At least one recipient is required.";
+                    nbRecipientsAlert.Text = "The selected list doesn't have any people. <span>At least one recipient is required.</span>";
                     nbRecipientsAlert.Visible = true;
                     return;
+                }
+                else
+                {
+                    hfRSVPPersonIDs.Value = recipients.Select( m => m.PersonId ).ToList().AsDelimited( "," );
                 }
             }
             else
@@ -625,6 +771,10 @@ namespace RockWeb.Blocks.Communication
                     nbRecipientsAlert.Text = "At least one recipient is required.";
                     nbRecipientsAlert.Visible = true;
                     return;
+                }
+                else
+                {
+                    hfRSVPPersonIDs.Value = this.IndividualRecipientPersonIds.AsDelimited( "," );
                 }
             }
 
@@ -642,6 +792,8 @@ namespace RockWeb.Blocks.Communication
             nbRecipientsAlert.Visible = false;
             pnlRecipientSelectionList.Visible = tglRecipientSelection.Checked;
             pnlRecipientSelectionIndividual.Visible = !tglRecipientSelection.Checked;
+
+            UpdateRecipientListCount();
         }
 
         /// <summary>
@@ -663,16 +815,7 @@ namespace RockWeb.Blocks.Communication
                 ppAddPerson.PersonName = "Add Person";
             }
 
-            UpdateIndividualRecipientsCountText();
-        }
-
-        /// <summary>
-        /// Updates the individual recipients count text.
-        /// </summary>
-        private void UpdateIndividualRecipientsCountText()
-        {
-            var individualRecipientCount = this.IndividualRecipientPersonIds.Count();
-            lIndividualRecipientCount.Text = string.Format( "{0} {1} selected", individualRecipientCount, "recipient".PluralizeIf( individualRecipientCount != 1 ) );
+            UpdateRecipientListCount();
         }
 
         /// <summary>
@@ -777,11 +920,64 @@ namespace RockWeb.Blocks.Communication
         /// </summary>
         private void BindIndividualRecipientsGrid()
         {
-            var rockContext = new RockContext();
-            var personService = new PersonService( rockContext );
-            var qryPersons = personService.Queryable( true ).Where( a => this.IndividualRecipientPersonIds.Contains( a.Id ) ).Include( a => a.PhoneNumbers ).OrderBy( a => a.LastName ).ThenBy( a => a.NickName );
+            bool isCommunicationGroup = tglRecipientSelection.Checked;
 
+            nbListWarning.Visible = isCommunicationGroup;
+
+            // Set visibility for Select checkbox.
+            var selectIndex = gIndividualRecipients.GetColumnIndexByFieldType( typeof( SelectField ) );
+
+            if ( selectIndex.HasValue )
+            {
+                gIndividualRecipients.Columns[selectIndex.Value].Visible = !isCommunicationGroup;
+            }
+
+            // Set visibility for Delete buttons.
+            btnDeleteSelectedRecipients.Visible = !isCommunicationGroup;
+
+            var deleteIndex = gIndividualRecipients.GetColumnIndexByFieldType( typeof( DeleteField ) );
+
+            if ( deleteIndex.HasValue )
+            {
+                gIndividualRecipients.Columns[deleteIndex.Value].Visible = !isCommunicationGroup;
+            }
+
+            var listGroupId = ddlCommunicationGroupList.SelectedValue.AsIntegerOrNull();
+
+            if ( listGroupId != null )
+            {
+                var listGroupName = ddlCommunicationGroupList.SelectedItem.Text;
+
+                nbListWarning.Text = string.Format( "Below are the current members of the \"{0}\" List with segment filters applied.\nIf this message is sent at a future date, it is possible that the list may change between now and then.", listGroupName );
+            }
+
+            // Get the list of recipients.
+            var rockContext = new RockContext();
+
+            List<int> recipientIdList;
+
+            if ( isCommunicationGroup )
+            {
+                var segmentDataViewIds = cblCommunicationGroupSegments.Items.OfType<ListItem>().Where( a => a.Selected ).Select( a => a.Value ).AsIntegerList();
+
+                var segmentCriteria = rblCommunicationGroupSegmentFilterType.SelectedValueAsEnum<SegmentCriteria>( SegmentCriteria.Any );
+
+                recipientIdList = Rock.Model.Communication.GetCommunicationListMembers( rockContext, listGroupId, segmentCriteria, segmentDataViewIds )
+                    .Select( x => x.PersonId )
+                    .ToList();
+            }
+            else
+            {
+                recipientIdList = this.IndividualRecipientPersonIds;
+            }
+
+            var personService = new PersonService( rockContext );
+
+            var qryPersons = personService.Queryable( true ).AsNoTracking().Where( a => recipientIdList.Contains( a.Id ) ).Include( a => a.PhoneNumbers ).OrderBy( a => a.LastName ).ThenBy( a => a.NickName );
+
+            // Bind the list items to the grid.
             gIndividualRecipients.SetLinqDataSource( qryPersons );
+
             gIndividualRecipients.DataBind();
         }
 
@@ -794,7 +990,7 @@ namespace RockWeb.Blocks.Communication
         {
             this.IndividualRecipientPersonIds.Remove( e.RowKeyId );
             BindIndividualRecipientsGrid();
-            UpdateIndividualRecipientsCountText();
+            UpdateRecipientListCount();
 
             // upnlContent has UpdateMode = Conditional and this is a modal, so we have to update manually
             upnlContent.Update();
@@ -807,7 +1003,7 @@ namespace RockWeb.Blocks.Communication
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void cblCommunicationGroupSegments_SelectedIndexChanged( object sender, EventArgs e )
         {
-            UpdateRecipientFromListCount();
+            UpdateRecipientListCount();
         }
 
         /// <summary>
@@ -820,7 +1016,7 @@ namespace RockWeb.Blocks.Communication
             // reload segments in case the communication list has additional segments
             LoadCommunicationSegmentFilters();
 
-            UpdateRecipientFromListCount();
+            UpdateRecipientListCount();
         }
 
         /// <summary>
@@ -830,27 +1026,46 @@ namespace RockWeb.Blocks.Communication
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void rblCommunicationGroupSegmentFilterType_SelectedIndexChanged( object sender, EventArgs e )
         {
-            UpdateRecipientFromListCount();
+            UpdateRecipientListCount();
         }
 
         /// <summary>
-        /// Updates the recipient from list count.
+        /// Updates the recipient list count.
         /// </summary>
-        private void UpdateRecipientFromListCount()
+        private void UpdateRecipientListCount()
         {
-            IQueryable<GroupMember> groupMemberQuery = GetRecipientFromListSelection();
+            bool isCommunicationGroup = tglRecipientSelection.Checked;
 
-            if ( groupMemberQuery != null )
+            int listCount = 0;
+
+            if ( isCommunicationGroup )
             {
-                int groupMemberCount = groupMemberQuery.Count();
-                pnlRecipientFromListCount.Visible = true;
+                // Communication List Count
+                IQueryable<GroupMember> groupMemberQuery = GetRecipientFromListSelection();
 
-                lRecipientFromListCount.Text = string.Format( "{0} {1} selected", groupMemberCount, "recipient".PluralizeIf( groupMemberCount != 1 ) );
+                if ( groupMemberQuery != null )
+                {
+                    listCount = groupMemberQuery.Count();
+                    pnlRecipientFromListCount.Visible = true;
+
+                    lRecipientFromListCount.Text = string.Format( "{0} {1} selected", listCount, "recipient".PluralizeIf( listCount != 1 ) );
+                }
+                else
+                {
+                    pnlRecipientFromListCount.Visible = false;
+                }
+
+                pnlRecipientFromListCount.Visible = listCount > 0;
             }
             else
             {
-                pnlRecipientFromListCount.Visible = false;
+                // Individuals Selection Count.
+                listCount = this.IndividualRecipientPersonIds.Count();
+
+                lIndividualRecipientCount.Text = string.Format( "{0} {1} selected", listCount, "recipient".PluralizeIf( listCount != 1 ) );
             }
+
+            btnViewIndividualRecipients.Enabled = listCount > 0;
         }
 
         /// <summary>
@@ -860,55 +1075,12 @@ namespace RockWeb.Blocks.Communication
         /// <returns></returns>
         private IQueryable<GroupMember> GetRecipientFromListSelection()
         {
-            IQueryable<GroupMember> groupMemberQuery = null;
-            var rockContext = new RockContext();
-            var groupMemberService = new GroupMemberService( rockContext );
-            var personService = new PersonService( rockContext );
-            var dataViewService = new DataViewService( rockContext );
             int? communicationGroupId = ddlCommunicationGroupList.SelectedValue.AsIntegerOrNull();
-            if ( communicationGroupId.HasValue )
-            {
-                groupMemberQuery = groupMemberService.Queryable().Where( a => a.GroupId == communicationGroupId.Value && a.GroupMemberStatus == GroupMemberStatus.Active );
+            var segmentFilterType = rblCommunicationGroupSegmentFilterType.SelectedValueAsEnum<SegmentCriteria>();
+            var segmentDataViewIds = cblCommunicationGroupSegments.Items.OfType<ListItem>().Where( a => a.Selected ).Select( a => a.Value.AsInteger() ).ToList();
+            var rockContext = new RockContext();
 
-                var segmentFilterType = rblCommunicationGroupSegmentFilterType.SelectedValueAsEnum<SegmentCriteria>();
-                var segmentDataViewIds = cblCommunicationGroupSegments.Items.OfType<ListItem>().Where( a => a.Selected ).Select( a => a.Value.AsInteger() ).ToList();
-
-                Expression segmentExpression = null;
-                ParameterExpression paramExpression = personService.ParameterExpression;
-                var segmentDataViewList = dataViewService.GetByIds( segmentDataViewIds ).AsNoTracking().ToList();
-                foreach ( var segmentDataView in segmentDataViewList )
-                {
-                    List<string> errorMessages;
-
-                    var exp = segmentDataView.GetExpression( personService, paramExpression, out errorMessages );
-                    if ( exp != null )
-                    {
-                        if ( segmentExpression == null )
-                        {
-                            segmentExpression = exp;
-                        }
-                        else
-                        {
-                            if ( segmentFilterType == SegmentCriteria.All )
-                            {
-                                segmentExpression = Expression.AndAlso( segmentExpression, exp );
-                            }
-                            else
-                            {
-                                segmentExpression = Expression.OrElse( segmentExpression, exp );
-                            }
-                        }
-                    }
-                }
-
-                if ( segmentExpression != null )
-                {
-                    var personQry = personService.Get( paramExpression, segmentExpression );
-                    groupMemberQuery = groupMemberQuery.Where( a => personQry.Any( p => p.Id == a.PersonId ) );
-                }
-            }
-
-            return groupMemberQuery;
+            return Rock.Model.Communication.GetCommunicationListMembers( rockContext, communicationGroupId, segmentFilterType, segmentDataViewIds );
         }
 
         /// <summary>
@@ -939,7 +1111,7 @@ namespace RockWeb.Blocks.Communication
 
             BindIndividualRecipientsGrid();
 
-            UpdateIndividualRecipientsCountText();
+            UpdateRecipientListCount();
 
             // upnlContent has UpdateMode = Conditional and this is a modal, so we have to update manually
             upnlContent.Update();
@@ -957,20 +1129,18 @@ namespace RockWeb.Blocks.Communication
             pnlCommunicationDelivery.Visible = true;
             SetNavigationHistory( pnlCommunicationDelivery );
 
-            // Render warnings for any inactive transports (Javascript will hide and show based on Medium Selection)
-            var mediumsWithActiveTransports = Rock.Communication.MediumContainer.Instance.Components.Select( a => a.Value.Value ).Where( x => x.Transport != null && x.Transport.IsActive );
-            bool smsTransportEnabled = mediumsWithActiveTransports.Any( a => a.EntityType.Guid == Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_SMS.AsGuid() );
-            bool emailTransportEnabled = mediumsWithActiveTransports.Any( a => a.EntityType.Guid == Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_EMAIL.AsGuid() );
+            // See what is allowed by the block settings
+            var allowedCommunicationTypes = GetAllowedCommunicationTypes();
+            bool emailTransportEnabled = _emailTransportEnabled && allowedCommunicationTypes.Contains( Rock.Model.CommunicationType.Email );
+            bool smsTransportEnabled = _smsTransportEnabled && allowedCommunicationTypes.Contains( Rock.Model.CommunicationType.SMS );
+            bool pushTransportEnabled = _pushTransportEnabled && allowedCommunicationTypes.Contains( Rock.Model.CommunicationType.PushNotification );
 
-            btnMediumSMS.Visible = smsTransportEnabled;
-            btnMediumEmail.Visible = emailTransportEnabled;
-
-            // only prompt for Medium Type if both SMS and Email are available
-            rcwMediumType.Visible = smsTransportEnabled && emailTransportEnabled;
+            // only prompt for Medium Type if more than one will be visible
+            rcwMediumType.Visible = ( smsTransportEnabled || emailTransportEnabled || pushTransportEnabled ) && allowedCommunicationTypes.Count() > 1;
 
             if ( !rcwMediumType.Visible )
             {
-                // if only one MediumType is availalbe, automatically set the MediumType to it
+                // if only one MediumType is available, automatically set the MediumType to it
                 if ( emailTransportEnabled )
                 {
                     hfMediumType.Value = CommunicationType.Email.ConvertToInt().ToString();
@@ -979,12 +1149,24 @@ namespace RockWeb.Blocks.Communication
                 {
                     hfMediumType.Value = CommunicationType.SMS.ConvertToInt().ToString();
                 }
+                else if ( pushTransportEnabled )
+                {
+                    hfMediumType.Value = CommunicationType.PushNotification.ConvertToInt().ToString();
+                }
+
+            }
+            else
+            {
+                btnMediumRecipientPreference.Visible = allowedCommunicationTypes.Contains( Rock.Model.CommunicationType.RecipientPreference );
+                btnMediumEmail.Visible = emailTransportEnabled;
+                btnMediumSMS.Visible = smsTransportEnabled;
+                btnMediumPush.Visible = pushTransportEnabled;
             }
 
             // make sure that either EMAIL or SMS is enabled
-            if ( !( emailTransportEnabled || smsTransportEnabled ) )
+            if ( !( emailTransportEnabled || smsTransportEnabled || pushTransportEnabled ) )
             {
-                nbNoCommunicationTransport.Text = "There are no active Email or SMS communication transports configured.";
+                nbNoCommunicationTransport.Text = "There are no active Email, SMS, or Push communication transports configured.";
                 nbNoCommunicationTransport.Visible = true;
                 btnCommunicationDeliveryNext.Enabled = false;
             }
@@ -1080,6 +1262,7 @@ namespace RockWeb.Blocks.Communication
 
             var templateQuery = new CommunicationTemplateService( rockContext )
                 .Queryable()
+                .AsNoTracking()
                 .Where( a => a.IsActive );
 
             int? categoryId = cpCommunicationTemplate.SelectedValue.AsIntegerOrNull();
@@ -1173,58 +1356,32 @@ namespace RockWeb.Blocks.Communication
             hfSelectedCommunicationTemplateId.Value = communicationTemplateId.ToString();
             var communicationTemplate = new CommunicationTemplateService( new RockContext() ).Get( hfSelectedCommunicationTemplateId.Value.AsInteger() );
 
-            // If the template does not provide a default From Name and Address use the current person.
-            if ( communicationTemplate.FromName.IsNotNullOrWhitespace() )
-            {
-                tbFromName.Text = communicationTemplate.FromName;
-            }
-            else
-            {
-                // if FromName hasn't been set yet, and the template doesn't have a FromName, use CurrentPerson
-                if ( tbFromName.Text.IsNullOrWhiteSpace() )
-                {
-                    tbFromName.Text = CurrentPerson.FullName;
-                }
-            }
-
-            if ( communicationTemplate.FromEmail.IsNotNullOrWhitespace() )
-            {
-                ebFromAddress.Text = communicationTemplate.FromEmail;
-            }
-            else
-            {
-                // if FromAddress hasn't been set yet, and the template doesn't have a FromAddress, use CurrentPerson
-                if ( ebFromAddress.Text.IsNullOrWhiteSpace() )
-                {
-                    ebFromAddress.Text = CurrentPerson.Email;
-                }
-            }
+            //this change is being made explicitly as discussed in #3516
+            tbFromName.Text = communicationTemplate.FromName.ResolveMergeFields( Rock.Lava.LavaHelper.GetCommonMergeFields( this.RockPage, this.CurrentPerson ) );
+            ebFromAddress.Text = communicationTemplate.FromEmail.ResolveMergeFields( Rock.Lava.LavaHelper.GetCommonMergeFields( this.RockPage, this.CurrentPerson ) );
 
             // only set the ReplyToEmail, CCEMails, and BCCEmails if the template has one (just in case they already filled these in for this communication
-            if ( communicationTemplate.ReplyToEmail.IsNotNullOrWhitespace() )
+            if ( communicationTemplate.ReplyToEmail.IsNotNullOrWhiteSpace() )
             {
                 ebReplyToAddress.Text = communicationTemplate.ReplyToEmail;
             }
 
-            if ( communicationTemplate.CCEmails.IsNotNullOrWhitespace() )
+            if ( communicationTemplate.CCEmails.IsNotNullOrWhiteSpace() )
             {
                 ebCCList.Text = communicationTemplate.CCEmails;
             }
 
-            if ( communicationTemplate.BCCEmails.IsNotNullOrWhitespace() )
+            if ( communicationTemplate.BCCEmails.IsNotNullOrWhiteSpace() )
             {
                 ebBCCList.Text = communicationTemplate.BCCEmails;
             }
 
             hfShowAdditionalFields.Value = ( !string.IsNullOrEmpty( communicationTemplate.ReplyToEmail ) || !string.IsNullOrEmpty( communicationTemplate.CCEmails ) || !string.IsNullOrEmpty( communicationTemplate.BCCEmails ) ).ToTrueFalse().ToLower();
 
-            // only set the subject if the template has one (just in case they already typed in an email subject for this communication
-            if ( communicationTemplate.Subject.IsNotNullOrWhitespace() )
-            {
-                tbEmailSubject.Text = communicationTemplate.Subject;
-            }
+            //  set the subject from the template even if it is null so we don't accidentally keep a subject doesn't make sense for the newly selected template
+            tbEmailSubject.Text = communicationTemplate.Subject;
 
-            // if this communication already has an Email Content specified, since they picked (or re-picked) a template, 
+            // if this communication already has an Email Content specified, since they picked (or re-picked) a template,
             // we'll have to start over on the EmailEditorHtml since the content is dependent on the template
             hfEmailEditorHtml.Value = communicationTemplate.Message.ResolveMergeFields( Rock.Lava.LavaHelper.GetCommonMergeFields( null ) );
 
@@ -1237,16 +1394,32 @@ namespace RockWeb.Blocks.Communication
                 var valueItem = ddlSMSFrom.Items.FindByValue( communicationTemplate.SMSFromDefinedValueId.ToString() );
                 if ( valueItem == null )
                 {
-                    var lookupDefinedValue = DefinedValueCache.Read( communicationTemplate.SMSFromDefinedValueId.GetValueOrDefault() );
+                    var lookupDefinedValue = DefinedValueCache.Get( communicationTemplate.SMSFromDefinedValueId.GetValueOrDefault() );
                     ddlSMSFrom.Items.Add( new ListItem( lookupDefinedValue.Description, lookupDefinedValue.Id.ToString() ) );
                 }
                 ddlSMSFrom.SetValue( communicationTemplate.SMSFromDefinedValueId.Value );
             }
 
             // only set the SMSMessage if the template has one (just in case they already typed in an SMSMessage for this communication
-            if ( communicationTemplate.SMSMessage.IsNotNullOrWhitespace() )
+            if ( communicationTemplate.SMSMessage.IsNotNullOrWhiteSpace() )
             {
                 tbSMSTextMessage.Text = communicationTemplate.SMSMessage;
+            }
+
+            var pushCommunication = new CommunicationDetails
+            {
+                PushData = communicationTemplate.PushData,
+                PushImageBinaryFileId = communicationTemplate.PushImageBinaryFileId,
+                PushMessage = communicationTemplate.PushMessage,
+                PushTitle = communicationTemplate.PushTitle,
+                PushOpenMessage = communicationTemplate.PushOpenMessage,
+                PushOpenAction = communicationTemplate.PushOpenAction
+            };
+
+            var pushNotificationControl = phPushControl.Controls[0] as PushNotification;
+            if ( pushNotificationControl != null )
+            {
+                pushNotificationControl.SetFromCommunication( pushCommunication );
             }
         }
 
@@ -1269,6 +1442,7 @@ namespace RockWeb.Blocks.Communication
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnTemplateSelectionNext_Click( object sender, EventArgs e )
         {
+            Rock.Model.CommunicationType communicationType = ( Rock.Model.CommunicationType ) hfMediumType.Value.AsInteger();
             CommunicationTemplate selectedTemplate = null;
             int? selectedTemplateId = hfSelectedCommunicationTemplateId.Value.AsIntegerOrNull();
             if ( selectedTemplateId.HasValue )
@@ -1276,7 +1450,8 @@ namespace RockWeb.Blocks.Communication
                 selectedTemplate = new CommunicationTemplateService( new RockContext() ).Get( selectedTemplateId.Value );
             }
 
-            if ( selectedTemplate == null || !selectedTemplate.SupportsEmailWizard() )
+            if ( selectedTemplate == null ||
+                ( ( communicationType == CommunicationType.Email || communicationType == CommunicationType.RecipientPreference ) && !selectedTemplate.SupportsEmailWizard() ) )
             {
                 nbTemplateSelectionWarning.Text = "Please select a template.";
                 nbTemplateSelectionWarning.Visible = true;
@@ -1285,19 +1460,51 @@ namespace RockWeb.Blocks.Communication
             }
 
             nbTemplateSelectionWarning.Visible = false;
-
             pnlTemplateSelection.Visible = false;
 
             // The next page should be ShowEmailSummary since this is the Select Email Template Page, but just in case...
-            Rock.Model.CommunicationType communicationType = ( Rock.Model.CommunicationType ) hfMediumType.Value.AsInteger();
-            if ( communicationType == CommunicationType.Email || communicationType == CommunicationType.RecipientPreference )
+            if ( ShouldShowEmail() )
             {
                 ShowEmailSummary();
             }
-            else if ( communicationType == CommunicationType.SMS )
+            else if ( ShouldShowSms() )
             {
                 ShowMobileTextEditor();
             }
+            else if ( ShouldShowPush() )
+            {
+                ShowPushEditor();
+            }
+            else
+            {
+                ShowConfirmation();
+            }
+        }
+
+        private bool CommunicationOptionCanBeShown(CommunicationType communicationType )
+        {
+            var allowedCommunicationTypes = GetAllowedCommunicationTypes();
+            var communicationTypeIsAllowed = !allowedCommunicationTypes.Any() || allowedCommunicationTypes.Contains( communicationType );
+
+            var selecedCommunicationType = ( Rock.Model.CommunicationType ) hfMediumType.Value.AsInteger();
+            var communicationTypeIsSelected = ( selecedCommunicationType == communicationType || selecedCommunicationType == CommunicationType.RecipientPreference );
+
+            return communicationTypeIsAllowed && communicationTypeIsSelected;
+        }
+
+        private bool ShouldShowEmail()
+        {
+            return _emailTransportEnabled && CommunicationOptionCanBeShown(CommunicationType.Email);
+        }
+
+        private bool ShouldShowSms()
+        {
+            return _smsTransportEnabled && CommunicationOptionCanBeShown( CommunicationType.SMS );
+        }
+
+        private bool ShouldShowPush()
+        {
+            return _pushTransportEnabled && CommunicationOptionCanBeShown( CommunicationType.PushNotification );
         }
 
         /// <summary>
@@ -1337,7 +1544,6 @@ namespace RockWeb.Blocks.Communication
         {
             pnlEmailEditor.Visible = false;
             ShowEmailSummary();
-
         }
 
         /// <summary>
@@ -1351,9 +1557,13 @@ namespace RockWeb.Blocks.Communication
             pnlEmailEditor.Visible = false;
 
             Rock.Model.CommunicationType communicationType = ( Rock.Model.CommunicationType ) hfMediumType.Value.AsInteger();
-            if ( communicationType == CommunicationType.SMS || communicationType == CommunicationType.RecipientPreference )
+            if ( ShouldShowSms() )
             {
                 ShowMobileTextEditor();
+            }
+            else if ( ShouldShowPush() )
+            {
+                ShowPushEditor();
             }
             else
             {
@@ -1368,9 +1578,9 @@ namespace RockWeb.Blocks.Communication
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void btnEmailSendTest_Click( object sender, EventArgs e )
         {
-            SendTestCommunication( EntityTypeCache.Read( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_EMAIL.AsGuid() ).Id, nbEmailTestResult );
+            SendTestCommunication( EntityTypeCache.Get( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_EMAIL.AsGuid() ).Id, nbEmailTestResult );
 
-            // make sure the email designer keeps the html source that was there
+            // make sure the email designer keeps the HTML source that was there
             ifEmailDesigner.Attributes["srcdoc"] = hfEmailEditorHtml.Value;
 
             // upnlContent has UpdateMode = Conditional, so we have to update manually
@@ -1388,24 +1598,21 @@ namespace RockWeb.Blocks.Communication
                 return;
             }
 
-            try
-            {
-                CleanupOrphanedTestCommunications();
-            }
-            catch ( Exception ex )
-            {
-                this.LogException( ex );
-            }
-
             Rock.Model.Communication communication = UpdateCommunication( new RockContext() );
-            var personToClone = CurrentPerson;
 
             if ( communication != null )
             {
+                // Using a new context (so that changes in the UpdateCommunication() are not persisted )
                 using ( var rockContext = new RockContext() )
                 {
-                    // Using a new context (so that changes in the UpdateCommunication() are not persisted )
-                    int? testPersonId = null;
+                    // store the CurrentPerson's current Email and SMS number so we can restore it after changing them to the Test Email/SMS Number
+                    int testPersonId = CurrentPerson.Id;
+                    string testPersonOriginalEmailAddress = CurrentPerson.Email;
+                    var testPersonOriginalSMSPhoneNumber = CurrentPerson.PhoneNumbers
+                                            .Where( p => p.IsMessagingEnabled )
+                                            .Select( a => a.Number )
+                                            .FirstOrDefault();
+
                     Rock.Model.Communication testCommunication = null;
                     CommunicationService communicationService = null;
 
@@ -1415,8 +1622,9 @@ namespace RockWeb.Blocks.Communication
                         testCommunication.Id = 0;
                         testCommunication.Guid = Guid.NewGuid();
                         testCommunication.CreatedByPersonAliasId = this.CurrentPersonAliasId;
+                        // removed the AsNoTracking() from the next line because otherwise the Person/PersonAlias is attempted (but fails) to be added as new.
                         testCommunication.CreatedByPersonAlias = new PersonAliasService( rockContext ).Queryable().Where( a => a.Id == this.CurrentPersonAliasId.Value ).Include( a => a.Person ).FirstOrDefault();
-                        testCommunication.EnabledLavaCommands = GetAttributeValue( "EnabledLavaCommands" );
+                        testCommunication.EnabledLavaCommands = GetAttributeValue( AttributeKey.EnabledLavaCommands );
                         testCommunication.ForeignGuid = null;
                         testCommunication.ForeignId = null;
                         testCommunication.ForeignKey = null;
@@ -1447,34 +1655,45 @@ namespace RockWeb.Blocks.Communication
 
                         testRecipient.Status = CommunicationRecipientStatus.Pending;
 
-                        var testPerson = personToClone.Clone( false );
-                        testPerson.Id = 0;
-                        testPerson.Guid = Guid.NewGuid();
-                        if ( mediumEntityTypeId == EntityTypeCache.Read( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_EMAIL.AsGuid() ).Id )
+                        var sendTestToPerson = new PersonService( rockContext ).Get( CurrentPerson.Id );
+                        if ( mediumEntityTypeId == EntityTypeCache.Get( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_EMAIL.AsGuid() ).Id )
                         {
-                            testPerson.Email = tbTestEmailAddress.Text;
+                            testCommunication.Subject = string.Format( "[Test] {0}", communication.Subject );
+                            if ( sendTestToPerson.Email != tbTestEmailAddress.Text )
+                            {
+                                sendTestToPerson.Email = tbTestEmailAddress.Text;
+                            }
                         }
-                        else if ( mediumEntityTypeId == EntityTypeCache.Read( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_SMS.AsGuid() ).Id )
+                        else if ( mediumEntityTypeId == EntityTypeCache.Get( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_SMS.AsGuid() ).Id )
                         {
-                            testPerson.PhoneNumbers = new List<Rock.Model.PhoneNumber>();
-                            testPerson.PhoneNumbers.Add( new PhoneNumber { IsMessagingEnabled = true, Number = tbTestSMSNumber.Text } );
+                            testCommunication.SMSMessage = string.Format( "[Test] {0}", communication.SMSMessage );
+                            var smsPhoneNumber = sendTestToPerson.PhoneNumbers.FirstOrDefault( a => a.IsMessagingEnabled == true );
+                            if ( smsPhoneNumber == null )
+                            {
+                                var mobilePhoneValueId = DefinedValueCache.Get( Rock.SystemGuid.DefinedValue.PERSON_PHONE_TYPE_MOBILE ).Id;
+                                var testPhoneNumber = new PhoneNumber
+                                {
+                                    IsMessagingEnabled = true,
+                                    CountryCode = PhoneNumber.DefaultCountryCode(),
+                                    NumberTypeValueId = mobilePhoneValueId,
+                                    Number = tbTestSMSNumber.Text,
+                                    NumberFormatted = PhoneNumber.FormattedNumber( PhoneNumber.DefaultCountryCode(), tbTestSMSNumber.Text ),
+                                    ForeignKey = "_ForTestCommunication_"
+                                };
+
+                                sendTestToPerson.PhoneNumbers.Add( testPhoneNumber );
+                            }
+                            else
+                            {
+                                if ( smsPhoneNumber.Number != tbTestSMSNumber.Text )
+                                {
+                                    smsPhoneNumber.Number = tbTestSMSNumber.Text;
+                                    smsPhoneNumber.NumberFormatted = PhoneNumber.FormattedNumber( smsPhoneNumber.CountryCode, smsPhoneNumber.Number );
+                                }
+                            }
                         }
 
-                        testPerson.ForeignGuid = null;
-                        testPerson.ForeignId = null;
-
-                        // Just in case it doesn't get cleaned up, mark it so that we can try to clean it up next time
-                        testPerson.ForeignKey = "_ForTestCommunication_";
-
-                        var personService = new PersonService( rockContext );
-                        testPerson.Aliases.Add( new PersonAlias { AliasPerson = testPerson, AliasPersonGuid = testPerson.Guid, Guid = Guid.NewGuid() } );
-                        personService.Add( testPerson );
-
-                        // use disablePrePostProcessing for all the TestCommunication related SaveChanges since we are deleting all the stuff we add and we don't want any workflow triggers to fire (if any) 
-                        rockContext.SaveChanges( disablePrePostProcessing: true );
-                        testPersonId = testPerson.Id;
-                        testPerson = personService.Get( testPersonId.Value );
-                        testRecipient.PersonAliasId = testPerson.PrimaryAliasId.Value;
+                        testRecipient.PersonAliasId = sendTestToPerson.PrimaryAliasId.Value;
 
                         testRecipient.MediumEntityTypeId = mediumEntityTypeId;
 
@@ -1516,40 +1735,74 @@ namespace RockWeb.Blocks.Communication
                     {
                         try
                         {
-                            // make sure we delete the test communication record we created to send the test 
+                            // make sure we delete the test communication record we created to send the test
                             if ( communicationService != null && testCommunication != null )
                             {
+                                var testCommunicationId = testCommunication.Id;
                                 communicationService.Delete( testCommunication );
                                 rockContext.SaveChanges( disablePrePostProcessing: true );
-                            }
 
-                            // make sure we delete the Person record we created to send the test 
-                            using ( var deleteRockContext = new RockContext() )
-                            {
-                                var personToDeleteService = new PersonService( deleteRockContext );
-                                var personAliasToDeleteService = new PersonAliasService( deleteRockContext );
-
-                                if ( testPersonId.HasValue )
+                                // Delete any Person History that was created for the Test Communication
+                                using ( var historyContext = new RockContext() )
                                 {
-                                    var personToDelete = personToDeleteService.Get( testPersonId.Value );
-
-                                    foreach ( var alias in personToDelete.Aliases.ToList() )
+                                    var categoryId = CategoryCache.Get( Rock.SystemGuid.Category.HISTORY_PERSON_COMMUNICATIONS.AsGuid() ).Id;
+                                    var communicationEntityTypeId = EntityTypeCache.Get( "Rock.Model.Communication" ).Id;
+                                    var historyService = new HistoryService( historyContext );
+                                    var communicationHistoryQuery = historyService.Queryable().Where( a => a.CategoryId == categoryId && a.RelatedEntityTypeId == communicationEntityTypeId && a.RelatedEntityId == testCommunicationId );
+                                    foreach ( History communicationHistory in communicationHistoryQuery )
                                     {
-                                        string errorMessage;
-                                        if ( personAliasToDeleteService.CanDelete( alias, out errorMessage ) )
+                                        historyService.Delete( communicationHistory );
+                                    }
+
+                                    historyContext.SaveChanges( disablePrePostProcessing: true );
+                                }
+                            }
+                        }
+                        catch ( Exception ex )
+                        {
+                            // just log the exception, don't show it
+                            ExceptionLogService.LogException( ex );
+                        }
+
+                        try
+                        {
+                            // make sure we restore the CurrentPerson's email/SMS number if it was changed for the test
+                            using ( var restorePersonContext = new RockContext() )
+                            {
+                                var restorePersonService = new PersonService( restorePersonContext );
+                                var personToUpdate = restorePersonService.Get( testPersonId );
+                                if ( mediumEntityTypeId == EntityTypeCache.Get( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_EMAIL.AsGuid() ).Id )
+                                {
+                                    if ( personToUpdate.Email != testPersonOriginalEmailAddress )
+                                    {
+                                        personToUpdate.Email = testPersonOriginalEmailAddress;
+                                        restorePersonContext.SaveChanges( disablePrePostProcessing: true );
+                                    }
+                                }
+                                else if ( mediumEntityTypeId == EntityTypeCache.Get( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_SMS.AsGuid() ).Id )
+                                {
+                                    var defaultSMSNumber = personToUpdate.PhoneNumbers.Where( p => p.IsMessagingEnabled ).FirstOrDefault();
+                                    if ( defaultSMSNumber != null )
+                                    {
+                                        if ( defaultSMSNumber.Number != testPersonOriginalSMSPhoneNumber )
                                         {
-                                            personAliasToDeleteService.Delete( alias );
-                                        }
-                                        else
-                                        {
-                                            // if we are unable to delete the personalias (maybe something referenced it in the brief window), just point it back to the person that was cloned
-                                            alias.PersonId = personToClone.Id;
+                                            if ( testPersonOriginalSMSPhoneNumber == null )
+                                            {
+                                                if ( defaultSMSNumber.ForeignKey == "_ForTestCommunication_" )
+                                                {
+                                                    new PhoneNumberService( restorePersonContext ).Delete( defaultSMSNumber );
+                                                    restorePersonContext.SaveChanges( disablePrePostProcessing: true );
+                                                }
+                                            }
+                                            else
+                                            {
+                                                defaultSMSNumber.Number = testPersonOriginalSMSPhoneNumber;
+                                                defaultSMSNumber.NumberFormatted = PhoneNumber.FormattedNumber( defaultSMSNumber.CountryCode, defaultSMSNumber.Number );
+                                                restorePersonContext.SaveChanges( disablePrePostProcessing: true );
+                                            }
                                         }
                                     }
 
-                                    personToDelete.Aliases = null;
-                                    personToDeleteService.Delete( personToDelete );
-                                    deleteRockContext.SaveChanges( disablePrePostProcessing: true );
                                 }
                             }
                         }
@@ -1559,63 +1812,6 @@ namespace RockWeb.Blocks.Communication
                             ExceptionLogService.LogException( ex );
                         }
                     }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Shouldn't happen, but just in case...
-        /// this will cleanup any orphaned test communications artifacts
-        /// </summary>
-        private void CleanupOrphanedTestCommunications()
-        {
-            using ( RockContext deleteRockContext = new RockContext() )
-            {
-                PersonService personToDeleteService = new PersonService( deleteRockContext );
-                PersonAliasService personAliasToDeleteService = new PersonAliasService( deleteRockContext );
-                PersonDuplicateService personDuplicateService = new PersonDuplicateService( deleteRockContext );
-
-                // check for any test communication artifacts that didn't clean up correctly
-                var forTestCommunicationPersonQry = personToDeleteService.Queryable().Where( a => a.ForeignKey == "_ForTestCommunication_" );
-                if ( forTestCommunicationPersonQry.Any() )
-                {
-                    var communicationToDeleteService = new Rock.Model.CommunicationService( deleteRockContext );
-                    var communicationToDeleteQry = communicationToDeleteService.Queryable().Where( a => a.Recipients.Any( r => forTestCommunicationPersonQry.Any( p => p.Id == r.PersonAlias.PersonId ) ) );
-                    foreach ( var testCommunicationToDelete in communicationToDeleteQry.ToList() )
-                    {
-                        try
-                        {
-                            communicationToDeleteService.Delete( testCommunicationToDelete );
-                        }
-                        catch ( Exception ex )
-                        {
-                            ExceptionLogService.LogException( ex );
-                        }
-                    }
-
-                    foreach ( var personToDelete in forTestCommunicationPersonQry )
-                    {
-                        try
-                        {
-                            foreach ( var personToDeleteAlias in personToDelete.Aliases.ToList() )
-                            {
-                                foreach ( var duplicatePerson in personDuplicateService.Queryable().Where( a => a.DuplicatePersonAliasId == personToDeleteAlias.Id || a.PersonAliasId == personToDeleteAlias.Id ) )
-                                {
-                                    personDuplicateService.Delete( duplicatePerson );
-                                }
-
-                                personAliasToDeleteService.Delete( personToDeleteAlias );
-                            }
-
-                            personToDeleteService.Delete( personToDelete );
-                        }
-                        catch ( Exception ex )
-                        {
-                            ExceptionLogService.LogException( ex );
-                        }
-                    }
-
-                    deleteRockContext.SaveChanges( disablePrePostProcessing: true );
                 }
             }
         }
@@ -1650,8 +1846,7 @@ namespace RockWeb.Blocks.Communication
             sampleCommunicationRecipient.PersonAlias = sampleCommunicationRecipient.PersonAlias ?? new PersonAliasService( rockContext ).Get( sampleCommunicationRecipient.PersonAliasId );
             var mergeFields = sampleCommunicationRecipient.CommunicationMergeValues( commonMergeFields );
 
-            Rock.Communication.MediumComponent emailMediumWithActiveTransport = Rock.Communication.MediumContainer.Instance.Components.Select( a => a.Value.Value )
-                .Where( x => x.Transport != null && x.Transport.IsActive )
+            Rock.Communication.MediumComponent emailMediumWithActiveTransport = MediumContainer.GetActiveMediumComponentsWithActiveTransports()
                 .Where( a => a.EntityType.Guid == Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_EMAIL.AsGuid() ).FirstOrDefault();
 
             string communicationHtml = hfEmailEditorHtml.Value;
@@ -1662,15 +1857,15 @@ namespace RockWeb.Blocks.Communication
                 foreach ( var attr in emailMediumWithActiveTransport.Attributes.Select( a => a.Value ) )
                 {
                     string value = emailMediumWithActiveTransport.GetAttributeValue( attr.Key );
-                    if ( value.IsNotNullOrWhitespace() )
+                    if ( value.IsNotNullOrWhiteSpace() )
                     {
                         mediumAttributes.Add( attr.Key, value );
                     }
                 }
 
-                string publicAppRoot = GlobalAttributesCache.Read().GetValue( "PublicApplicationRoot" ).EnsureTrailingForwardslash();
+                string publicAppRoot = GlobalAttributesCache.Get().GetValue( "PublicApplicationRoot" );
 
-                // Add Html view
+                // Add HTML view
                 // Get the unsubscribe content and add a merge field for it
                 if ( communication.IsBulkCommunication && mediumAttributes.ContainsKey( "UnsubscribeHTML" ) )
                 {
@@ -1921,7 +2116,7 @@ namespace RockWeb.Blocks.Communication
                     {
 
                         // Make sure Image is no bigger than maxwidth
-                        int maxWidth = this.GetAttributeValue( "MaxSMSImageWidth" ).AsIntegerOrNull() ?? 600;
+                        int maxWidth = this.GetAttributeValue( AttributeKey.MaxSMSImageWidth ).AsIntegerOrNull() ?? 600;
                         imageStream.Seek( 0, SeekOrigin.Begin );
                         System.Drawing.Bitmap croppedBitmap = new System.Drawing.Bitmap( imageStream );
 
@@ -1944,7 +2139,7 @@ namespace RockWeb.Blocks.Communication
                         sizingPlugin.Limits.TotalBehavior = origLimit;
                     }
 
-                    string publicAppRoot = GlobalAttributesCache.Read().GetValue( "PublicApplicationRoot" ).EnsureTrailingForwardslash();
+                    string publicAppRoot = GlobalAttributesCache.Get().GetValue( "PublicApplicationRoot" );
                     imgSMSImageAttachment.ImageUrl = string.Format( "{0}GetImage.ashx?guid={1}", publicAppRoot, binaryFile.Guid );
                     divAttachmentLoadError.InnerText = "Unable to load attachment from " + imgSMSImageAttachment.ImageUrl;
                     imgSMSImageAttachment.Visible = true;
@@ -1966,7 +2161,7 @@ namespace RockWeb.Blocks.Communication
                         }
                     }
 
-                    string publicAppRoot = GlobalAttributesCache.Read().GetValue( "PublicApplicationRoot" ).EnsureTrailingForwardslash();
+                    string publicAppRoot = GlobalAttributesCache.Get().GetValue( "PublicApplicationRoot" );
                     imgSMSImageAttachment.ImageUrl = virtualThumbnailFilePath.Replace( "~/", publicAppRoot );
                     divAttachmentLoadError.InnerText = "Unable to load preview icon from " + imgSMSImageAttachment.ImageUrl;
                     imgSMSImageAttachment.Visible = true;
@@ -2014,7 +2209,7 @@ namespace RockWeb.Blocks.Communication
             pnlMobileTextEditor.Visible = false;
 
             Rock.Model.CommunicationType communicationType = ( Rock.Model.CommunicationType ) hfMediumType.Value.AsInteger();
-            if ( communicationType == CommunicationType.Email || communicationType == CommunicationType.RecipientPreference )
+            if ( ShouldShowEmail() )
             {
                 ShowEmailEditor();
             }
@@ -2032,7 +2227,25 @@ namespace RockWeb.Blocks.Communication
         protected void btnMobileTextEditorNext_Click( object sender, EventArgs e )
         {
             pnlMobileTextEditor.Visible = false;
-            ShowConfirmation();
+            var communicationType = ( Rock.Model.CommunicationType ) hfMediumType.Value.AsInteger();
+            if ( ShouldShowPush() )
+            {
+                ShowPushEditor();
+            }
+            else
+            {
+                ShowConfirmation();
+            }
+        }
+
+        private void ShowPushEditor()
+        {
+            var rockContext = new RockContext();
+            Rock.Model.Communication communication = UpdateCommunication( rockContext );
+
+
+            pnlPushEditor.Visible = true;
+            SetNavigationHistory( pnlPushEditor );
         }
 
         /// <summary>
@@ -2041,7 +2254,7 @@ namespace RockWeb.Blocks.Communication
         /// <param name="sender">The sender.</param>
         public void InitializeSMSFromSender( Person sender )
         {
-            var numbers = DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.COMMUNICATION_SMS_FROM.AsGuid() );
+            var numbers = DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.COMMUNICATION_SMS_FROM.AsGuid() );
             if ( numbers != null )
             {
                 foreach ( var number in numbers.DefinedValues )
@@ -2083,7 +2296,7 @@ namespace RockWeb.Blocks.Communication
                 return;
             }
 
-            SendTestCommunication( EntityTypeCache.Read( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_SMS.AsGuid() ).Id, nbSMSTestResult );
+            SendTestCommunication( EntityTypeCache.Get( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_SMS.AsGuid() ).Id, nbSMSTestResult );
         }
 
         #endregion Mobile Text Editor
@@ -2129,7 +2342,7 @@ namespace RockWeb.Blocks.Communication
 sendCount,
 sendCountTerm.PluralizeIf( sendCount != 1 ) );
 
-            int maxRecipients = GetAttributeValue( "MaximumRecipients" ).AsIntegerOrNull() ?? int.MaxValue;
+            int maxRecipients = GetAttributeValue( AttributeKey.MaximumRecipients ).AsIntegerOrNull() ?? int.MaxValue;
             bool userCanApprove = IsUserAuthorized( "Approve" );
             if ( sendCount > maxRecipients && !userCanApprove )
             {
@@ -2151,13 +2364,21 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
             pnlConfirmation.Visible = false;
 
             Rock.Model.CommunicationType communicationType = ( Rock.Model.CommunicationType ) hfMediumType.Value.AsInteger();
-            if ( communicationType == CommunicationType.SMS || communicationType == CommunicationType.RecipientPreference )
+            if ( ShouldShowPush() )
+            {
+                ShowPushEditor();
+            }
+            else if ( ShouldShowSms() )
             {
                 ShowMobileTextEditor();
             }
-            else if ( communicationType == CommunicationType.Email )
+            else if ( ShouldShowEmail() )
             {
                 ShowEmailEditor();
+            }
+            else
+            {
+                ShowTemplateSelection();
             }
         }
 
@@ -2176,7 +2397,7 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
             var rockContext = new RockContext();
             Rock.Model.Communication communication = UpdateCommunication( rockContext );
 
-            int maxRecipients = GetAttributeValue( "MaximumRecipients" ).AsIntegerOrNull() ?? int.MaxValue;
+            int maxRecipients = GetAttributeValue( AttributeKey.MaximumRecipients ).AsIntegerOrNull() ?? int.MaxValue;
             bool userCanApprove = IsUserAuthorized( "Approve" );
             var recipientCount = communication.Recipients.Count();
             string message = string.Empty;
@@ -2190,6 +2411,7 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
                 communication.Status = CommunicationStatus.Approved;
                 communication.ReviewedDateTime = RockDateTime.Now;
                 communication.ReviewerPersonAliasId = CurrentPersonAliasId;
+                communication.CreatedDateTime = RockDateTime.Now;
 
                 if ( communication.FutureSendDateTime.HasValue &&
                                communication.FutureSendDateTime > RockDateTime.Now )
@@ -2219,7 +2441,7 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
             if ( communication.Status == CommunicationStatus.Approved &&
                 ( !communication.FutureSendDateTime.HasValue || communication.FutureSendDateTime.Value <= RockDateTime.Now ) )
             {
-                if ( GetAttributeValue( "SendWhenApproved" ).AsBoolean() )
+                if ( GetAttributeValue( AttributeKey.SendWhenApproved ).AsBoolean() )
                 {
                     var transaction = new Rock.Transactions.SendCommunicationTransaction();
                     transaction.CommunicationId = communication.Id;
@@ -2243,14 +2465,65 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
                 return;
             }
 
-            var rockContext = new RockContext();
-            Rock.Model.Communication communication = UpdateCommunication( rockContext );
-            communication.Status = CommunicationStatus.Draft;
-            rockContext.SaveChanges();
+            Rock.Model.Communication communication = SaveAsDraft();
 
-            hfCommunicationId.Value = communication.Id.ToString();
+            ShowResult( "The communication has been saved.", communication );
+        }
 
-            ShowResult( "The communication has been saved", communication );
+        /// <summary>
+        /// Handles the Click event of the btnEmailEditorSaveDraft control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void btnEmailEditorSaveDraft_Click( object sender, EventArgs e )
+        {
+            EditorSaveDraft( nbEmailTestResult, isEmailEditor: true );
+        }
+
+        /// <summary>
+        /// Handles the Click event of the btnSMSEditorSaveDraft control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void btnSMSEditorSaveDraft_Click( object sender, EventArgs e )
+        {
+            EditorSaveDraft( nbSMSTestResult );
+        }
+
+        /// <summary>
+        /// Saves the draft communication and sets an appropriate notification message.
+        /// </summary>
+        /// <param name="isEmailEditor">if set to <c>true</c> if the editor is the email editor (not SMS).</param>
+        private void EditorSaveDraft( NotificationBox notificationBox, bool isEmailEditor = false )
+        {
+            if ( !ValidateSendDateTime() )
+            {
+                return;
+            }
+
+            try
+            {
+                Rock.Model.Communication communication = SaveAsDraft();
+
+                if ( isEmailEditor )
+                {
+                    ifEmailDesigner.Attributes["srcdoc"] = hfEmailEditorHtml.Value;
+                }
+
+                upnlContent.Update();
+
+                notificationBox.NotificationBoxType = NotificationBoxType.Success;
+                notificationBox.Text = "The communication has been saved.";
+            }
+            catch ( Exception ex )
+            {
+                notificationBox.NotificationBoxType = NotificationBoxType.Danger;
+                notificationBox.Text = "The communication could not be saved.";
+                ExceptionLogService.LogException( ex );
+            }
+
+            notificationBox.Dismissable = true;
+            notificationBox.Visible = true;
         }
 
         /// <summary>
@@ -2266,7 +2539,7 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
 
             nbResult.Text = message;
 
-            CurrentPageReference.Parameters.AddOrReplace( "CommunicationId", communication.Id.ToString() );
+            CurrentPageReference.Parameters.AddOrReplace( PageParameterKey.CommunicationId, communication.Id.ToString() );
             hlViewCommunication.NavigateUrl = CurrentPageReference.BuildUrl();
 
             // only show the Link if there is a CommunicationDetail block type on this page
@@ -2298,6 +2571,21 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Saves the communication as Draft
+        /// </summary>
+        /// <returns></returns>
+        private Rock.Model.Communication SaveAsDraft()
+        {
+            var rockContext = new RockContext();
+            Rock.Model.Communication communication = UpdateCommunication( rockContext );
+            communication.Status = CommunicationStatus.Draft;
+            rockContext.SaveChanges();
+
+            hfCommunicationId.Value = communication.Id.ToString();
+            return communication;
         }
 
         /// <summary>
@@ -2359,7 +2647,7 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
                 communicationService.Add( communication );
             }
 
-            communication.EnabledLavaCommands = GetAttributeValue( "EnabledLavaCommands" );
+            communication.EnabledLavaCommands = GetAttributeValue( AttributeKey.EnabledLavaCommands );
 
             if ( qryRecipients == null )
             {
@@ -2400,75 +2688,44 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
                 communication.ListGroupId = null;
             }
 
-            var emailMediumEntityType = EntityTypeCache.Read( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_EMAIL.AsGuid() );
-            var smsMediumEntityType = EntityTypeCache.Read( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_SMS.AsGuid() );
-            Dictionary<int, CommunicationType?> communicationListGroupMemberCommunicationTypeLookup = new Dictionary<int, CommunicationType?>();
+            var emailMediumEntityType = EntityTypeCache.Get( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_EMAIL.AsGuid() );
+            var smsMediumEntityType = EntityTypeCache.Get( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_SMS.AsGuid() );
+            var pushMediumEntityType = EntityTypeCache.Get( Rock.SystemGuid.EntityType.COMMUNICATION_MEDIUM_PUSH_NOTIFICATION.AsGuid() );
 
-            var preferredCommunicationTypeAttribute = AttributeCache.Read( Rock.SystemGuid.Attribute.GROUPMEMBER_COMMUNICATION_LIST_PREFERRED_COMMUNICATION_MEDIUM.AsGuid() );
-            var groupMemberPreferredCommunicationTypeAttributeDefault = ( CommunicationType? ) preferredCommunicationTypeAttribute.DefaultValue.AsIntegerOrNull();
+            var communicationListGroupMemberCommunicationTypeLookup = new Dictionary<int, CommunicationType>();
+
             if ( communication.CommunicationType == CommunicationType.RecipientPreference )
             {
-                var attributeValueQry = new AttributeValueService( rockContext ).Queryable().Where( a => a.AttributeId == preferredCommunicationTypeAttribute.Id );
-                if ( communication.ListGroupId.HasValue )
+                var communicationListGroupMemberCommunicationTypeList = new GroupMemberService( rockContext ).Queryable()
+                    .Where( a => a.GroupId == communication.ListGroupId.Value && a.GroupMemberStatus == GroupMemberStatus.Active )
+                    .ToList();
+
+                foreach ( var communicationListGroupMemberCommunicationType in communicationListGroupMemberCommunicationTypeList )
                 {
-                    var communicationListGroupMemberCommunicationTypeList = new GroupMemberService( rockContext ).Queryable()
-                        .Where( a => a.GroupId == communication.ListGroupId.Value && a.GroupMemberStatus == GroupMemberStatus.Active )
-                        .Join( attributeValueQry, gm => gm.Id, av => av.EntityId, ( gm, av ) => new { gm.PersonId, av.ValueAsNumeric } )
-                        .ToList();
-                    rockContext.Database.Connection.Open();
-                    foreach ( var communicationListGroupMemberCommunicationType in communicationListGroupMemberCommunicationTypeList )
-                    {
-                        var recipientPreference = ( CommunicationType? ) communicationListGroupMemberCommunicationType.ValueAsNumeric;
-                        communicationListGroupMemberCommunicationTypeLookup.AddOrIgnore( communicationListGroupMemberCommunicationType.PersonId, recipientPreference );
-                    }
+                    var recipientPreference = communicationListGroupMemberCommunicationType.CommunicationPreference;
+                    communicationListGroupMemberCommunicationTypeLookup.AddOrIgnore( communicationListGroupMemberCommunicationType.PersonId, recipientPreference );
                 }
             }
 
             foreach ( var recipient in communication.Recipients )
             {
-                if ( communication.CommunicationType == CommunicationType.Email )
-                {
-                    recipient.MediumEntityTypeId = emailMediumEntityType.Id;
-                }
-                else if ( communication.CommunicationType == CommunicationType.SMS )
-                {
-                    recipient.MediumEntityTypeId = smsMediumEntityType.Id;
-                }
-                else if ( communication.CommunicationType == CommunicationType.RecipientPreference )
-                {
-                    // if emailing to a communication list, first see if the recipient has a CommunicationPreference set as a GroupMember attribute for this list
-                    CommunicationType? recipientPreference = null;
+                // GetValueOrNull will default to CommunicationType.RecipientPreference if not found in the dictionary.
+                var groupMemberPreference = communicationListGroupMemberCommunicationTypeLookup.GetValueOrNull( recipient.PersonAlias.PersonId );
 
-                    recipientPreference = communicationListGroupMemberCommunicationTypeLookup.GetValueOrNull( recipient.PersonAlias.PersonId ) ?? groupMemberPreferredCommunicationTypeAttributeDefault;
+                var recipientPreference = recipientPersonsLookup.ContainsKey( recipient.PersonAlias.PersonId ) ?
+                    recipientPersonsLookup[recipient.PersonAlias.PersonId].CommunicationPreference :
+                    groupMemberPreference;
 
-                    // if not emailing to a communication list, or the recipient doesn't have a preference set in the list, get the preference from the Person record
-                    if ( recipientPreference == null || recipientPreference == CommunicationType.RecipientPreference )
-                    {
-                        recipientPreference = recipientPersonsLookup[recipient.PersonAlias.PersonId].CommunicationPreference;
-                    }
-
-                    if ( recipientPreference == CommunicationType.SMS )
-                    {
-                        // if the Recipient's preferred communication type is SMS, use that as the medium for this recipient
-                        recipient.MediumEntityTypeId = smsMediumEntityType.Id;
-                    }
-                    else if ( recipientPreference == CommunicationType.Email )
-                    {
-                        // if the Recipient's preferred communication type is Email, use that as the medium for this recipient
-                        recipient.MediumEntityTypeId = emailMediumEntityType.Id;
-                    }
-                    else
-                    {
-                        // if the Recipient's preferred communication type neither Email or SMS, or not specified, default to sending as an Email
-                        recipient.MediumEntityTypeId = emailMediumEntityType.Id;
-                    }
-                }
-                else
-                {
-                    throw new Exception( "Unexpected CommunicationType: " + communication.CommunicationType.ConvertToString() );
-                }
+                recipient.MediumEntityTypeId = Rock.Model.Communication.DetermineMediumEntityTypeId(
+                    emailMediumEntityType.Id,
+                    smsMediumEntityType.Id,
+                    pushMediumEntityType.Id,
+                    communication.CommunicationType,
+                    groupMemberPreference,
+                    recipientPreference );
             }
 
+            communication.ExcludeDuplicateRecipientAddress = cbDuplicatePreventionOption.Checked;
             var segmentDataViewIds = cblCommunicationGroupSegments.Items.OfType<ListItem>().Where( a => a.Selected ).Select( a => a.Value.AsInteger() ).ToList();
             var segmentDataViewGuids = new DataViewService( rockContext ).GetByIds( segmentDataViewIds ).Select( a => a.Guid ).ToList();
 
@@ -2529,6 +2786,20 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
                 communication.FutureSendDateTime = dtpSendDateTimeConfirmation.SelectedDateTime;
             }
 
+            var pushCommunication = new CommunicationDetails();
+            var pushNotificationControl = phPushControl.Controls[0] as PushNotification;
+            if ( pushNotificationControl != null )
+            {
+                pushNotificationControl.UpdateCommunication( pushCommunication );
+            }
+
+            communication.PushData = pushCommunication.PushData;
+            communication.PushImageBinaryFileId = pushCommunication.PushImageBinaryFileId;
+            communication.PushMessage = pushCommunication.PushMessage;
+            communication.PushOpenAction = pushCommunication.PushOpenAction;
+            communication.PushOpenMessage = pushCommunication.PushOpenMessage;
+            communication.PushTitle = pushCommunication.PushTitle;
+
             return communication;
         }
 
@@ -2545,8 +2816,29 @@ sendCountTerm.PluralizeIf( sendCount != 1 ) );
 
         #endregion
 
+        protected void btnPushEditorPrevious_Click( object sender, EventArgs e )
+        {
+            pnlPushEditor.Visible = false;
 
+            var communicationType = ( Rock.Model.CommunicationType ) hfMediumType.Value.AsInteger();
+            if ( ShouldShowSms() )
+            {
+                ShowMobileTextEditor();
+            }
+            else if ( ShouldShowEmail() )
+            {
+                ShowEmailEditor();
+            }
+            else
+            {
+                ShowTemplateSelection();
+            }
+        }
 
-
+        protected void btnPushEditorNext_Click( object sender, EventArgs e )
+        {
+            pnlPushEditor.Visible = false;
+            ShowConfirmation();
+        }
     }
 }

@@ -16,10 +16,11 @@
 //
 using System;
 using System.Linq;
-using System.Text.RegularExpressions;
+
 using Rock.Data;
 using Rock.Model;
 using Rock.Web.Cache;
+
 using UAParser;
 
 namespace Rock.Transactions
@@ -120,7 +121,7 @@ namespace Rock.Transactions
                     if ( clientType != "Crawler" )
                     {
                         // lookup the interaction channel, and create it if it doesn't exist
-                        int channelMediumTypeValueId = DefinedValueCache.Read( SystemGuid.DefinedValue.INTERACTIONCHANNELTYPE_URLSHORTENER.AsGuid() ).Id;
+                        int channelMediumTypeValueId = DefinedValueCache.Get( SystemGuid.DefinedValue.INTERACTIONCHANNELTYPE_URLSHORTENER.AsGuid() ).Id;
                         InteractionChannelService interactionChannelService = new InteractionChannelService( rockContext );
                         var interactionChannel = interactionChannelService.Queryable()
                             .Where( a => a.ChannelTypeMediumValueId == channelMediumTypeValueId )
@@ -130,15 +131,15 @@ namespace Rock.Transactions
                             interactionChannel = new InteractionChannel();
                             interactionChannel.Name = "Short Links";
                             interactionChannel.ChannelTypeMediumValueId = channelMediumTypeValueId;
-                            interactionChannel.ComponentEntityTypeId = EntityTypeCache.Read<Rock.Model.PageShortLink>().Id; ;
+                            interactionChannel.ComponentEntityTypeId = EntityTypeCache.Get<Rock.Model.PageShortLink>().Id; ;
                             interactionChannel.Guid = SystemGuid.InteractionChannel.SHORT_LINKS.AsGuid();
                             interactionChannelService.Add( interactionChannel );
                             rockContext.SaveChanges();
                         }
 
                         // check that the page exists as a component
-                        var interactionComponent = new InteractionComponentService( rockContext ).GetComponentByEntityId( interactionChannel.Id, PageShortLinkId.Value, Token );
-                        if ( Url.IsNotNullOrWhitespace() )
+                        var interactionComponent = new InteractionComponentService( rockContext ).GetComponentByChannelIdAndEntityId( interactionChannel.Id, PageShortLinkId, Token );
+                        if ( Url.IsNotNullOrWhiteSpace() )
                         {
                             
                             if ( interactionComponent.ComponentSummary != Url )
@@ -159,7 +160,7 @@ namespace Rock.Transactions
                         if ( interactionComponent != null )
                         {
                             int? personAliasId = null;
-                            if ( UserName.IsNotNullOrWhitespace() )
+                            if ( UserName.IsNotNullOrWhiteSpace() )
                             {
                                 var currentUser = new UserLoginService( rockContext ).GetByUserName( UserName );
                                 personAliasId = currentUser?.Person?.PrimaryAlias?.Id;
@@ -167,7 +168,7 @@ namespace Rock.Transactions
 
                             ClientInfo client = uaParser.Parse( userAgent );
                             var clientOs = client.OS.ToString();
-                            var clientBrowser = client.UserAgent.ToString();
+                            var clientBrowser = client.UA.ToString();
 
                             new InteractionService( rockContext ).AddInteraction( interactionComponent.Id, null, "View", Url, personAliasId, DateViewed,
                                 clientBrowser, clientOs, clientType, userAgent, IPAddress, this.SessionId?.AsGuidOrNull() );

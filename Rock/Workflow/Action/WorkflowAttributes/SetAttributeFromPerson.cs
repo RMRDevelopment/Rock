@@ -18,9 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
-using System.Linq;
 
-using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
@@ -53,7 +51,7 @@ namespace Rock.Workflow.Action
         {
             errorMessages = new List<string>();
 
-            var attribute = AttributeCache.Read( GetAttributeValue( action, "Attribute" ).AsGuid(), rockContext );
+            var attribute = AttributeCache.Get( GetAttributeValue( action, "Attribute" ).AsGuid(), rockContext );
             if ( attribute != null )
             {
                 Guid? personAliasGuid = GetAttributeValue( action, "Person" ).AsGuidOrNull();

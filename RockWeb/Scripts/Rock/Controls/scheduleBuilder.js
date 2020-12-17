@@ -71,13 +71,18 @@
                 // set colors back to default just in case previously marked invalid
                 var $datepicker = $modal.find('.specific-date input');
                 $datepicker.css('color', '');
-                var checkDate = Date.parse($datepicker.val());
-                if (!checkDate) {
+
+                // var checkDate = Date.parse($datepicker.val());
+                if ($datepicker.val() == null || $datepicker.val() == "") {
                     // blank, don't color, just return
                     return;
                 }
 
-                if (checkDate < 0) {
+                var locale = window.navigator.userLanguage || window.navigator.language;
+                moment.locale(locale);
+                var checkDate = moment($datepicker.val(), 'l');
+
+                if (!checkDate.isValid) {
                     // invalid date entered, color red and return
                     $datepicker.css('color', 'red');
                     return;
@@ -102,7 +107,7 @@
                 dateList.children().remove();
                 $.each(dateListValues, function (i, value) {
                     // add to ul
-                    var newLi = "<li><span>" + value + "</span> <a href='#' style='display: none'><i class='fa fa-times'></i></a></li>";
+                    var newLi = "<li><span>" + value + "</span> <a href='#' style='display: none'> <i class='fa fa-times'></i></a></li>";
                     dateList.append(newLi);
                 });
 
@@ -117,14 +122,13 @@
             });
 
             // fadeIn/fadeOut the X buttons to delete dates
-            $modal.find('.lstSpecificDates').hover(
+            $modal.find('.lstSpecificDates').on('mouseenter',
                 function () {
                     $(this).find('li a').stop(true, true).show();
-                },
+                }).on('mouseleave',
                 function () {
                     $(this).find('li a').stop(true, true).fadeOut(500);
-                }
-            );
+                });
 
             // delete specific date from list
             $modal.find('.lstSpecificDates').off('click').on('click', 'li a', function () {
@@ -132,7 +136,7 @@
 
                 // get date list from hidden field
                 var $hiddenField = $modal.find('.js-specific-datelist-values');
-                var dateList = $hiddenField.val().split(",");
+                var dateList = $hiddenField.val().split(',');
 
                 // delete selectedDate
                 var index = dateList.indexOf(selectedDate);
@@ -152,7 +156,7 @@
 
             // show dateRangepicker, ok, cancel so that new dateRange can be added to the list
             $modal.find('.add-exclusion-daterange').off('click').on('click', function () {
-                
+
                 $(this).hide();
                 $modal.find('.js-add-exclusion-daterange-group').show(function () {
                     Rock.controls.modal.updateSize();
@@ -163,7 +167,7 @@
             $modal.find('.add-exclusion-daterange-ok').off('click').on('click', function () {
 
                 // get daterange list from hidden field
-                var dateRangeListValues = $modal.find('.js-exclusion-daterange-list-values').val().split(",");
+                var dateRangeListValues = $modal.find('.js-exclusion-daterange-list-values').val().split(',');
                 if (!dateRangeListValues[0]) {
                     // if blank, initialize as a new empty array
                     dateRangeListValues = [];
@@ -204,22 +208,21 @@
             });
 
             // fadeIn/fadeOut the X buttons to delete dateRanges
-            $modal.find('.lstExclusionDateRanges').hover(
+            $modal.find('.lstExclusionDateRanges').on('mouseenter',
                 function () {
                     $(this).find('li a').stop(true, true).show();
-                },
+                }).on('mouseleave',
                 function () {
                     $(this).find('li a').stop(true, true).fadeOut(500);
-                }
-            );
+                });
 
             // delete dateRange from list
             $modal.find('.lstExclusionDateRanges').off('click').on('click', 'li a', function () {
-                var selectedDateRange = $(this).siblings("span").text();
+                var selectedDateRange = $(this).siblings('span').text();
 
                 // get dateRange list from hidden field
                 var $hiddenField = $modal.find('.js-exclusion-daterange-list-values');
-                var dateRangeList = $hiddenField.val().split(",");
+                var dateRangeList = $hiddenField.val().split(',');
 
                 // delete selectedDateRange
                 var index = dateRangeList.indexOf(selectedDateRange);
@@ -237,17 +240,21 @@
 
             // validate on Save.  Make sure they have at least a StartDate and Time set
             $modal.find('.js-modaldialog-save-link').off('click').on('click', function (event) {
+
+                var locale = window.navigator.userLanguage || window.navigator.language;
+                moment.locale(locale);
+
                 var $datetimepicker = $modal.find('[id*="dpStartDateTime"]').find('input'),
-                    startDateValue = Date.parse($datetimepicker.first().val()) || -1,
+                    startDateValue = moment($datetimepicker.first().val(), 'l'),
                     startTimeValue = $datetimepicker.last().val();
 
-                if (startDateValue < 0 || !startTimeValue) {
-                    $datetimepicker.parents(".form-group").first().toggleClass("has-error", 1);
+                if (!startDateValue.isValid) {
+                    $datetimepicker.parents('.form-group').first().toggleClass('has-error', 1);
                     event.preventDefault();
                     return;
                 }
                 else {
-                    $datetimepicker.parents(".form-group").first().toggleClass("has-error", 0);
+                    $datetimepicker.parents('.form-group').first().toggleClass('has-error', 0);
                 }
             });
         };

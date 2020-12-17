@@ -14,17 +14,18 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Data.Entity;
 using System.Data.Entity.ModelConfiguration;
 using System.Linq;
 using System.Runtime.Serialization;
+using Newtonsoft.Json;
 using Rock.Data;
-using Rock.UniversalSearch;
-using Rock.UniversalSearch.IndexModels;
+using Rock.Transactions;
+using Rock.Web.Cache;
 
 namespace Rock.Model
 {
@@ -34,7 +35,7 @@ namespace Rock.Model
     [RockDomain( "CMS" )]
     [Table( "ContentChannel" )]
     [DataContract]
-    public partial class ContentChannel : Model<ContentChannel>
+    public partial class ContentChannel : Model<ContentChannel>, ICacheable, ICampusFilterable
     {
         #region Entity Properties
 
@@ -188,6 +189,25 @@ namespace Rock.Model
         [DataMember]
         public int? ItemTagCategoryId { get; set; }
 
+        /// <summary>
+        /// Gets or sets a value indicating whether this content is structured.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if this content is structured; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool IsStructuredContent { get; set; }
+
+        /// <summary>
+        /// Gets or sets the Structure Content Tool Id.
+        /// </summary>
+        /// <value>
+        /// The structure content tool value identifier.
+        /// </value>
+        [DataMember]
+        [DefinedValue]
+        public int? StructuredContentToolValueId { get; set; }
+
         #endregion
 
         #region Virtual Properties
@@ -211,6 +231,15 @@ namespace Rock.Model
         public virtual Category ItemTagCategory { get; set; }
 
         /// <summary>
+        /// Gets or sets the <see cref="Rock.Model.DefinedValue"/> representing the content channel's structure content tool.
+        /// </summary>
+        /// <value>
+        /// A <see cref="DefinedValue"/> object representing the content channel's structure content tool.
+        /// </value>
+        [DataMember]
+        public virtual DefinedValue StructuredContentToolValue { get; set; }
+
+        /// <summary>
         /// Gets or sets the items.
         /// </summary>
         /// <value>
@@ -219,13 +248,24 @@ namespace Rock.Model
         [LavaInclude]
         public virtual ICollection<ContentChannelItem> Items { get; set; }
 
+        /*
+	        08/25/2020 - MSB
+	        We have added the JsonIgnore attribute to address in application crash issue
+            caused by a Content Channel referencing itself when the object is serialized
+            to a JSON string.
+
+            https://github.com/SparkDevNetwork/Rock/issues/4250
+	
+            Reason: Web Api Controller	
+        */
+
         /// <summary>
         /// Gets or sets the collection of ContentChannels that this ContentChannel allows as children.
         /// </summary>
         /// <value>
         /// A collection of ContentChannels that this ContentChannel allows as children.
         /// </value>
-        [DataMember, LavaIgnore]
+        [DataMember, LavaIgnore, JsonIgnore]
         public virtual ICollection<ContentChannel> ChildContentChannels
         {
             get { return _childContentChannels ?? ( _childContentChannels = new Collection<ContentChannel>() ); }
@@ -245,6 +285,21 @@ namespace Rock.Model
             set { _parentContentChannels = value; }
         }
         private ICollection<ContentChannel> _parentContentChannels;
+
+        /// <summary>
+        /// Gets or sets the collection of <see cref="Rock.Model.Category">Categories</see> that this Content Channel is associated with.
+        /// NOTE: Since changes to Categories isn't tracked by ChangeTracker, set the ModifiedDateTime if Categories are modified.
+        /// </summary>
+        /// <value>
+        /// A collection of <see cref="Rock.Model.Category">Categories</see> that this Content Channel is associated with.
+        /// </value>
+        [DataMember]
+        public virtual ICollection<Category> Categories
+        {
+            get { return _categories ?? ( _categories = new Collection<Category>() ); }
+            set { _categories = value; }
+        }
+        private ICollection<Category> _categories;
 
         /// <summary>
         /// Gets the supported actions.
@@ -296,45 +351,47 @@ namespace Rock.Model
         #region Methods
 
         #region Index Methods
+
         /// <summary>
-        /// Deletes the indexed documents by content channel.
+        /// Queues ContentChannelItems of this ContentChannel to have their indexes deleted
         /// </summary>
         /// <param name="contentChannelId">The content channel identifier.</param>
         public void DeleteIndexedDocumentsByContentChannel( int contentChannelId )
         {
-            var contentItems = new ContentChannelItemService( new RockContext() ).Queryable()
-                                    .Where( i => i.ContentChannelId == contentChannelId );
+            var contentChannelItemIds = new ContentChannelItemService( new RockContext() ).Queryable()
+                                    .Where( i => i.ContentChannelId == contentChannelId ).Select( a => a.Id ).ToList();
 
-            foreach ( var item in contentItems )
+            int contentChannelItemEntityTypeId = EntityTypeCache.GetId<Rock.Model.ContentChannelItem>().Value;
+
+            foreach ( var contentChannelItemId in contentChannelItemIds )
             {
-                var indexableChannelItem = ContentChannelItemIndex.LoadByModel( item );
-                IndexContainer.DeleteDocument<ContentChannelItemIndex>( indexableChannelItem );
+                var transaction = new DeleteIndexEntityTransaction { EntityId = contentChannelItemId, EntityTypeId = contentChannelItemEntityTypeId };
+                transaction.Enqueue();
             }
         }
 
         /// <summary>
-        /// Bulks the index documents by content channel.
+        /// Queues ContentChannelItems of this ContentChannel to have their indexes updated
         /// </summary>
         /// <param name="contentChannelId">The content channel identifier.</param>
         public void BulkIndexDocumentsByContentChannel( int contentChannelId )
         {
-            List<ContentChannelItemIndex> indexableChannelItems = new List<ContentChannelItemIndex>();
-
             // return all approved content channel items that are in content channels that should be indexed
-            RockContext rockContext = new RockContext();
-            var contentChannelItems = new ContentChannelItemService( rockContext ).Queryable()
+            var contentChannelItemIds = new ContentChannelItemService( new RockContext() ).Queryable()
                                             .Where( i =>
                                                 i.ContentChannelId == contentChannelId
-                                                && ( i.ContentChannel.RequiresApproval == false || i.ContentChannel.ContentChannelType.DisableStatus || i.Status == ContentChannelItemStatus.Approved ) );
+                                                && ( i.ContentChannel.RequiresApproval == false || i.ContentChannel.ContentChannelType.DisableStatus || i.Status == ContentChannelItemStatus.Approved ) )
+                                            .Select( a => a.Id ).ToList();
 
-            foreach ( var item in contentChannelItems )
+            int contentChannelItemEntityTypeId = EntityTypeCache.GetId<Rock.Model.ContentChannelItem>().Value;
+
+            foreach ( var contentChannelItemId in contentChannelItemIds )
             {
-                var indexableChannelItem = ContentChannelItemIndex.LoadByModel( item );
-                indexableChannelItems.Add( indexableChannelItem );
+                var transaction = new IndexEntityTransaction { EntityId = contentChannelItemId, EntityTypeId = contentChannelItemEntityTypeId };
+                transaction.Enqueue();
             }
-
-            IndexContainer.IndexDocuments( indexableChannelItems );
         }
+
         #endregion
 
         /// <summary>
@@ -342,19 +399,19 @@ namespace Rock.Model
         /// </summary>
         /// <param name="dbContext">The database context.</param>
         /// <param name="state">The state.</param>
-        public override void PreSaveChanges( DbContext dbContext, System.Data.Entity.EntityState state )
+        public override void PreSaveChanges( Data.DbContext dbContext, EntityState state )
         {
-            if ( state == System.Data.Entity.EntityState.Deleted )
+            if ( state == EntityState.Deleted )
             {
                 ChildContentChannels.Clear();
             }
 
             // clean up the index
-            if ( state == System.Data.Entity.EntityState.Deleted && IsIndexEnabled )
+            if ( state == EntityState.Deleted && IsIndexEnabled )
             {
                 this.DeleteIndexedDocumentsByContentChannel( Id );
             }
-            else if ( state == System.Data.Entity.EntityState.Modified )
+            else if ( state == EntityState.Modified )
             {
                 // check if indexing is enabled
                 var changeEntry = dbContext.ChangeTracker.Entries<ContentChannel>().Where( a => a.Entity == this ).FirstOrDefault();
@@ -389,6 +446,29 @@ namespace Rock.Model
             return this.Name;
         }
         #endregion
+
+        #region ICacheable
+
+        /// <summary>
+        /// Gets the cache object associated with this Entity
+        /// </summary>
+        /// <returns></returns>
+        public IEntityCache GetCacheObject()
+        {
+            return ContentChannelCache.Get( this.Id );
+        }
+
+        /// <summary>
+        /// Updates any Cache Objects that are associated with this entity
+        /// </summary>
+        /// <param name="entityState">State of the entity.</param>
+        /// <param name="dbContext">The database context.</param>
+        public void UpdateCache( EntityState entityState, Rock.Data.DbContext dbContext )
+        {
+            ContentChannelCache.UpdateCachedEntity( this.Id, entityState );
+        }
+
+        #endregion
     }
 
     #region Entity Configuration
@@ -406,6 +486,8 @@ namespace Rock.Model
             this.HasMany( p => p.ChildContentChannels ).WithMany( c => c.ParentContentChannels ).Map( m => { m.MapLeftKey( "ContentChannelId" ); m.MapRightKey( "ChildContentChannelId" ); m.ToTable( "ContentChannelAssociation" ); } );
             this.HasRequired( c => c.ContentChannelType ).WithMany( t => t.Channels ).HasForeignKey( c => c.ContentChannelTypeId ).WillCascadeOnDelete( false );
             this.HasOptional( c => c.ItemTagCategory ).WithMany().HasForeignKey( c => c.ItemTagCategoryId ).WillCascadeOnDelete( false );
+            this.HasOptional( p => p.StructuredContentToolValue ).WithMany().HasForeignKey( p => p.StructuredContentToolValueId ).WillCascadeOnDelete( false );
+            this.HasMany( a => a.Categories ).WithMany().Map( a => { a.MapLeftKey( "ContentChannelId" ); a.MapRightKey( "CategoryId" ); a.ToTable( "ContentChannelCategory" ); } );
         }
     }
 

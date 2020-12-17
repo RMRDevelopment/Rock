@@ -23,19 +23,19 @@
         updateFilterControls(this);
     });
 
-    $('.js-filter-compare').change(function () {
+    $('.js-filter-compare').on("change", function () {
         updateFilterControls(this);
-    })
+    });
 
     // handle property selection changes from the EntityFieldFilter
-    $('select.entity-property-selection').change(function () {
+    $('select.entity-property-selection').on("change", function () {
         var $parentRow = $(this).closest('.js-filter-row');
         $parentRow.find('div.field-criteria').hide();
         $parentRow.find('div.field-criteria').eq($(this).find(':selected').index()).show();
     });
 
     // activity animation on filter field cootrol
-    $('.filter-item > header').click(function () {
+    $('.filter-item > header').on("click", function () {
         $(this).siblings('.panel-body').slideToggle();
         $(this).children('div.pull-left').children('div').slideToggle();
 
@@ -46,12 +46,12 @@
         $('a.filter-view-state > i', this).toggleClass('fa-chevron-up');
     });
 
-    // fix so that the Remove button will fire its event, but not the parent event 
-    $('.filter-item a.btn-danger').click(function (event) {
+    // fix so that the Remove button will fire its event, but not the parent event
+    $('.filter-item a.btn-danger').on("click", function (event) {
         event.stopImmediatePropagation();
     });
 
-    $('.filter-item-select').click(function (event) {
+    $('.filter-item-select').on("click", function (event) {
         event.stopImmediatePropagation();
     });
 }
@@ -130,11 +130,11 @@ $(document).ready(function () {
                 },
 
                 //
-                formatFilterForDefinedValueField: function (title, $selectedContent) {
+                formatFilterForCheckBoxListFilterControl: function (title, $selectedContent) {
                     var selectedItems = '';
                     $('input:checked', $selectedContent).each(
                         function () {
-                            selectedItems += selectedItems == '' ? '' : ' or ';
+                            selectedItems += selectedItems == '' ? '' : ' OR ';
                             selectedItems += ' \'' + $(this).parent().text() + '\'';
                         });
 
@@ -142,15 +142,19 @@ $(document).ready(function () {
                 },
 
                 //
-                formatFilterForSelectSingleField: function (title, $selectedContent) {
-                    var selectedItems = '';
-                    $('input:checked', $selectedContent).each(
-                        function () {
-                            selectedItems += selectedItems == '' ? '' : ' or ';
-                            selectedItems += ' \'' + $(this).parent().text() + ' \''
-                        });
+                formatFilterForDefinedValueField: function (title, $selectedContent) {
+                    return formatFilterForCheckBoxListFilterControl(title, $selectedContent);
+                },
 
-                    return title + ' is ' + selectedItems
+                // NOTE: this is specifically for the Rock.Reporting.DataFilter.OtherDataViewFilter (and similar) components
+                formatFilterForOtherDataViewFilter: function (title, $selectedContent) {
+                    var dataViewName = $('.js-dataview .js-item-name-value', $selectedContent).val();
+                    return title + ' ' + dataViewName;
+                },
+
+                //
+                formatFilterForSelectSingleField: function (title, $selectedContent) {
+                    return formatFilterForCheckBoxListFilterControl(title, $selectedContent);
                 },
 
                 // NOTE: this is specifically for the Rock.Reporting.DataFilter.Person.InGroupFilter component
@@ -165,9 +169,9 @@ $(document).ready(function () {
                         var includeSelectedGroups = $('.js-include-selected-groups', $selectedContent).is(':checked');
                         var includeInactiveGroups = $('.js-include-inactive-groups', $selectedContent).is(':checked');
                         if (includeDescendantGroups) {
-                            result = result + ' or descendant groups';
+                            result = result + ' OR descendant groups';
                         } else {
-                            result = result + ' or child groups';
+                            result = result + ' OR child groups';
                         }
 
                         if (includeInactiveGroups) {
@@ -175,7 +179,7 @@ $(document).ready(function () {
                         }
 
                         if (!includeSelectedGroups) {
-                            result = result + ', not including selected groups';
+                            result = result + ', NOT including selected groups';
                         }
                     }
 
@@ -188,7 +192,7 @@ $(document).ready(function () {
                     if (groupMemberStatus) {
                         result = result + ', with member status:' + groupMemberStatus;
                     }
-                    
+
                     var dateAddedDateRangeText = $('.js-dateadded-sliding-date-range .js-slidingdaterange-text-value', $selectedContent).val()
                     if (dateAddedDateRangeText) {
                       result = result + ', added to group in Date Range: ' + dateAddedDateRangeText;
@@ -207,10 +211,43 @@ $(document).ready(function () {
                     return result;
                 },
 
+                // NOTE: this is specifically for the Rock.Reporting.DataFilter.Person.HasPhoneFilter component
+                formatFilterForHasPhoneFilter: function ($content) {
+
+                    var has;
+                    if ($('.js-hasphoneoftype', $content).find(':selected').val() == "True") {
+                        has = "Has ";
+                    } else {
+                        has = "Doesn't have ";
+                    }
+
+                    var phoneType = $('.js-phonetype', $content).find(':selected').text();
+                    var sms = $('.js-hassms', $content).find(':selected').text();
+
+                    if (sms == 'Yes') {
+                        sms = ' AND has SMS Enabled';
+                    }
+                    else if (sms == 'No') {
+                        sms = " AND doesn't have SMS Enabled";
+                    }
+
+                    var result = has + phoneType + sms;
+
+                    return result;
+                },
+
                 //
                 formatFilterDefault: function (title, $selectedContent) {
                     var compareTypeText = $('.js-filter-compare', $selectedContent).find(':selected').text();
-                    var compareValueText = $('.js-filter-control', $selectedContent).val();
+
+                    var compareValueText = $('input[type=text].js-filter-control', $selectedContent).val(); // textbox value.
+                    if (!compareValueText || compareValueText == "") {
+                        compareValueText = $('.js-filter-control', $selectedContent).find(':selected').map(function () { return this.text; }).get().join("', '");
+                    }
+                    if (!compareValueText || compareValueText == "") {
+                        compareValueText = $('.js-filter-control', $selectedContent).find(':checked').next().map(function () { return $(this).text(); }).get().join("', '");
+                    }
+
                     var result = title;
                     if ($('.js-filter-control', $selectedContent).is(':visible')) {
                         result = title + ' ' + compareTypeText + " '" + compareValueText + "'";
@@ -220,7 +257,7 @@ $(document).ready(function () {
 
                     return result;
                 }
-            }
+            };
 
         return exports;
     }());

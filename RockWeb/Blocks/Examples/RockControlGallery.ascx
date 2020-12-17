@@ -1,8 +1,24 @@
 ﻿<%@ Control Language="C#" AutoEventWireup="true" CodeFile="RockControlGallery.ascx.cs" Inherits="RockWeb.Blocks.Examples.RockControlGallery" %>
+<!-- add after bootstrap.min.css -->
+
 <script type="text/javascript">
-    function pageLoad() {
+    Sys.Application.add_load(function () {
         prettyPrint();
-    }
+
+        $(function () {
+            var navSelector = '#toc';
+            var $myNav = $(navSelector);
+            var $exampleHeaders = $('.r-example-nocodepreview,.r-example').find('h1,h2,h3,h4');
+            Toc.init({
+                $nav: $myNav,
+                $scope: $('h1,h2,h3,h4').not($exampleHeaders)
+            });
+            $('body').scrollspy({
+                target: navSelector,
+                offset: 80
+            });
+        });
+    });
 </script>
 <style>
     .rlink {
@@ -20,16 +36,22 @@
 
         <div class="panel panel-block">
             <div class="panel-heading">
-                <h1 class="panel-title"><i class="fa fa-magic"></i> Control Gallery</h1>
+                <h1 class="panel-title" data-toc-skip="1">
+                    <i class="fa fa-magic"></i>
+                    Control Gallery
+                </h1>
             </div>
             <div class="panel-body">
+            <div class="row">
+            <div class="col-lg-2 col-lg-offset-1 col-md-2" style="position:sticky;top:80px;"><nav id="toc"></nav></div>
+            <div id="main-controls" class="col-md-9 col-lg-7">
                 <asp:Panel ID="pnlDetails" runat="server">
 
-                    <asp:ValidationSummary ID="valExample" runat="server" HeaderText="Please Correct the Following" CssClass="alert alert-danger" />
+                    <asp:ValidationSummary ID="valExample" runat="server" HeaderText="Please correct the following:" CssClass="alert alert-validation" />
 
                     <h1 runat="server">General Information</h1>
 
-                    <h2 runat="server">Input Sizing Rules</h2>
+                    <h2 id="input-sizing">Input Sizing Rules</h2>
 
                     <div class="alert alert-warning">
                         <p><strong>Warning!</strong></p>
@@ -43,7 +65,6 @@
                     <div class="alert alert-danger">
                         <p><strong>Alert</strong></p>
                         Rock framework developers should get approval from the Core Team before using these styles.
-
                     </div>
 
                     <div runat="server" class="r-example">
@@ -66,18 +87,18 @@
                     </div>
 
                     <h2 runat="server">Horizontal Forms</h2>
-                    <p>While Rock uses a similar approach to Bootstrap, we've made horizontal forms a bit easier to help facilitate their use when creating forms in workflows and event
+                    <p>While Rock uses a similar approach to Bootstrap, we’ve made horizontal forms a bit easier to help facilitate their use when creating forms in workflows and event
                         registrations. Below is the syntax for declaring a horizontal form.
                     </p>
                     <div runat="server" class="r-example">
-<div class="form-horizontal label-sm">
-  <div class="form-group">
-    <label for="inputEmail3" class="control-label">Email</label>
-    <div class="control-wrapper">
-      <input type="email" class="form-control" id="inputEmail7" placeholder="Email">
-    </div>
-  </div>
-</div>
+                        <div class="form-horizontal label-sm">
+                            <div class="form-group">
+                                <label for="inputEmail3" class="control-label">Email</label>
+                                <div class="control-wrapper">
+                                <input type="email" class="form-control" id="inputEmail3" placeholder="Email">
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <p>When using this in form generators you'll need to complete two steps. The first is adding a wrapping <code>&lt;div class=&quot;form-group &quot;&gt;</code> in your pre/post fields.</p>
@@ -89,45 +110,54 @@
                         <li><strong>label-md: </strong> Label column of 4, field column of 8</li>
                         <li><strong>label-lg: </strong> Label column of 6, field column of 6</li>
                         <li><strong>label-xl: </strong> Label column of 8, field column of 4</li>
+                        <li><strong>label-auto: </strong> Label and field widths determined by contents</li>
                     </ul>
 
                     <div runat="server" class="r-example">
-<div class="form-horizontal label-sm">
-  <div class="form-group">
-    <label for="inputEmail3" class="control-label">Email</label>
-    <div class="control-wrapper">
-      <input type="email" class="form-control" id="inputEmail4" placeholder="Email">
-    </div>
-  </div>
-</div>
+                        <div class="form-horizontal label-sm">
+                            <div class="form-group">
+                                <label for="inputEmail4" class="control-label">Email</label>
+                                <div class="control-wrapper">
+                                    <input type="email" class="form-control" id="inputEmail4" placeholder="Email">
+                                </div>
+                            </div>
+                        </div>
 
-<div class="form-horizontal label-md">
-  <div class="form-group">
-    <label for="inputEmail3" class="control-label">Email</label>
-    <div class="control-wrapper">
-      <input type="email" class="form-control" id="inputEmail5" placeholder="Email">
-    </div>
-  </div>
-</div>
+                        <div class="form-horizontal label-md">
+                            <div class="form-group">
+                                <label for="inputEmail5" class="control-label">Email</label>
+                                <div class="control-wrapper">
+                                    <input type="email" class="form-control" id="inputEmail5" placeholder="Email">
+                                </div>
+                            </div>
+                        </div>
 
-<div class="form-horizontal label-lg">
-  <div class="form-group">
-    <label for="inputEmail3" class="control-label">Email</label>
-    <div class="control-wrapper">
-      <input type="email" class="form-control" id="inputEmail6" placeholder="Email">
-    </div>
-  </div>
-</div>
+                        <div class="form-horizontal label-lg">
+                            <div class="form-group">
+                                <label for="inputEmail6" class="control-label">Email</label>
+                                <div class="control-wrapper">
+                                    <input type="email" class="form-control" id="inputEmail6" placeholder="Email">
+                                </div>
+                            </div>
+                        </div>
 
-<div class="form-horizontal label-xl">
-  <div class="form-group">
-    <label for="inputEmail3" class="control-label">Email</label>
-    <div class="control-wrapper">
-      <input type="email" class="form-control" id="inputEmail3" placeholder="Email">
-    </div>
-  </div>
-</div>
+                        <div class="form-horizontal label-xl">
+                            <div class="form-group">
+                                <label for="inputEmail7" class="control-label">Email</label>
+                                <div class="control-wrapper">
+                                    <input type="email" class="form-control" id="inputEmail7" placeholder="Email">
+                                </div>
+                            </div>
+                        </div>
 
+                        <div class="form-horizontal label-auto">
+                            <div class="form-group">
+                                <label for="inputEmail8" class="control-label">Email Email Email Email Email Email Email Email Email Email Email</label>
+                                <div class="control-wrapper">
+                                    <input type="email" class="form-control" id="inputEmail8" placeholder="Email">
+                                </div>
+                            </div>
+                        </div>
 
                     </div>
 
@@ -137,7 +167,7 @@
                     <div class="alert alert-warning">
                         <p><strong>Warning!</strong></p>
                         If you think you need to control the margin or padding, you might be 'doing it wrong.'
-                        These are for use in those cases when you know what you're doing.</em>
+                        <em>These are for use in those cases when you know what you're doing.</em>
                     </div>
 
                     <h3>Format</h3>
@@ -183,7 +213,7 @@
 
 
                     <a id="DropDowns"></a>
-                    <h1 runat="server">DropDowns</h1>
+                    <h1 runat="server">Drop Downs</h1>
 
                     <a id="DataDropDownList"></a>
                     <div runat="server" class="r-example">
@@ -191,50 +221,65 @@
                     </div>
 
                     <a id="StateDropDownList"></a>
+                    <h2>State Drop Down List</h2>
                     <div runat="server" class="r-example">
                         <Rock:StateDropDownList ID="statepExample" runat="server" Label="Rock:StateDropDownList" />
                     </div>
 
                     <a id="ButtonDropDownList"></a>
+                    <h2>Button Drop Down List</h2>
                     <div runat="server" class="r-example">
                         <Rock:ButtonDropDownList ID="bddlExample" runat="server" Label="Rock:ButtonDropDownList" />
                     </div>
 
                     <a id="ButtonDropDownListCheckMark"></a>
+                    <h2>Button Drop Down List Checkmark</h2>
                     <div runat="server" class="r-example">
                         <Rock:ButtonDropDownList ID="bddlExampleCheckmark" runat="server" Label="Rock:ButtonDropDownList with Checkmark" SelectionStyle="Checkmark" Title="T-Shirt Size" />
                     </div>
 
                     <a id="Input"></a>
-                    <h1 runat="server">Input</h1>
+                    <h1 runat="server">Inputs</h1>
 
 
                     <a id="DataTextBox"></a>
+                    <h2>Text Box</h2>
                     <div runat="server" class="r-example">
                         <Rock:DataTextBox ID="dtbExample" runat="server" Label="Rock:DataTextBox" LabelTextFromPropertyName="false" SourceTypeName="Rock.Model.GroupType, Rock" PropertyName="Description" />
                     </div>
 
                     <a id="EmailBox"></a>
+                    <h2>Email Box</h2>
                     <div runat="server" class="r-example">
                         <Rock:EmailBox ID="ebEmail" runat="server" Label="Rock:EmailBox" />
                     </div>
 
                     <a id="UrlLinkBox"></a>
+                    <h2>URL Link Box</h2>
                     <div runat="server" class="r-example">
                         <Rock:UrlLinkBox ID="ulLink" runat="server" Label="Rock:UrlLinkBox" />
                     </div>
 
                     <a id="NumberBox"></a>
+                    <h2>Number Box</h2>
                     <div runat="server" class="r-example">
                         <Rock:NumberBox ID="numbExample" runat="server" Label="Rock:NumberBox" />
                     </div>
 
+                    <a id="AddressControl"></a>
+                    <h2>Address Control</h2>
+                    <div runat="server" class="r-example">
+                        <Rock:AddressControl ID="addrExample" runat="server" Label="Rock:AddressControl" />
+                    </div>
+
                     <a id="NumberUpDown"></a>
+                    <h2>Number Up Down (Stepper)</h2>
                     <div runat="server" class="r-example">
                         <Rock:NumberUpDown ID="nudExample" runat="server" Label="Rock:NumberUpDown" Minimum="0" Maximum="5" />
                     </div>
 
                     <a id="RockCheckBox"></a>
+                    <h2>Check Box</h2>
                     <div runat="server" class="r-example">
                         <Rock:RockCheckBox ID="cbExample" runat="server" Label="Rock:RockCheckBox" />
                     </div>
@@ -254,7 +299,13 @@
                         <Rock:RockCheckBoxList ID="cblExampleHorizontal" runat="server" Label="Rock:RockCheckBoxList (horizontal)" RepeatDirection="Horizontal" />
                     </div>
 
+                    <a id="Rock List Box"></a>
+                    <div runat="server" class="r-example">
+                        <Rock:RockListBox ID="lbExampleListBox" runat="server" Label="Rock:RockListBox" />
+                    </div>
+
                     <a id="RockRadioButtonList"></a>
+                    <h2>Radio Button</h2>
                     <div runat="server" class="r-example">
                         <Rock:RockRadioButtonList ID="rblExample" runat="server" Label="Rock:RockRadioButtonList" />
                     </div>
@@ -264,19 +315,32 @@
                         <Rock:RockRadioButtonList ID="rblExampleHorizontal" runat="server" Label="Rock:RockRadioButtonList (horizontal)" RepeatDirection="Horizontal" />
                     </div>
 
+                    <a id="RockSwitch"></a>
+                    <div runat="server" class="r-example">
+                        <Rock:Switch ID="swExample" runat="server" Label="Rock:Switch" Text="Rock:Switch" />
+                    </div>
+
+                    <a id="RockListItems"></a>
+                    <div runat="server" class="r-example">
+                        <Rock:ListItems ID="liExample" runat="server" Label="Rock:ListItems"></Rock:ListItems>
+                    </div>
+
                     <a id="NumberRangeEditor"></a>
+                    <h2>Number Range</h2>
                     <div runat="server" class="r-example">
                         <Rock:NumberRangeEditor ID="nreExample" runat="server" Label="Rock:NumberRangeEditor" LowerValue="10" UpperValue="25" />
                     </div>
 
                     <a id="RatingInput"></a>
+                    <h2>Rating Input</h2>
                     <div runat="server" class="r-example">
                         <Rock:RockRating ID="rrRating" runat="server" Label="Rock:RatingInput" /><br />
                     </div>
 
                     <a id="RangeSlider"></a>
+                    <h2>Range Slider</h2>
                     <div runat="server" class="r-example">
-                        <Rock:RangeSlider ID="rsSlider" runat="server" Label="Rock:RangeSlider" MaxValue="250" MinValue="125" SelectedValue="200" />
+                        <Rock:RangeSlider ID="rsSlider" runat="server" Label="Rock:RangeSlider" MaxValue="250" MinValue="125" StepValue="5" SelectedValue="200" />
                         <br />
                     </div>
 
@@ -356,12 +420,12 @@
 
                     <a id="CampusPicker"></a>
                     <div runat="server" class="r-example">
-                        <Rock:CampusPicker ID="campExample" runat="server" Label="Rock:CampusPicker" />
+                        <Rock:CampusPicker ID="campExample" runat="server" Label="Rock:CampusPicker" ForceVisible="true" />
                     </div>
 
                     <a id="CampusesPicker"></a>
                     <div runat="server" class="r-example">
-                        <Rock:CampusesPicker ID="campsExample" runat="server" Label="Rock:CampusesPicker" />
+                        <Rock:CampusesPicker ID="campsExample" runat="server" Label="Rock:CampusesPicker" ForceVisible="true" />
                     </div>
 
                     <a id="Connections"></a>
@@ -372,11 +436,11 @@
                         <Rock:ConnectionRequestPicker ID="crpConnectionRequestPicker" runat="server" Label="Rock:ConnectionRequestPicker" />
                     </div>
 
-                   
+
 
                     <a id="DefinedValues"></a>
                     <h2 runat="server">DefinedValues</h2>
-                    
+
                     <a id="DefinedValuePicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:DefinedValuePicker ID="dvpDefinedValuePicker" runat="server" Label="Rock:DefinedValuePicker for ConnectionStatus defined type" DefinedTypeId="4" />
@@ -393,7 +457,7 @@
                     </div>
 
                     <h2>Events</h2>
-                    
+
                     <a id="EventCalendarPicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:EventCalendarPicker ID="ecpEventCalendarPicker" runat="server" Label="Rock:EventCalendarPicker" />
@@ -438,6 +502,11 @@
                         <Rock:FileUploader ID="fuprExampleBinaryFile" runat="server" Label="Rock:FileUploader (BinaryFile mode)" BinaryFileTypeGuid="C1142570-8CD6-4A20-83B1-ACB47C1CD377" />
                     </div>
 
+                    <a id="FileUploaderLg"></a>
+                    <div runat="server" class="r-example">
+                        <Rock:FileUploader ID="fuprExampleUploader" runat="server" DisplayMode="DropZone" IsBinaryFile="true" Required="false" Label="Rock:FileUploader Large (BinaryFile mode)" RequiredErrorMessage="A Document File is required." FormGroupCssClass="fileupload-group-lg" UploadButtonText="Drop File Here or Click to Select"></Rock:FileUploader>
+                    </div>
+
                     <a id="FileUploaderContentFileMode"></a>
                     <div runat="server" class="r-example">
                         <Rock:FileUploader ID="fuprExampleContentFile" runat="server" Label="Rock:FileUploader (Content file mode)" IsBinaryFile="false" RootFolder="~/App_Data/TemporaryFiles" OnFileUploaded="fupContentFile_FileUploaded" />
@@ -474,7 +543,7 @@
                     <div runat="server" class="r-example">
                         <Rock:GroupTypePicker ID="gpGroupType" runat="server" Label="Rock:GroupTypePicker" />
                     </div>
-                    
+
                     <a id="GroupTypesPicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:GroupTypesPicker ID="gpGroupTypes" runat="server" Label="Rock:GroupTypesPicker" />
@@ -483,6 +552,16 @@
                     <a id="GroupRolePicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:GroupRolePicker ID="grpExample" runat="server" Label="Rock:GroupRolePicker" />
+                    </div>
+
+                    <h2 runat="server">Interval</h2>
+                    <a id="IntervalPicker"></a>
+                    <div runat="server" class="r-example">
+                        <Rock:IntervalPicker ID="ipExample1" runat="server" Label="Rock:IntervalPicker" />
+                    </div>
+
+                    <div runat="server" class="r-example">
+                        <Rock:IntervalPicker ID="ipExample2" DefaultValue="2" DefaultInterval="Day" runat="server" Label="Rock:IntervalPicker (Default Value, Default Interval)" />
                     </div>
 
                     <h2 runat="server">Locations</h2>
@@ -519,8 +598,8 @@
                     <a id="PersonPicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:PersonPicker ID="ppExample" runat="server" Label="Rock:PersonPicker" />
-                    </div>                    
-                    
+                    </div>
+
                     <a id="PersonAndBusinessPicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:PersonPicker ID="ppBusinessExample" runat="server" Label="Rock:PersonPicker including businesses" IncludeBusinesses="true" />
@@ -536,28 +615,30 @@
                         <Rock:GradePicker ID="pGradePicker" runat="server" Label="Rock:GradePicker" />
                     </div>
 
-                    <h2>Lava</h2>
+                    <h2>Lava Commands</h2>
 
                     <a id="LavaCommandsPicker"></a>
                     <div runat="server" class="r-example">
-                        <Rock:LavaCommandsPicker ID="pLavaCommandsPicker" runat="server" Label="LavaCommandsPicker" />
+                        <Rock:LavaCommandsPicker ID="pLavaCommandsPicker" runat="server" Label="Rock:LavaCommandsPicker" />
                     </div>
 
                     <a id="MergeFieldPicker"></a>
+                    <h2>Lava Merge Fields</h2>
                     <div runat="server" class="r-example">
                         <Rock:MergeFieldPicker ID="mfpExample" runat="server" Label="Rock:MergeFieldPicker" />
                     </div>
-                    
+
                     <a id="MergeTemplatePicker"></a>
+                    <h2>Merge Fields Templates</h2>
                     <div runat="server" class="r-example">
-                        <Rock:MergeTemplatePicker ID="pMergeTemplatePicker" runat="server" Label="MergeTemplatePicker" />
+                        <Rock:MergeTemplatePicker ID="pMergeTemplatePicker" runat="server" Label="Rock:MergeTemplatePicker" />
                     </div>
 
                     <h2>Reporting</h2>
 
-                    <a id="DataViewPicker"></a>
+                    <a id="DataViewItemPicker"></a>
                     <div runat="server" class="r-example">
-                        <Rock:DataViewPicker ID="dvpDataViewPicker" runat="server" Label="DataViewPicker for Person Dataviews" EntityTypeId="15" />
+                        <Rock:DataViewItemPicker ID="dvpDataViewPicker" runat="server" Label="Rock:DataViewItemPicker for Person Dataviews" EntityTypeId="15" />
                     </div>
 
                     <a id="DataViewsPicker"></a>
@@ -565,19 +646,24 @@
                         <Rock:DataViewsPicker ID="dvpDataViewsPicker" runat="server" Label="Rock:DataViewsPicker for Person Dataviews" EntityTypeId="15"/>
                     </div>
 
+                    <a id="ReportPicker"></a>
+                    <div runat="server" class="r-example">
+                        <Rock:ReportPicker ID="rpReports" runat="server" Label="Rock:ReportPicker for Person Reports" EntityTypeId="15" />
+                    </div>
+
                     <a id="MetricCategoryPicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:MetricCategoryPicker ID="pMetricCategoryPicker" runat="server" Label="Rock:MetricCategoryPicker (Pick Metric from Category Tree)" EntityTypeId="15"/>
                     </div>
- 
+
                     <h2>Workflows</h2>
 
                     <a id="WorkflowTypePicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:WorkflowTypePicker ID="wftpExample" runat="server" Label="Rock:WorkflowTypePicker" />
                     </div>
-                    
-                    
+
+
                     <a id="WorkflowActionTypePicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:WorkflowActionTypePicker ID="wfatpExample" runat="server" Label="Rock:WorkflowActionTypePicker" />
@@ -612,8 +698,8 @@
                         <Rock:FieldTypePicker ID="ftlExample" runat="server" Label="Rock:FieldTypePicker" />
                     </div>
 
-                    
-                    
+
+
                     <a id="RemoteAuthsPicker"></a>
                     <div runat="server" class="r-example">
                         <Rock:RemoteAuthsPicker ID="pRemoteAuthsPicker" runat="server" Label="Rock:RemoteAuthsPicker" />
@@ -635,12 +721,12 @@
                     <a id="Misc"></a>
                     <h1 runat="server">Misc</h1>
 
-                    
+
 
                     <a id="Notificationbox"></a>
-                    <h2 runat="server">Rock:Notificationbox</h2>
+                    <h2 runat="server">Rock:NotificationBox</h2>
                     <p>
-                        This creates a <a href="http://getbootstrap.com/components/#alerts">Bootstrap alert</a>.  We've added the ability to have Details that can be shown. 
+                        This creates a <a href="http://getbootstrap.com/components/#alerts">Bootstrap alert</a>.  We’ve added the ability to have Details that can be shown.
                     </p>
 
                     <div runat="server" class="r-example">
@@ -672,7 +758,7 @@
                     <h2 runat="server">Rock:HighlightLabel</h2>
                     <p>
                         This creates a <a href="http://getbootstrap.com/components/#labels">Bootstrap Label</a>
-                        but we've added a few additional custom <code>LabelType</code> options to control the color.
+                        but we’ve added a few additional custom <code>LabelType</code> options to control the color.
                     </p>
                     <div runat="server" class="r-example">
                         <Rock:HighlightLabel ID="hlblExample1" runat="server" LabelType="Default" Text="Default" ToolTip="More information is here." />
@@ -687,7 +773,7 @@
                     </div>
 
                     <p>
-                        While you can set the <code>Text</code> to include HTML (such as font icons), you can also do this 
+                        While you can set the <code>Text</code> to include HTML (such as font icons), you can also do this
                     a little easier just by setting the <code>IconCssClass</code> property.
                     </p>
 
@@ -732,39 +818,42 @@
                         <Rock:Toggle ID="tglExample10" runat="server" ButtonSizeCssClass="btn-xs" />
                     </div>
 
+                    <a id="ButtonGroup"></a>
+                    <h2 runat="server">Rock:ButtonGroup</h2>
+                    <div runat="server" class="r-example">
+                        <Rock:ButtonGroup ID="bgExample" runat="server" Label="Favorite Fruit">
+                            <asp:ListItem Text="Apple" Value="1" />
+                            <asp:ListItem Text="Banana" Value="2" />
+                            <asp:ListItem Text="Strawberry" Value="3" />
+                            <asp:ListItem Text="Chicken" Value="4" />
+                        </Rock:ButtonGroup>
+                    </div>
+
                     <a id="BootstrapButton"></a>
                     <h2 runat="server">Rock:BootstrapButton</h2>
                     <div runat="server" class="r-example">
                         <Rock:BootstrapButton ID="lbSave" runat="server" Text="Click Me" CssClass="btn btn-primary"
                             DataLoadingText="&lt;i class='fa fa-refresh fa-spin'&gt;&lt;/i&gt; Saving"
-                            CompletedText ="Done" CompletedDuration="3" CompletedMessage="&nbsp;Your Changes have been Saved!"/>
-                    </div>
-
-                    <a id="NoteControl"></a>
-                    <h2 runat="server">Rock:NoteControl</h2>
-                    <div id="Div3" runat="server" class="r-example">
-                        <section class="panel-note">
-                            <Rock:NoteControl ID="noteExample" runat="server" IsAlert="false" IsPrivate="false" Text="Here is some example note text." CanEdit="true" />
-                        </section>
+                            CompletedText ="Done" CompletedMessage="<div class='margin-t-md alert alert-success'>Changes have been saved.</div>" CompletedDuration="3"/>
                     </div>
 
                     <a id="AttributeEditor"></a>
                     <h2 runat="server">Rock:AttributeEditor</h2>
                     <div runat="server" class="r-example">
-                        <asp:LinkButton ID="lbExample" runat="server" CssClass="btn btn-link" Text="Attribute Editor..." OnClick="btnShowAttributeEditor_Click" CausesValidation="false" />
+                        <asp:LinkButton ID="btnShowAttributeEditor" runat="server" CssClass="btn btn-link" Text="Attribute Editor..." OnClick="btnShowAttributeEditor_Click" CausesValidation="false" />
                         <asp:Panel ID="pnlAttributeEditor" runat="server" Visible="false" CssClass="well">
                             <Rock:AttributeEditor ID="edtExample" runat="server" OnCancelClick="aeExample_CancelClick" OnSaveClick="aeExample_SaveClick" ValidationGroup="Attribute" />
                         </asp:Panel>
                     </div>
 
                     <a id="HtmlEditor"></a>
-                    <h2 runat="server">Rock:HtmlEditor</h2>
+                    <h2>Rock:HtmlEditor (Full)</h2>
                     <div runat="server" class="r-example">
                         <Rock:HtmlEditor ID="htmlEditorFull" runat="server" Label="HtmlEditor" Toolbar="Full" />
                     </div>
 
                     <a id="HtmlEditorLight"></a>
-                    <h2 runat="server">Rock:HtmlEditor</h2>
+                    <h2>Rock:HtmlEditor (Light)</h2>
                     <div runat="server" class="r-example">
                         <Rock:HtmlEditor ID="htmlEditorLight" runat="server" Label="HtmlEditor" Toolbar="Light" />
                     </div>
@@ -773,19 +862,19 @@
                     <h2 runat="server">Rock:CodeEditor</h2>
                     <div runat="server" class="r-example">
                         <Rock:CodeEditor ID="ceScript" runat="server" EditorTheme="Rock" Label="Script" EditorMode="Html" EditorHeight="300">
-    <h1>Hello!!!</h1> 
+    <h3>Hello!!!</h3>
     <p>This is a great way to edit HTML! Reasons:</p>
 
-    <!-- Comment 
-         We shouldn't have to explain why this is better than just a 
+    <!-- Comment
+         We shouldn't have to explain why this is better than just a
          textarea but we will just for you...
     -->
 
     <ol class="reasons">
-        <li>Stynax highlighting</li>
+        <li>Syntax highlighting</li>
         <li>Tabs work great</li>
         <li>Code folding</li>
-    </ol>             
+    </ol>
                         </Rock:CodeEditor>
                     </div>
                     <p>
@@ -800,8 +889,7 @@
                         <Rock:MarkdownEditor ID="mdMarkdownEditor" runat="server" CssClass="margin-t-sm" Label="Rock:MarkdownEditor" EditorHeight="400">
 *Italic*
 **Bold**
-# Heading 1
-## Heading 2
+
 
 [Link](http://www.rockrms.com)
 
@@ -809,10 +897,10 @@
 
 > Blockquote
 
-* Apples 
+* Apples
   * Red
   * Green
-  * Blue                              
+  * Blue
 * Bananas
 * Oranges
 
@@ -832,15 +920,33 @@ Horizontal Rule
 ---
 
                         </Rock:MarkdownEditor>
-                        
+
                         <asp:Literal ID="lMarkdownHtml" runat="server" />
+                    </div>
+
+
+                    <a id="CampusAccountAmountPicker"></a>
+                    <h2 runat="server">Rock:CampusAccountAmountPicker</h2><span>(SingleAccount Mode)</span>
+                    <div runat="server" class="r-example">
+                        <Rock:CampusAccountAmountPicker ID="caapExampleSingleAccount" runat="server" AmountEntryMode="SingleAccount" AutoPostBack="true" OnAccountChanged="caapExample_Changed" />
+
+                        <hr />
+                        <Rock:RockLiteral ID="lCaapExampleSingleAccountResultAccount" runat="server" Label="Resulting Campus Account" Text="-"/>
+                    </div>
+
+                    <h2 runat="server">Rock:CampusAccountAmountPicker</h2><span>(MultipleAccounts Mode)</span>
+                    <div runat="server" class="r-example">
+                        <Rock:CampusAccountAmountPicker ID="caapExampleMultiAccount" runat="server" AmountEntryMode="MultipleAccounts" OnAccountChanged="caapExample_Changed"/>
+
+                         <hr />
+                        <Rock:RockLiteral ID="lCaapExampleMultiAccountResultAccount" runat="server" Label="Resulting Campus Accounts" Text="-" />
                     </div>
 
 
                     <a id="CssRollovers"></a>
                     <h2 runat="server">CSS Rollovers</h2>
-                    You often run across situiations where you would like buttons or links to apprear when you hover over a selection of code. Instead of using jQuery toggles you can use the
-                CSS classes below. These classes can be applied to any tags.  In order to support nested rollovers the actions must be direct decendents of their containers.  On touch enabled
+                    You often run across situations where you would like buttons or links to appear when you hover over a selection of code. Instead of using jQuery toggles you can use the
+                CSS classes below. These classes can be applied to any tags.  In order to support nested rollovers the actions must be direct descendants of their containers. On touch enabled
                 devices the rollover-items will always be displayed.
                 <div runat="server" class="r-example">
                     <div class="alert alert-info rollover-container">
@@ -853,13 +959,13 @@ Horizontal Rule
                 </div>
 
                     <h2 runat="server">Rock jQuery UI Library</h2>
-                    To help promote consistance we have created a standard Rock jQuery UI Library.  Below are the current functions with their usage patters.
-            
+                    To help promote consistence we have created a standard Rock jQuery UI Library. Below are the current functions with their usage patterns.
+
                 <a id="RockFadeIn"></a>
                     <h3 runat="server">rockFadeIn()</h3>
                     <p>
                         Use this to fade in a selected DOM object in. The function hides the selector and then fades it in. Using this object will help provide
-                    consistant fade behavior.
+                    consistent fade behavior.
                     </p>
                     <strong>Usage Examples</strong>
                     <ul>
@@ -894,7 +1000,7 @@ Horizontal Rule
                     </div>
 
                 </asp:Panel>
-
+</div></div>
             </div>
         </div>
 

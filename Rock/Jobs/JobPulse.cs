@@ -16,9 +16,12 @@
 //
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+
 using Quartz;
 using Quartz.Impl.Matchers;
+
 using Rock.Model;
 using Rock.Web.Cache;
 
@@ -27,11 +30,14 @@ namespace Rock.Jobs
     /// <summary>
     /// Job to keep a heartbeat of the job process so we know when the jobs stop working
     /// </summary>
+    [DisplayName( "Job Pulse" )]
+    [Description( "System job that allows Rock to monitor the jobs engine." )]
+
     [DisallowConcurrentExecution]
     public class JobPulse : IJob
     {
         /// <summary> 
-        /// Empty constructor for job initilization
+        /// Empty constructor for job initialization
         /// <para>
         /// Jobs require a public empty constructor so that the
         /// scheduler can instantiate the class whenever it needs.
@@ -51,7 +57,7 @@ namespace Rock.Jobs
         /// </summary>
         public virtual void Execute( IJobExecutionContext context )
         {
-            var globalAttributesCache = GlobalAttributesCache.Read();
+            var globalAttributesCache = GlobalAttributesCache.Get();
 
             // Update a JobPulse global attribute value so that 3rd Party plugins could query this value in case they need to know
             globalAttributesCache.SetValue( "JobPulse", RockDateTime.Now.ToString(), true );
@@ -92,8 +98,12 @@ namespace Rock.Jobs
                     IJobDetail jobDetail = jobService.BuildQuartzJob( job );
                     ITrigger jobTrigger = jobService.BuildQuartzTrigger( job );
 
-                    scheduler.ScheduleJob( jobDetail, jobTrigger );
-                    jobsScheduleUpdated++;
+                    // Schedule the job (unless the cron expression is set to never run for an on-demand job like rebuild streaks)
+                    if ( job.CronExpression != ServiceJob.NeverScheduledCronExpression )
+                    {
+                        scheduler.ScheduleJob( jobDetail, jobTrigger );
+                        jobsScheduleUpdated++;
+                    }
 
                     if ( job.LastStatus == errorSchedulingStatus )
                     {

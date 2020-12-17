@@ -20,7 +20,6 @@ using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Linq;
 
-using Rock.Attribute;
 using Rock.CheckIn;
 using Rock.Data;
 
@@ -30,7 +29,7 @@ namespace Rock.Workflow.Action.CheckIn
     /// Removes (or excludes) any locations that are not active
     /// </summary>
     [ActionCategory( "Check-In" )]
-    [Description( "Sets the avialable schedules for each grouptype, group, and location" )]
+    [Description( "Sets the available schedules for each grouptype, group, and location" )]
     [Export( typeof( ActionComponent ) )]
     [ExportMetadata( "ComponentName", "Set Available Schedules" )]
 

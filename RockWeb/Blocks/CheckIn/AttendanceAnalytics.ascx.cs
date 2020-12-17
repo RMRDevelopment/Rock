@@ -15,6 +15,7 @@
 // </copyright>
 //
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -30,6 +31,7 @@ using Rock;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
+using Rock.Reporting;
 using Rock.Security;
 using Rock.Web.Cache;
 using Rock.Web.UI;
@@ -43,22 +45,158 @@ namespace RockWeb.Blocks.CheckIn
     [DisplayName( "Attendance Analytics" )]
     [Category( "Check-in" )]
     [Description( "Shows a graph of attendance statistics which can be configured for specific groups, date range, etc." )]
-    [GroupTypesField( "Group Types", "Optional List of specific group types that should be included. If none are selected, an option to select an attendance type will be displayed and all of that attendance type's areas will be available.", false, "", "", 0 )]
-    [BooleanField( "Include Inactive Campuses", "Should campus filter include inactive campuses?", false, "", 1 )]
-    [BooleanField( "Show All Groups", "Should all of the available groups be listed individually with checkboxes? If not, a group dropdown will be used instead for selecting the desired groups", true, "", 2)]
-    [BooleanField( "Show Group Ancestry", "By default the group ancestry path is shown.  Unselect this to show only the group name.", true, "", 3 )]
-    [LinkedPage( "Detail Page", "Select the page to navigate to when the chart is clicked", false, "", "", 4 )]
-    [LinkedPage( "Check-in Detail Page", "Page that shows the user details for the check-in data.", false, "", "", 5 )]
-    [CategoryField("Data View Category(s)", "The optional data view categories that should be included as an option to filter attendance for. If a category is not selected, all data views will be included.", true, "Rock.Model.DataView", "", "", false, "", "", 6, "DataViewCategories" )]
-    [BooleanField( "Group Specific", "Should this block display attendance only for the selected group?", false, "", 7 )]
-    [BooleanField( "Show Schedule Filter", "Should the Schedules filter be displayed", true, "", 8)]
-    [BooleanField( "Show Campus Filter", "Should the Campus filter be displayed?", true, "", 9)]
-    [BooleanField( "Show View By Option", "Should the option to view 'Attendees' vs 'Parents of Attendees' vs 'Children of Attendees' be displayed when viewing the grid? If not displayed, the grid will always show attendees.", true, "", 10 )]
-    [BooleanField( "Show Bulk Update Option", "Should the Bulk Update option be allowed from the attendance grid?", true, "", 11 )]
 
-    [DefinedValueField( Rock.SystemGuid.DefinedType.CHART_STYLES, "Chart Style", "", true, false, Rock.SystemGuid.DefinedValue.CHART_STYLE_ROCK, "", 5 )]
+    [GroupTypesField(
+        name: "Group Types",
+        description: "Optional List of specific group types that should be included. If none are selected, an option to select an attendance type will be displayed and all of that attendance type's areas will be available.",
+        required: false,
+        defaultGroupTypeGuids: "",
+        category: "",
+        order: 0,
+        key: AttributeKeys.GroupTypes )]
+
+    [BooleanField(
+        name: "Include Inactive Campuses",
+        description: "Should campus filter include inactive campuses?",
+        defaultValue: false,
+        category: "",
+        order: 1,
+        key: AttributeKeys.IncludeInactiveCampuses )]
+
+    [BooleanField(
+        name: "Show All Groups",
+        description: "Should all of the available groups be listed individually with checkboxes? If not, a group dropdown will be used instead for selecting the desired groups",
+        defaultValue: true,
+        category: "",
+        order: 2,
+        key: AttributeKeys.ShowAllGroups )]
+
+    [BooleanField(
+        name: "Show Group Ancestry",
+        description: "By default the group ancestry path is shown.  Unselect this to show only the group name.",
+        defaultValue: true,
+        category: "",
+        order: 3,
+        key: AttributeKeys.ShowGroupAncestry )]
+
+    [LinkedPage(
+        name: "Detail Page",
+        description: "Select the page to navigate to when the chart is clicked",
+        required: false,
+        defaultValue: "",
+        category: "",
+        order: 4,
+        key: AttributeKeys.DetailPage )]
+
+    [LinkedPage(
+        name: "Check-in Detail Page",
+        description: "Page that shows the user details for the check-in data.",
+        required: false,
+        defaultValue: "",
+        category: "",
+        order: 5,
+        key: AttributeKeys.CheckinDetailPage )]
+
+    [DefinedValueField(
+        definedTypeGuid: Rock.SystemGuid.DefinedType.CHART_STYLES,
+        name: "Chart Style",
+        description: "",
+        required: true,
+        allowMultiple: false,
+        defaultValue: Rock.SystemGuid.DefinedValue.CHART_STYLE_ROCK,
+        category: "",
+        order: 6,
+        key: AttributeKeys.ChartStyle )]
+
+    [CategoryField(
+        name: "Data View Category(s)",
+        description: "The optional data view categories that should be included as an option to filter attendance for. If a category is not selected, all data views will be included.",
+        allowMultiple: true,
+        entityTypeName: "Rock.Model.DataView",
+        entityTypeQualifierColumn: "",
+        entityTypeQualifierValue: "",
+        required: false,
+        defaultValue: "",
+        category: "",
+        order: 7,
+        key: AttributeKeys.DataViewCategories )]
+
+    [BooleanField(
+        name: "Group Specific",
+        description: "Should this block display attendance only for the selected group?",
+        defaultValue: false,
+        category: "",
+        order: 8,
+        key: AttributeKeys.GroupSpecific )]
+
+    [BooleanField(
+        name: "Show Schedule Filter",
+        description: "Should the Schedules filter be displayed",
+        defaultValue: true,
+        category: "",
+        order: 9,
+        key: AttributeKeys.ShowScheduleFilter )]
+
+    [BooleanField( name: "Show Campus Filter",
+        description: "Should the Campus filter be displayed?",
+        defaultValue: true,
+        category: "",
+        order: 10,
+        key: AttributeKeys.ShowCampusFilter )]
+
+    [BooleanField( name: "Show View By Option",
+        description: "Should the option to view 'Attendees' vs 'Parents of Attendees' vs 'Children of Attendees' be displayed when viewing the grid? If not displayed, the grid will always show attendees.",
+        defaultValue: true,
+        category: "",
+        order: 11,
+        key: AttributeKeys.ShowViewByOption )]
+
+    [BooleanField(
+        name: "Show Bulk Update Option",
+        description: "Should the Bulk Update option be allowed from the attendance grid?",
+        defaultValue: true,
+        category: "",
+        order: 12,
+        key: AttributeKeys.ShowBulkUpdateOption )]
+
+    [CustomDropdownListField(
+        name: "Filter Column Direction",
+        description: "Choose the direction for the checkboxes for filter selections.",
+        listSource: "vertical^Vertical,horizontal^Horizontal",
+        required: true,
+        defaultValue: "vertical",
+        order: 13,
+        key: AttributeKeys.FilterColumnDirection )]
+
+    [IntegerField(
+        name: "Filter Column Count",
+        description: "The number of check boxes for each row.",
+        required: false,
+        defaultValue: 1,
+        order: 14,
+        key: AttributeKeys.FilterColumnCount )]
+
     public partial class AttendanceAnalytics : RockBlock
     {
+        private static class AttributeKeys
+        {
+            public const string GroupTypes = "GroupTypes";
+            public const string IncludeInactiveCampuses = "IncludeInactiveCampuses";
+            public const string ShowAllGroups = "ShowAllGroups";
+            public const string ShowGroupAncestry = "ShowGroupAncestry";
+            public const string DetailPage = "DetailPage";
+            public const string CheckinDetailPage = "Check-inDetailPage";
+            public const string DataViewCategories = "DataViewCategories";
+            public const string GroupSpecific = "GroupSpecific";
+            public const string ShowScheduleFilter = "ShowScheduleFilter";
+            public const string ShowCampusFilter = "ShowCampusFilter";
+            public const string ShowViewByOption = "ShowViewByOption";
+            public const string ShowBulkUpdateOption = "ShowBulkUpdateOption";
+            public const string FilterColumnCount = "FilterColumnCount";
+            public const string FilterColumnDirection = "FilterColumnDirection";
+            public const string ChartStyle = "ChartStyle";
+        }
+
         #region Fields
 
         private RockContext _rockContext = null;
@@ -90,7 +228,7 @@ namespace RockWeb.Blocks.CheckIn
             cbShowInactive.Checked = GetUserPreference( BlockCache.Guid.ToString() + "_showInactive" ).AsBoolean();
 
             // Determine if the block should be for a specific group
-            _isGroupSpecific = GetAttributeValue( "GroupSpecific" ).AsBoolean();
+            _isGroupSpecific = GetAttributeValue( AttributeKeys.GroupSpecific ).AsBoolean();
             if ( _isGroupSpecific )
             {
                 int? groupId = PageParameter( "GroupId" ).AsIntegerOrNull();
@@ -103,7 +241,7 @@ namespace RockWeb.Blocks.CheckIn
                     }
                 }
 
-                if ( _specificGroup == null || ( !IsUserAuthorized(Rock.Security.Authorization.VIEW) && !_specificGroup.IsAuthorized( Rock.Security.Authorization.VIEW, CurrentPerson ) ) )
+                if ( _specificGroup == null || ( !IsUserAuthorized( Rock.Security.Authorization.VIEW ) && !_specificGroup.IsAuthorized( Rock.Security.Authorization.VIEW, CurrentPerson ) ) )
                 {
                     nbInvalidGroup.Visible = true;
                     pnlContent.Visible = false;
@@ -112,11 +250,11 @@ namespace RockWeb.Blocks.CheckIn
                 btnCopyToClipboard.Visible = false;
             }
             else
-            { 
+            {
                 btnCopyToClipboard.Visible = true;
                 RockPage.AddScriptLink( this.Page, "~/Scripts/clipboard.js/clipboard.min.js" );
                 string script = string.Format( @"
-    new Clipboard('#{0}');
+    new ClipboardJS('#{0}');
     $('#{0}').tooltip();
 ", btnCopyToClipboard.ClientID );
                 ScriptManager.RegisterStartupScript( btnCopyToClipboard, btnCopyToClipboard.GetType(), "share-copy", script, true );
@@ -129,18 +267,16 @@ namespace RockWeb.Blocks.CheckIn
             gChartAttendance.GridRebind += gChartAttendance_GridRebind;
             gAttendeesAttendance.GridRebind += gAttendeesAttendance_GridRebind;
 
-            gAttendeesAttendance.EntityTypeId = EntityTypeCache.Read<Rock.Model.Person>().Id;
-            gAttendeesAttendance.Actions.ShowBulkUpdate = GetAttributeValue( "ShowBulkUpdateOption" ).AsBoolean( true );
+            gAttendeesAttendance.EntityTypeId = EntityTypeCache.Get<Rock.Model.Person>().Id;
+            gAttendeesAttendance.Actions.ShowBulkUpdate = GetAttributeValue( AttributeKeys.ShowBulkUpdateOption ).AsBoolean( true );
             gAttendeesAttendance.Actions.ShowMergePerson = !_isGroupSpecific;
             gAttendeesAttendance.Actions.ShowMergeTemplate = !_isGroupSpecific;
 
-            dvpDataView.AutoLoadItems = false;
-            dvpDataView.EntityTypeId = EntityTypeCache.Read( typeof( Rock.Model.Person ) ).Id;
-            dvpDataView.CategoryGuids = GetAttributeValue( "DataViewCategories" ).SplitDelimitedValues().AsGuidList();
-            dvpDataView.LoadDropDownItems();
+            dvpDataView.EntityTypeId = EntityTypeCache.Get( typeof( Rock.Model.Person ) ).Id;
+            dvpDataView.CategoryGuids = GetAttributeValue( AttributeKeys.DataViewCategories ).SplitDelimitedValues().AsGuidList();
 
             // show / hide the checkin details page
-            btnCheckinDetails.Visible = !string.IsNullOrWhiteSpace( GetAttributeValue( "Check-inDetailPage" ) );
+            btnCheckinDetails.Visible = !string.IsNullOrWhiteSpace( GetAttributeValue( AttributeKeys.CheckinDetailPage ) );
         }
 
         /// <summary>
@@ -154,13 +290,14 @@ namespace RockWeb.Blocks.CheckIn
             // GroupTypesUI dynamically creates controls, so we need to rebuild it on every OnLoad()
             BuildGroupTypesUI( false );
 
-            var chartStyleDefinedValueGuid = this.GetAttributeValue( "ChartStyle" ).AsGuidOrNull();
+            var chartStyleDefinedValueGuid = this.GetAttributeValue( AttributeKeys.ChartStyle ).AsGuidOrNull();
 
             lcAttendance.Options.SetChartStyle( chartStyleDefinedValueGuid );
-            bcAttendance.Options.SetChartStyle( chartStyleDefinedValueGuid );
             bcAttendance.Options.xaxis = new AxisOptions { mode = AxisMode.categories, tickLength = 0 };
             bcAttendance.Options.series.bars.barWidth = 0.6;
             bcAttendance.Options.series.bars.align = "center";
+            // Set chart style after setting options so they are not overwritten.
+            bcAttendance.Options.SetChartStyle( chartStyleDefinedValueGuid );
 
             if ( !Page.IsPostBack )
             {
@@ -170,7 +307,7 @@ namespace RockWeb.Blocks.CheckIn
                 try
                 {
                     LoadSettings();
-                    if ( ( !_isGroupSpecific && FilterIncludedInURL ) || (_isGroupSpecific && _specificGroup != null ) )
+                    if ( ( !_isGroupSpecific && FilterIncludedInURL ) || ( _isGroupSpecific && _specificGroup != null ) )
                     {
                         LoadChartAndGrids();
                     }
@@ -196,7 +333,7 @@ namespace RockWeb.Blocks.CheckIn
         {
             get
             {
-                return ( GetAttributeValue( "DetailPage" ) ?? string.Empty ).AsGuidOrNull();
+                return ( GetAttributeValue( AttributeKeys.DetailPage ) ?? string.Empty ).AsGuidOrNull();
             }
         }
 
@@ -213,6 +350,11 @@ namespace RockWeb.Blocks.CheckIn
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         protected void Block_BlockUpdated( object sender, EventArgs e )
         {
+            string repeatDirection = GetAttributeValue( AttributeKeys.FilterColumnDirection );
+            int repeatColumns = GetAttributeValue( AttributeKeys.FilterColumnCount ).AsIntegerOrNull() ?? 0;
+            clbCampuses.RepeatDirection = repeatDirection == "vertical" ? RepeatDirection.Vertical : RepeatDirection.Horizontal;
+            clbCampuses.RepeatColumns = repeatDirection == "horizontal" ? repeatColumns : 0;
+
             BuildGroupTypesUI( true );
 
             if ( pnlResults.Visible )
@@ -250,14 +392,19 @@ namespace RockWeb.Blocks.CheckIn
         /// </summary>
         public void LoadDropDowns()
         {
-            bool includeInactiveCampuses = GetAttributeValue( "IncludeInactiveCampuses" ).AsBoolean();
+            string repeatDirection = GetAttributeValue( AttributeKeys.FilterColumnDirection );
+            int repeatColumns = GetAttributeValue( AttributeKeys.FilterColumnCount ).AsIntegerOrNull() ?? 0;
 
+            bool includeInactiveCampuses = GetAttributeValue( AttributeKeys.IncludeInactiveCampuses ).AsBoolean();
+
+            clbCampuses.RepeatDirection = repeatDirection == "vertical" ? RepeatDirection.Vertical : RepeatDirection.Horizontal;
+            clbCampuses.RepeatColumns = repeatDirection == "horizontal" ? repeatColumns : 0;
             clbCampuses.Items.Clear();
             var noCampusListItem = new ListItem();
             noCampusListItem.Text = "<span title='Include records that are not associated with a campus'>No Campus</span>";
             noCampusListItem.Value = "null";
             clbCampuses.Items.Add( noCampusListItem );
-            foreach ( var campus in CampusCache.All( includeInactiveCampuses ).OrderBy( a => a.Name ) )
+            foreach ( var campus in CampusCache.All( includeInactiveCampuses ) )
             {
                 var listItem = new ListItem();
                 listItem.Text = campus.Name;
@@ -267,7 +414,7 @@ namespace RockWeb.Blocks.CheckIn
 
             if ( !_isGroupSpecific )
             {
-                var groupTypeGuids = this.GetAttributeValue( "GroupTypes" ).SplitDelimitedValues().AsGuidList();
+                var groupTypeGuids = this.GetAttributeValue( AttributeKeys.GroupTypes ).SplitDelimitedValues().AsGuidList();
                 if ( !groupTypeGuids.Any() )
                 {
                     // show the CheckinType control if there isn't a block setting for specific group types
@@ -306,7 +453,7 @@ namespace RockWeb.Blocks.CheckIn
                     _addedGroupTypeIds = new List<int>();
                     _addedGroupIds = new List<int>();
 
-                    var showAllGroups = GetAttributeValue( "ShowAllGroups" ).AsBoolean();
+                    var showAllGroups = GetAttributeValue( AttributeKeys.ShowAllGroups ).AsBoolean();
                     if ( showAllGroups )
                     {
                         rptGroupTypes.DataSource = groupTypes.ToList();
@@ -355,7 +502,7 @@ namespace RockWeb.Blocks.CheckIn
         private void BindSelectedGroups()
         {
             var selectedGroupIds = GetSelectedGroupIds();
-            bool showGroupAncestry = GetAttributeValue( "ShowGroupAncestry" ).AsBoolean( true );
+            bool showGroupAncestry = GetAttributeValue( AttributeKeys.ShowGroupAncestry ).AsBoolean( true );
 
             using ( var rockContext = new RockContext() )
             {
@@ -387,39 +534,41 @@ namespace RockWeb.Blocks.CheckIn
         /// <returns></returns>
         private List<GroupType> GetSelectedGroupTypes()
         {
-
             if ( !_isGroupSpecific )
             {
-                var groupTypeGuids = this.GetAttributeValue( "GroupTypes" ).SplitDelimitedValues().AsGuidList();
+                var groupTypeGuids = this.GetAttributeValue( AttributeKeys.GroupTypes ).SplitDelimitedValues().AsGuidList();
+                var groupTypeService = new GroupTypeService( _rockContext );
                 if ( groupTypeGuids.Any() )
                 {
-                    var groupTypes = new List<GroupType>();
+                    var groupTypes = groupTypeGuids.Select( a => GroupTypeCache.Get( a ) ).Where( a => a != null )
+                        .OrderBy( t => t.Order )
+                        .ThenBy( t => t.Name )
+                        .ToList();
 
-                    var groupTypeService = new GroupTypeService( _rockContext );
-                    foreach( var guid in groupTypeGuids )
+                    foreach ( var groupType in groupTypes.ToList() )
                     {
-                        var groupTypeCache = GroupTypeCache.Read( guid );
-                        if ( groupTypeCache != null )
+                        foreach ( var childGroupType in groupTypeService.GetCheckinAreaDescendantsOrdered( groupType.Id ) )
                         {
-                            foreach ( var groupType in groupTypeService.GetAllAssociatedDescendentsOrdered( groupTypeCache.Id ) )
+                            if ( !groupTypes.Any( t => t.Id == childGroupType.Id ) )
                             {
-                                if ( !groupTypes.Any( t => t.Id == groupType.Id ) )
-                                {
-                                    groupTypes.Add( groupType );
-                                }
+                                groupTypes.Add( childGroupType );
                             }
                         }
                     }
 
-                    return groupTypes;
+                    var groupTypeIds = groupTypes.Select( a => a.Id ).ToList();
+                    return groupTypeService.GetByIds( groupTypeIds ).ToList();
                 }
                 else
                 {
                     if ( ddlAttendanceType.SelectedGroupTypeId.HasValue )
                     {
-                        return new GroupTypeService( _rockContext )
-                            .GetAllAssociatedDescendentsOrdered( ddlAttendanceType.SelectedGroupTypeId.Value )
+                        var groupTypeIds = groupTypeService
+                            .GetCheckinAreaDescendantsOrdered( ddlAttendanceType.SelectedGroupTypeId.Value )
+                            .Select(a => a.Id)
                             .ToList();
+
+                        return groupTypeService.GetByIds( groupTypeIds ).ToList();
                     }
                 }
             }
@@ -658,7 +807,7 @@ function(item) {
             }
             else
             {
-                var showAllGroups = GetAttributeValue( "ShowAllGroups" ).AsBoolean();
+                var showAllGroups = GetAttributeValue( AttributeKeys.ShowAllGroups ).AsBoolean();
                 if ( showAllGroups )
                 {
                     var checkboxListControls = rptGroupTypes.ControlsOfTypeRecursive<RockCheckBoxList>();
@@ -704,12 +853,12 @@ function(item) {
                 drpSlidingDateRange.DelimitedValues = slidingDateRangeSettings;
             }
 
-            dvpDataView.SetValue( GetSetting( keyPrefix, "DataView" ) );
+            dvpDataView.SetValue( GetSetting( keyPrefix, "DataView" ).AsIntegerOrNull() );
 
             hfGroupBy.Value = GetSetting( keyPrefix, "GroupBy" );
             hfGraphBy.Value = GetSetting( keyPrefix, "GraphBy" );
 
-            if ( GetAttributeValue( "ShowCampusFilter" ).AsBoolean() )
+            if ( GetAttributeValue( AttributeKeys.ShowCampusFilter ).AsBoolean() )
             {
                 clbCampuses.Visible = true;
 
@@ -742,11 +891,11 @@ function(item) {
                 }
             }
             else
-            { 
+            {
                 clbCampuses.Visible = false;
             }
 
-            if ( GetAttributeValue( "ShowScheduleFilter" ).AsBoolean() )
+            if ( GetAttributeValue( AttributeKeys.ShowScheduleFilter ).AsBoolean() )
             {
                 spSchedules.Visible = true;
 
@@ -769,7 +918,7 @@ function(item) {
 
             // if no groups are selected, and option to show all groups is configured, default to showing all of them
 
-            var showAllGroups = GetAttributeValue( "ShowAllGroups" ).AsBoolean();
+            var showAllGroups = GetAttributeValue( AttributeKeys.ShowAllGroups ).AsBoolean();
             if ( showAllGroups )
             {
                 var selectAll = groupIdList.Count == 0;
@@ -791,7 +940,7 @@ function(item) {
             ShowBy showBy = GetSetting( keyPrefix, "ShowBy" ).ConvertToEnumOrNull<ShowBy>() ?? ShowBy.Chart;
             DisplayShowBy( showBy );
 
-            if ( GetAttributeValue( "ShowViewByOption" ).AsBoolean() )
+            if ( GetAttributeValue( AttributeKeys.ShowViewByOption ).AsBoolean() )
             {
                 pnlViewBy.Visible = true;
                 ViewBy viewBy = GetSetting( keyPrefix, "ViewBy" ).ConvertToEnumOrNull<ViewBy>() ?? ViewBy.Attendees;
@@ -946,6 +1095,9 @@ function(item) {
         /// <returns></returns>
         private IEnumerable<Rock.Chart.IChartData> GetAttendanceChartData()
         {
+            var groupBy = hfGroupBy.Value.ConvertToEnumOrNull<ChartGroupBy>() ?? ChartGroupBy.Week;
+            var graphBy = hfGraphBy.Value.ConvertToEnumOrNull<AttendanceGraphBy>() ?? AttendanceGraphBy.Total;
+
             var dateRange = SlidingDateRangePicker.CalculateDateRangeFromDelimitedValues( drpSlidingDateRange.DelimitedValues );
             if ( dateRange.End == null )
             {
@@ -954,11 +1106,11 @@ function(item) {
 
             // Adjust the start/end times to reflect the attendance dates who's SundayDate value would fall between the date range selected
             DateTime start = dateRange.Start.HasValue ?
-                dateRange.Start.Value.Date.AddDays( 0 - ( dateRange.Start.Value.DayOfWeek == DayOfWeek.Sunday ? 6 : (int)dateRange.Start.Value.DayOfWeek - 1 ) ) :
+                dateRange.Start.Value.Date.AddDays( 0 - ( dateRange.Start.Value.DayOfWeek == DayOfWeek.Sunday ? 6 : ( int ) dateRange.Start.Value.DayOfWeek - 1 ) ) :
                 new DateTime( 1900, 1, 1 );
 
             DateTime end = dateRange.End.HasValue ?
-                dateRange.End.Value.AddDays( 0 - (int)dateRange.End.Value.DayOfWeek ) :
+                dateRange.End.Value.AddDays( 0 - ( int ) dateRange.End.Value.DayOfWeek ) :
                 new DateTime( 2100, 1, 1, 23, 59, 59 );
 
             if ( end < start )
@@ -967,20 +1119,12 @@ function(item) {
             }
 
             string groupIds = GetSelectedGroupIds().AsDelimited( "," );
+            string campusIds = GetAttributeValue( AttributeKeys.ShowCampusFilter ).AsBoolean() ? clbCampuses.SelectedValues.AsDelimited( "," ) : string.Empty;
+            var dataView = dvpDataView.SelectedValueAsInt();
+            var scheduleIds = GetAttributeValue( AttributeKeys.ShowScheduleFilter ).AsBoolean() ? spSchedules.SelectedValues.ToList().AsDelimited( "," ) : string.Empty;
 
-            var scheduleIds = GetAttributeValue( "ShowScheduleFilter" ).AsBoolean() ? spSchedules.SelectedValues.ToList().AsDelimited( "," ) : string.Empty;
+            var chartData = new AttendanceService( _rockContext ).GetChartData( groupBy, graphBy, start, end, groupIds, campusIds, dataView, scheduleIds );
 
-            string campusIds = GetAttributeValue( "ShowCampusFilter" ).AsBoolean() ? clbCampuses.SelectedValues.AsDelimited( "," ) : string.Empty;
-
-            var chartData = new AttendanceService( _rockContext ).GetChartData(
-                hfGroupBy.Value.ConvertToEnumOrNull<ChartGroupBy>() ?? ChartGroupBy.Week,
-                hfGraphBy.Value.ConvertToEnumOrNull<AttendanceGraphBy>() ?? AttendanceGraphBy.Total,
-                start,
-                end,
-                groupIds,
-                campusIds,
-                dvpDataView.SelectedValueAsInt(),
-                scheduleIds );
             return chartData;
         }
 
@@ -1033,7 +1177,7 @@ function(item) {
             // if 'null' is one of the campuses, treat that as a 'CampusId is Null'
             var includeNullCampus = true;
             List<int> campusIdList = null;
-            if ( GetAttributeValue( "ShowCampusFilter" ).AsBoolean() )
+            if ( GetAttributeValue( AttributeKeys.ShowCampusFilter ).AsBoolean() )
             {
                 includeNullCampus = clbCampuses.SelectedValues.Any( a => a.Equals( "null", StringComparison.OrdinalIgnoreCase ) );
                 campusIdList = clbCampuses.SelectedValues.AsIntegerList();
@@ -1044,7 +1188,7 @@ function(item) {
                 }
             }
 
-            var scheduleIdList = GetAttributeValue( "ShowScheduleFilter" ).AsBoolean() ? spSchedules.SelectedValues.AsIntegerList() : new List<int>();
+            var scheduleIdList = GetAttributeValue( AttributeKeys.ShowScheduleFilter ).AsBoolean() ? spSchedules.SelectedValues.AsIntegerList() : new List<int>();
             scheduleIdList.Remove( 0 );
             if ( !scheduleIdList.Any() )
             {
@@ -1085,20 +1229,20 @@ function(item) {
             }
             nbMissedDateRangeRequired.Visible = false;
 
-            // Determine how dates shold be grouped
+            // Determine how dates should be grouped
             ChartGroupBy groupBy = hfGroupBy.Value.ConvertToEnumOrNull<ChartGroupBy>() ?? ChartGroupBy.Week;
 
             // Determine if parents or children are being included with results
             var includeParents = hfViewBy.Value.ConvertToEnumOrNull<ViewBy>().GetValueOrDefault( ViewBy.Attendees ) == ViewBy.ParentsOfAttendees;
             var includeChildren = hfViewBy.Value.ConvertToEnumOrNull<ViewBy>().GetValueOrDefault( ViewBy.Attendees ) == ViewBy.ChildrenOfAttendees;
 
-            // Atttendance results
+            // Attendance results
             var allAttendeeVisits = new Dictionary<int, AttendeeVisits>();
             var allResults = new List<AttendeeResult>();
 
             // Collection of async queries to run before assembling data
-            var qryTasks = new List<Task>();
-            var taskInfos = new List<TaskInfo>();
+            var qryTasks = new ConcurrentBag<Task>();
+            var taskInfos = new ConcurrentBag<TaskInfo>();
 
             DataTable dtAttendeeLastAttendance = null;
             DataTable dtAttendees = null;
@@ -1160,7 +1304,7 @@ function(item) {
 
                 } ) );
 
-                // Call the stored procedure to get the names/demographic info for attendess
+                // Call the stored procedure to get the names/demographic info for attendees
                 qryTasks.Add( Task.Run( () =>
                 {
                     var ti = new TaskInfo { name = "Get Name/Demographic Data", start = DateTime.Now };
@@ -1267,10 +1411,13 @@ function(item) {
                         var person = new PersonInfo();
                         person.NickName = row["NickName"].ToString();
                         person.LastName = row["LastName"].ToString();
+                        person.Gender = row["Gender"].ToString().ConvertToEnum<Gender>();
                         person.Email = row["Email"].ToString();
                         person.GivingId = row["GivingId"].ToString();
                         person.Birthdate = row["BirthDate"] as DateTime?;
+                        person.Gender = row["Gender"].ToString().ConvertToEnum<Gender>();
                         person.Age = Person.GetAge( person.Birthdate );
+                        person.Grade = dtNonAttenders.Columns.Contains( "GraduationYear" ) ? Person.GradeFormattedFromGraduationYear( row["GraduationYear"] as int? ) : null;
 
                         person.ConnectionStatusValueId = row["ConnectionStatusValueId"] as int?;
                         result.Person = person;
@@ -1284,6 +1431,7 @@ function(item) {
                             parent.Email = row["ParentEmail"].ToString();
                             parent.GivingId = row["ParentGivingId"].ToString();
                             parent.Birthdate = row["ParentBirthDate"] as DateTime?;
+                            parent.Gender = row["ParentGender"].ToString().ConvertToEnum<Gender>();
                             parent.Age = Person.GetAge( parent.Birthdate );
                             result.Parent = parent;
                         }
@@ -1297,6 +1445,8 @@ function(item) {
                             child.Email = row["ChildEmail"].ToString();
                             child.GivingId = row["ChildGivingId"].ToString();
                             child.Birthdate = row["ChildBirthDate"] as DateTime?;
+                            child.Gender = row["ChildGender"].ToString().ConvertToEnum<Gender>();
+                            child.Grade = Person.GradeFormattedFromGraduationYear( row["ChildGraduationYear"] as int? );
                             child.Age = Person.GetAge( child.Birthdate );
                             result.Child = child;
                         }
@@ -1323,10 +1473,9 @@ function(item) {
                     var dataView = new DataViewService( _rockContext ).Get( dataViewId.Value );
                     if ( dataView != null )
                     {
-                        var errorMessages = new List<string>();
                         var dvPersonService = new PersonService( _rockContext );
                         ParameterExpression paramExpression = dvPersonService.ParameterExpression;
-                        Expression whereExpression = dataView.GetExpression( dvPersonService, paramExpression, out errorMessages );
+                        Expression whereExpression = dataView.GetExpression( dvPersonService, paramExpression );
 
                         SortProperty sort = null;
                         var dataViewPersonIdQry = dvPersonService
@@ -1401,6 +1550,7 @@ function(item) {
                             {
                                 var lastAttendance = new PersonLastAttendance();
                                 lastAttendance.CampusId = row["CampusId"] as int?;
+                                lastAttendance.CampusName = row["CampusName"].ToString();
                                 lastAttendance.GroupId = row["GroupId"] as int?;
                                 lastAttendance.GroupName = row["GroupName"].ToString();
                                 lastAttendance.RoleName = row["RoleName"].ToString();
@@ -1430,11 +1580,14 @@ function(item) {
                             var person = new PersonInfo();
                             person.NickName = row["NickName"].ToString();
                             person.LastName = row["LastName"].ToString();
+                            person.Gender = row["Gender"].ToString().ConvertToEnum<Gender>();
                             person.Email = row["Email"].ToString();
                             person.GivingId = row["GivingId"].ToString();
                             person.Birthdate = row["BirthDate"] as DateTime?;
+                            person.Gender = row["Gender"].ToString().ConvertToEnum<Gender>();
                             person.Age = Person.GetAge( person.Birthdate );
                             person.ConnectionStatusValueId = row["ConnectionStatusValueId"] as int?;
+                            person.Grade = dtAttendees.Columns.Contains( "GraduationYear" ) ? Person.GradeFormattedFromGraduationYear( row["GraduationYear"] as int? ) : null;
                             result.Person = person;
 
                             if ( includeParents )
@@ -1446,6 +1599,7 @@ function(item) {
                                 parent.Email = row["ParentEmail"].ToString();
                                 parent.GivingId = row["ParentGivingId"].ToString();
                                 parent.Birthdate = row["ParentBirthDate"] as DateTime?;
+                                parent.Gender = row["ParentGender"].ToString().ConvertToEnum<Gender>();
                                 parent.Age = Person.GetAge( parent.Birthdate );
                                 result.Parent = parent;
                             }
@@ -1459,6 +1613,8 @@ function(item) {
                                 child.Email = row["ChildEmail"].ToString();
                                 child.GivingId = row["ChildGivingId"].ToString();
                                 child.Birthdate = row["ChildBirthDate"] as DateTime?;
+                                child.Gender = row["ChildGender"].ToString().ConvertToEnum<Gender>();
+                                child.Grade = Person.GradeFormattedFromGraduationYear( row["ChildGraduationYear"] as int? );
                                 child.Age = Person.GetAge( child.Birthdate );
                                 result.Child = child;
                             }
@@ -1500,6 +1656,7 @@ function(item) {
                             {
                                 var lastAttendance = new PersonLastAttendance();
                                 lastAttendance.CampusId = row["CampusId"] as int?;
+                                lastAttendance.CampusName = row["CampusName"].ToString();
                                 lastAttendance.GroupId = row["GroupId"] as int?;
                                 lastAttendance.GroupName = row["GroupName"].ToString();
                                 lastAttendance.RoleName = row["RoleName"].ToString();
@@ -1520,6 +1677,12 @@ function(item) {
 
             var personUrlFormatString = ( ( RockPage ) this.Page ).ResolveRockUrl( "~/Person/{0}" );
 
+            var personGradeField = gAttendeesAttendance.Columns.OfType<RockBoundField>().FirstOrDefault( a => a.HeaderText == "Grade" );
+            if ( personGradeField != null )
+            {
+                personGradeField.ExcelExportBehavior = includeChildren ? ExcelExportBehavior.NeverInclude : ExcelExportBehavior.AlwaysInclude;
+            }
+
             var personHyperLinkField = gAttendeesAttendance.Columns.OfType<HyperLinkField>().FirstOrDefault( a => a.HeaderText == "Name" );
             if ( personHyperLinkField != null )
             {
@@ -1537,6 +1700,12 @@ function(item) {
             if ( parentField != null )
             {
                 parentField.ExcelExportBehavior = includeParents ? ExcelExportBehavior.AlwaysInclude : ExcelExportBehavior.NeverInclude;
+            }
+
+            var parentGenderField = gAttendeesAttendance.Columns.OfType<RockBoundField>().FirstOrDefault( a => a.HeaderText == "Parent Gender" );
+            if ( parentGenderField != null )
+            {
+                parentGenderField.ExcelExportBehavior = includeParents ? ExcelExportBehavior.AlwaysInclude : ExcelExportBehavior.NeverInclude;
             }
 
             var parentEmailField = gAttendeesAttendance.Columns.OfType<RockBoundField>().FirstOrDefault( a => a.HeaderText == "Parent Email" );
@@ -1562,6 +1731,18 @@ function(item) {
             if ( childfield != null )
             {
                 childfield.ExcelExportBehavior = includeChildren ? ExcelExportBehavior.AlwaysInclude : ExcelExportBehavior.NeverInclude;
+            }
+
+            var childGenderlField = gAttendeesAttendance.Columns.OfType<RockBoundField>().FirstOrDefault( a => a.HeaderText == "Child Gender" );
+            if ( childGenderlField != null )
+            {
+                childGenderlField.ExcelExportBehavior = includeChildren ? ExcelExportBehavior.AlwaysInclude : ExcelExportBehavior.NeverInclude;
+            }
+
+            var childGradeField = gAttendeesAttendance.Columns.OfType<RockBoundField>().FirstOrDefault( a => a.HeaderText == "Child Grade" );
+            if ( childGradeField != null )
+            {
+                childGradeField.ExcelExportBehavior = includeChildren ? ExcelExportBehavior.AlwaysInclude : ExcelExportBehavior.NeverInclude;
             }
 
             var childEmailField = gAttendeesAttendance.Columns.OfType<RockBoundField>().FirstOrDefault( a => a.HeaderText == "Child Email" );
@@ -1696,12 +1877,12 @@ function(item) {
         private void LoadCurrentPageObjects( List<int> personIds )
         {
             // Load the addresses
-            var familyGroupType = GroupTypeCache.Read( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() );
+            var familyGroupType = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() );
             Guid? homeAddressGuid = Rock.SystemGuid.DefinedValue.GROUP_LOCATION_TYPE_HOME.AsGuidOrNull();
 
             if ( familyGroupType != null && homeAddressGuid.HasValue && personIds != null )
             {
-                var homeAddressDv = DefinedValueCache.Read( homeAddressGuid.Value );
+                var homeAddressDv = DefinedValueCache.Get( homeAddressGuid.Value );
                 if ( homeAddressDv != null )
                 {
                     _personLocations = new Dictionary<int, Location>();
@@ -1747,33 +1928,16 @@ function(item) {
         private void LogAndShowException( Exception exception )
         {
             LogException( exception );
-            string errorMessage = null;
-            string stackTrace = string.Empty;
-            while ( exception != null )
+            Exception sqlException = ReportingHelper.FindSqlTimeoutException( exception );
+            if ( sqlException != null )
             {
-                errorMessage = exception.Message;
-                stackTrace += exception.StackTrace;
-                if ( exception is System.Data.SqlClient.SqlException )
-                {
-                    // if there was a SQL Server Timeout, have the warning be a friendly message about that.
-                    if ( ( exception as System.Data.SqlClient.SqlException ).Number == -2 )
-                    {
-                        errorMessage = "The attendee report did not complete in a timely manner. Try again using a smaller date range and fewer campuses and groups.";
-                        break;
-                    }
-                    else
-                    {
-                        exception = exception.InnerException;
-                    }
-                }
-                else
-                {
-                    exception = exception.InnerException;
-                }
+                nbAttendeesError.Text = "The attendee report did not complete in a timely manner. Try again using a smaller date range and fewer campuses and groups.";
+                nbAttendeesError.Visible = true;
+                return;
             }
 
-            nbAttendeesError.Text = errorMessage;
-            nbAttendeesError.Details = stackTrace;
+            nbAttendeesError.Text = "An error occurred";
+            nbAttendeesError.Details = exception.Message;
             nbAttendeesError.Visible = true;
         }
 
@@ -1850,7 +2014,7 @@ function(item) {
         {
             var result = new List<DateTime>();
 
-            // Attendance is grouped by Sunday dates between the start/end dates. 
+            // Attendance is grouped by Sunday dates between the start/end dates.
             // The possible dates (columns) should be calculated the same way.
             var startSunday = dateRange.Start.Value.SundayDate();
             var endDate = dateRange.End.Value;
@@ -1922,7 +2086,7 @@ function(item) {
                     var templateFields = gAttendeesAttendance.Columns.OfType<TemplateField>();
                     foreach ( var templateField in templateFields )
                     {
-                        var cellIndex = gAttendeesAttendance.Columns.IndexOf( templateField );
+                        var cellIndex = gAttendeesAttendance.GetColumnIndex( templateField );
                         var cell = e.Row.Cells[cellIndex] as DataControlFieldCell;
                         templateField.InitializeCell( cell, DataControlCellType.DataCell, e.Row.RowState, e.Row.RowIndex );
                     }
@@ -1930,12 +2094,18 @@ function(item) {
                     lFirstVisitDate = e.Row.FindControl( "lFirstVisitDate" ) as Literal;
                 }
 
-                Literal lSecondVisitDate = e.Row.FindControl( "lSecondVisitDate" ) as Literal;
-                Literal lServiceTime = e.Row.FindControl( "lServiceTime" ) as Literal;
-                Literal lHomeAddress = e.Row.FindControl( "lHomeAddress" ) as Literal;
-                Literal lPhoneNumbers = e.Row.FindControl( "lPhoneNumbers" ) as Literal;
-                Literal lAttendanceCount = e.Row.FindControl( "lAttendanceCount" ) as Literal;
-                Literal lAttendancePercent = e.Row.FindControl( "lAttendancePercent" ) as Literal;
+                var lSecondVisitDate = e.Row.FindControl( "lSecondVisitDate" ) as Literal;
+                var lServiceTime = e.Row.FindControl( "lServiceTime" ) as Literal;
+                var lHomeAddress = e.Row.FindControl( "lHomeAddress" ) as Literal;
+                var lHomeAddressStreet = e.Row.FindControl( "lHomeAddressStreet" ) as Literal;
+                var lHomeAddressCity = e.Row.FindControl( "lHomeAddressCity" ) as Literal;
+                var lHomeAddressState = e.Row.FindControl( "lHomeAddressState" ) as Literal;
+                var lHomeAddressPostalCode = e.Row.FindControl( "lHomeAddressPostalCode" ) as Literal;
+                var lHomeAddressCountry = e.Row.FindControl( "lHomeAddressCountry" ) as Literal;
+
+                var lPhoneNumbers = e.Row.FindControl( "lPhoneNumbers" ) as Literal;
+                var lAttendanceCount = e.Row.FindControl( "lAttendanceCount" ) as Literal;
+                var lAttendancePercent = e.Row.FindControl( "lAttendancePercent" ) as Literal;
 
                 if ( personDates.FirstVisits != null )
                 {
@@ -1993,6 +2163,15 @@ function(item) {
                     if ( _personLocations != null && _personLocations.ContainsKey( currentPersonId ) )
                     {
                         lHomeAddress.Text = _personLocations[currentPersonId].FormattedHtmlAddress;
+                        lHomeAddressStreet.Text = _personLocations[currentPersonId].Street1.Trim();
+                        if ( !string.IsNullOrEmpty( _personLocations[currentPersonId].Street2 ) )
+                        {
+                            lHomeAddressStreet.Text += " " + _personLocations[currentPersonId].Street2;
+                        }
+                        lHomeAddressCity.Text = _personLocations[currentPersonId].City;
+                        lHomeAddressState.Text = _personLocations[currentPersonId].State;
+                        lHomeAddressPostalCode.Text = _personLocations[currentPersonId].PostalCode;
+                        lHomeAddressCountry.Text = _personLocations[currentPersonId].Country;
                     }
                 }
                 catch ( Exception ex )
@@ -2023,7 +2202,7 @@ function(item) {
 
                         if ( phoneNumber.NumberTypeValueId.HasValue )
                         {
-                            var phoneType = DefinedValueCache.Read( phoneNumber.NumberTypeValueId.Value );
+                            var phoneType = DefinedValueCache.Get( phoneNumber.NumberTypeValueId.Value );
                             if ( phoneType != null )
                             {
                                 formattedNumber = isExporting ?
@@ -2104,21 +2283,28 @@ function(item) {
 
                 if ( ( groupType.Groups.Any() && showInactive ) || groupType.Groups.Where( g => g.IsActive ).Any() )
                 {
-                    bool showGroupAncestry = GetAttributeValue( "ShowGroupAncestry" ).AsBoolean( true );
+                    bool showGroupAncestry = GetAttributeValue( AttributeKeys.ShowGroupAncestry ).AsBoolean( true );
 
                     var groupService = new GroupService( _rockContext );
 
                     var cblGroupTypeGroups = new RockCheckBoxList { ID = "cblGroupTypeGroups" + groupType.Id, FormGroupCssClass = "js-groups-container" };
 
+                    string repeatDirection = GetAttributeValue( AttributeKeys.FilterColumnDirection );
+                    int repeatColumns = GetAttributeValue( AttributeKeys.FilterColumnCount ).AsIntegerOrNull() ?? 0;
+
+                    cblGroupTypeGroups.RepeatDirection = repeatDirection == "vertical" ? RepeatDirection.Vertical : RepeatDirection.Horizontal;
+                    cblGroupTypeGroups.RepeatColumns = repeatDirection == "horizontal" ? repeatColumns : 0;
                     cblGroupTypeGroups.Label = groupType.Name;
                     cblGroupTypeGroups.Items.Clear();
 
-                    // limit to Groups that don't have a Parent, or the ParentGroup is a different grouptype so we don't end up with infinite recursion
-                    foreach ( var group in groupType.Groups
-                        .Where( g => !g.ParentGroupId.HasValue || ( g.ParentGroup.GroupTypeId != groupType.Id ) )
+                    // Select only those Groups that don't have a Parent, or the ParentGroup is a different group type so we don't end up with an infinite recursion.
+                    var eligibleGroups = groupType.Groups
+                        .Where( g => ( g.ParentGroup == null ) || ( g.ParentGroup.GroupTypeId != groupType.Id ) )
                         .OrderBy( a => a.Order )
                         .ThenBy( a => a.Name )
-                        .ToList() )
+                        .ToList();
+
+                    foreach ( var group in eligibleGroups )
                     {
                         if ( group.IsActive || showInactive )
                         {
@@ -2173,9 +2359,12 @@ function(item) {
                         checkBoxList.Items.Add( new ListItem( displayName, group.Id.ToString() ) );
                     }
 
+                    bool showInactive = GetUserPreference( BlockCache.Guid.ToString() + "_showInactive" ).AsBoolean();
+
                     if ( group.Groups != null )
                     {
                         foreach ( var childGroup in group.Groups
+                            .Where( a => a.IsActive || showInactive )
                             .OrderBy( a => a.Order )
                             .ThenBy( a => a.Name )
                             .ToList() )
@@ -2406,11 +2595,15 @@ function(item) {
 
             public string Email { get; set; }
 
+            public Gender Gender { get; set; }
+
             public int? Age { get; set; }
 
             public string GivingId { get; set; }
 
             public DateTime? Birthdate { get; set; }
+
+            public string Grade { get; set; }
 
             public int? ConnectionStatusValueId { get; set; }
 
@@ -2426,6 +2619,8 @@ function(item) {
         public class PersonLastAttendance
         {
             public int? CampusId { get; set; }
+
+            public string CampusName { get; set; }
 
             public int? GroupId { get; set; }
 

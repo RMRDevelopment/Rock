@@ -15,9 +15,8 @@
 // </copyright>
 //
 using System.Collections.Generic;
-using System.IO;
+using System.Data.Entity;
 using System.Linq;
-using System.Web.Http;
 
 using Rock.Model;
 using Rock.Rest.Filters;
@@ -35,10 +34,11 @@ namespace Rock.Rest.Controllers
         /// </summary>
         /// <param name="id">The id.</param>
         /// <param name="hidePageIds">List of pages that should not be included in results</param>
+        /// <param name="siteType">Type of the site.</param>
         /// <returns></returns>
         [Authenticate, Secured]
         [System.Web.Http.Route( "api/Pages/GetChildren/{id}" )]
-        public IQueryable<TreeViewItem> GetChildren( int id, string hidePageIds = null)
+        public IQueryable<TreeViewItem> GetChildren( int id, string hidePageIds = null, int? siteType = null)
         {
             IQueryable<Page> qry;
             if ( id == 0 )
@@ -50,8 +50,12 @@ namespace Rock.Rest.Controllers
                 qry = Get().Where( a => a.ParentPageId == id );
             }
 
-            List<int> hidePageIdList = ( hidePageIds ?? string.Empty ).Split( ',' ).Select( s => s.AsInteger()).ToList();
+            if(siteType != null )
+            {
+                qry = qry.Where( p => ( int ) p.Layout.Site.SiteType == siteType.Value );
+            }
 
+            List<int> hidePageIdList = ( hidePageIds ?? string.Empty ).Split( ',' ).Select( s => s.AsInteger()).ToList();
             List<Page> pageList = qry.Where( a => !hidePageIdList.Contains(a.Id) ).OrderBy( a => a.Order ).ThenBy( a => a.InternalName ).ToList();
             List<TreeViewItem> pageItemList = new List<TreeViewItem>();
             foreach ( var page in pageList )
@@ -82,6 +86,19 @@ namespace Rock.Rest.Controllers
             }
 
             return pageItemList.AsQueryable();
+        }
+
+        /// <summary>
+        /// Gets the children.
+        /// </summary>
+        /// <param name="id">The identifier.</param>
+        /// <param name="hidePageIds">The hide page ids.</param>
+        /// <returns></returns>
+        [RockObsolete("1.11")]
+        [Authenticate, Secured]
+        public IQueryable<TreeViewItem> GetChildren( int id, string hidePageIds = null )
+        {
+            return GetChildren( id, hidePageIds, null );
         }
     }
 }

@@ -86,10 +86,10 @@ namespace RockWeb.Blocks.CheckIn
             ScheduleService scheduleService = new ScheduleService( new RockContext() );
 
             // limit Schedules to ones that have a CheckInStartOffsetMinutes
-            var scheduleQry = scheduleService.Queryable().Where( a => a.CheckInStartOffsetMinutes != null );
+            var scheduleQry = scheduleService.Queryable().Where( a => a.CheckInStartOffsetMinutes != null && a.IsActive );
 
             // limit Schedules to the Category from the Filter
-            int scheduleCategoryId = CategoryCache.Read( Rock.SystemGuid.Category.SCHEDULE_SERVICE_TIMES.AsGuid() ).Id;
+            int scheduleCategoryId = CategoryCache.Get( Rock.SystemGuid.Category.SCHEDULE_SERVICE_TIMES.AsGuid() ).Id;
 
             scheduleQry = scheduleQry.Where( a => a.CategoryId == scheduleCategoryId );
 
@@ -106,8 +106,7 @@ namespace RockWeb.Blocks.CheckIn
             {
                 string dataFieldName = string.Format( "scheduleField_{0}", item.Id );
 
-                CheckBoxEditableField field = new CheckBoxEditableField { HeaderText = item.FriendlyScheduleText.Replace( " at ", "<br/>" ), DataField = dataFieldName };
-
+                CheckBoxEditableField field = new CheckBoxEditableField { HeaderText = item.Name.Replace( " ", "<br/>" ), DataField = dataFieldName };
                 gGroupLocationSchedule.Columns.Add( field );
             }
         }
@@ -141,23 +140,23 @@ namespace RockWeb.Blocks.CheckIn
 
             var groupLocationQry = groupLocationService.Queryable();
 
-            var templateGroupPaths = new Dictionary<int, List<GroupTypePath>>();
+            var templateGroupPaths = new Dictionary<int, List<CheckinAreaPath>>();
             var currentAndDescendantGroupTypeIds = new List<int>();
-            foreach ( var groupType in groupTypeService.Queryable().Where( a => this.CurrentGroupTypeIds.Contains( a.Id ) ) )
+            foreach ( var groupType in groupTypeService.Queryable().Where( a => this.LocalDeviceConfig.CurrentGroupTypeIds.Contains( a.Id ) ) )
             {
                 foreach( var parentGroupType in groupType.ParentGroupTypes )
                 {
                     if ( !templateGroupPaths.ContainsKey( parentGroupType.Id ) )
                     {
-                        templateGroupPaths.Add( parentGroupType.Id, groupTypeService.GetAllAssociatedDescendentsPath( parentGroupType.Id ).ToList() );
+                        templateGroupPaths.Add( parentGroupType.Id, groupTypeService.GetCheckinAreaDescendantsPath( parentGroupType.Id ).ToList() );
                     }
                 }
 
                 currentAndDescendantGroupTypeIds.Add( groupType.Id );
-                currentAndDescendantGroupTypeIds.AddRange( groupTypeService.GetAllAssociatedDescendents( groupType.Id ).Select( a => a.Id ).ToList() );
+                currentAndDescendantGroupTypeIds.AddRange( groupTypeService.GetCheckinAreaDescendants( groupType.Id ).Select( a => a.Id ).ToList() );
             }
 
-            var groupPaths = new List<GroupTypePath>();
+            var groupPaths = new List<CheckinAreaPath>();
             foreach ( var path in templateGroupPaths )
             {
                 groupPaths.AddRange( path.Value );
@@ -244,7 +243,7 @@ namespace RockWeb.Blocks.CheckIn
                 dataTable.Rows.Add( dataRow );
             }
 
-            gGroupLocationSchedule.EntityTypeId = EntityTypeCache.Read<GroupLocation>().Id;
+            gGroupLocationSchedule.EntityTypeId = EntityTypeCache.Get<GroupLocation>().Id;
             gGroupLocationSchedule.DataSource = dataTable;
             gGroupLocationSchedule.DataBind();
         }
@@ -319,7 +318,8 @@ namespace RockWeb.Blocks.CheckIn
 
                 if ( schedulesChanged )
                 {
-                    KioskDevice.FlushAll();
+                    rockContext.SaveChanges();
+                    KioskDevice.Clear();
                 }
             }
 

@@ -15,26 +15,24 @@
 // </copyright>
 //
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Web;
+using System.ComponentModel;
 using Quartz;
+
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
-using Rock.Web.UI;
-using Rock.Web.UI.Controls;
-using Rock.UniversalSearch.Crawler;
-using Rock.Web.Cache;
-using Rock.UniversalSearch.IndexModels;
 using Rock.UniversalSearch;
+using Rock.UniversalSearch.Crawler;
+using Rock.UniversalSearch.IndexModels;
 
 namespace Rock.Jobs
 {
     /// <summary>
-    /// Job to run quick SQL queries on a schedule
+    /// This job indexes the specified site.
     /// </summary>
+    [DisplayName( "Index Rock Site" )]
+    [Description( "This job indexes the specified site." )]
+
     [DisallowConcurrentExecution]
 
     [SiteField( "Site", "The site that will be indexed", true, order: 0 )]

@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
+
 using Rock.Model;
 
 namespace Rock.CheckIn
@@ -79,6 +80,20 @@ namespace Rock.CheckIn
         }
 
         /// <summary>
+        /// Gets a value indicating whether the check-out window is active.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if check out is active; otherwise, <c>false</c>.
+        /// </value>
+        public bool IsCheckOutActive
+        {
+            get
+            {
+                return KioskSchedules != null && KioskSchedules.Any( s => s.IsCheckInActive || s.IsCheckOutActive );
+            }
+        }
+
+        /// <summary>
         /// Gets the next active date time.
         /// </summary>
         /// <value>
@@ -107,7 +122,7 @@ namespace Rock.CheckIn
                     if ( Location.IsActive )
                     {
                         if ( Location.FirmRoomThreshold.HasValue &&
-                            Location.FirmRoomThreshold.Value <= KioskLocationAttendance.Read( Location.Id ).CurrentCount )
+                            Location.FirmRoomThreshold.Value <= KioskLocationAttendance.Get( Location.Id ).CurrentCount )
                         {
                             return false;
                         }
@@ -149,7 +164,7 @@ namespace Rock.CheckIn
         /// </returns>
         public override string ToString()
         {
-            return Location.ToString();
+            return Location.Name;
         }
     }
 }

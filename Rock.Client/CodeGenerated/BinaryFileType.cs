@@ -35,7 +35,15 @@ namespace Rock.Client
         public int Id { get; set; }
 
         /// <summary />
+        // Made Obsolete in Rock "1.11"
+        [Obsolete( "Use CacheToServerFileSystem instead.", false )]
         public bool AllowCaching { get; set; }
+
+        /// <summary />
+        public string CacheControlHeaderSettings { get; set; }
+
+        /// <summary />
+        public bool CacheToServerFileSystem { get; set; }
 
         /// <summary />
         public string Description { get; set; }
@@ -67,16 +75,16 @@ namespace Rock.Client
         public string Name { get; set; }
 
         /// <summary />
-        public Rock.Client.Enums.ColorDepth PreferredColorDepth { get; set; }
+        public Rock.Client.Enums.ColorDepth PreferredColorDepth { get; set; } = Rock.Client.Enums.ColorDepth.Undefined;
 
         /// <summary />
-        public Rock.Client.Enums.Format PreferredFormat { get; set; }
+        public Rock.Client.Enums.Format PreferredFormat { get; set; } = Rock.Client.Enums.Format.Undefined;
 
         /// <summary />
         public bool PreferredRequired { get; set; }
 
         /// <summary />
-        public Rock.Client.Enums.Resolution PreferredResolution { get; set; }
+        public Rock.Client.Enums.Resolution PreferredResolution { get; set; } = Rock.Client.Enums.Resolution.Undefined;
 
         /// <summary />
         public bool RequiresViewSecurity { get; set; }
@@ -117,7 +125,11 @@ namespace Rock.Client
         public void CopyPropertiesFrom( BinaryFileType source )
         {
             this.Id = source.Id;
+            #pragma warning disable 612, 618
             this.AllowCaching = source.AllowCaching;
+            #pragma warning restore 612, 618
+            this.CacheControlHeaderSettings = source.CacheControlHeaderSettings;
+            this.CacheToServerFileSystem = source.CacheToServerFileSystem;
             this.Description = source.Description;
             this.ForeignGuid = source.ForeignGuid;
             this.ForeignKey = source.ForeignKey;

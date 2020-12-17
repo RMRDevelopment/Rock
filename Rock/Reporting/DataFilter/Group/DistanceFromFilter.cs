@@ -21,8 +21,10 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
+using Rock.Web.Cache;
 using Rock.Web.UI.Controls;
 
 namespace Rock.Reporting.DataFilter.Group
@@ -131,7 +133,7 @@ function() {
         {
             RockDropDownList groupLocationTypeList = new RockDropDownList();
             groupLocationTypeList.Items.Clear();
-            foreach ( var value in Rock.Web.Cache.DefinedTypeCache.Read( Rock.SystemGuid.DefinedType.GROUP_LOCATION_TYPE.AsGuid() ).DefinedValues.OrderBy( a => a.Order ).ThenBy( a => a.Value ) )
+            foreach ( var value in DefinedTypeCache.Get( Rock.SystemGuid.DefinedType.GROUP_LOCATION_TYPE.AsGuid() ).DefinedValues.OrderBy( a => a.Order ).ThenBy( a => a.Value ) )
             {
                 groupLocationTypeList.Items.Add( new ListItem( value.Value, value.Guid.ToString() ) );
             }

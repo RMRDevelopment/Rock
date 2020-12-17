@@ -14,14 +14,11 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Web;
-using System.IO;
 
 using Rock.Data;
 using Rock.Model;
+using Rock.Web.Cache;
 
 namespace Rock.Transactions
 {
@@ -63,7 +60,7 @@ namespace Rock.Transactions
             {
                 using ( var rockContext = new RockContext() )
                 {
-                    var workflowType = Web.Cache.WorkflowTypeCache.Read(Trigger.WorkflowTypeId );
+                    var workflowType = WorkflowTypeCache.Get(Trigger.WorkflowTypeId );
                     if ( workflowType != null && ( workflowType.IsActive ?? true ) )
                     {
                         var workflow = Rock.Model.Workflow.Activate( workflowType, Trigger.WorkflowName );

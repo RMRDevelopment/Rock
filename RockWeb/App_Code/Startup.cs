@@ -15,15 +15,13 @@
 // </copyright>
 //
 using System;
-using Microsoft.Owin;
-using Owin;
-using System.Web;
-using React;
 using System.Collections.Generic;
 using Rock;
 using Rock.Model;
 using Rock.Utility;
 using System.Linq;
+using Owin;
+using Microsoft.Owin;
 
 [assembly: OwinStartup(typeof(RockWeb.Startup))]
 namespace RockWeb
@@ -40,8 +38,9 @@ namespace RockWeb
         public void Configuration( IAppBuilder app )
         {
             app.MapSignalR();
-            ReactSiteConfiguration.Configuration = new ReactSiteConfiguration()
-                .AddScript( "~/Scripts/React/dist/server.blocks.bundle.js" );
+
+            // This is for OIDC Connect
+            Rock.Oidc.Startup.OnStartup( app );
 
             // Find any plugins that implement IRockOwinStartup
             try

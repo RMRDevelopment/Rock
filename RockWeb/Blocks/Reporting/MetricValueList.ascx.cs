@@ -139,7 +139,7 @@ namespace RockWeb.Blocks.Reporting
             {
                 foreach ( var metricPartition in metric.MetricPartitions )
                 {
-                    var metricPartitionEntityType = EntityTypeCache.Read( metricPartition.EntityTypeId ?? 0 );
+                    var metricPartitionEntityType = EntityTypeCache.Get( metricPartition.EntityTypeId ?? 0 );
                     var controlId = string.Format( "metricPartition{0}_entityTypeEditControl", metricPartition.Id );
                     Control entityTypeEditControl = phMetricValuePartitions.FindControl( controlId );
 
@@ -166,7 +166,7 @@ namespace RockWeb.Blocks.Reporting
                 {
                     if ( metricPartition.EntityTypeId.HasValue )
                     {
-                        var entityTypeCache = EntityTypeCache.Read( metricPartition.EntityTypeId.Value );
+                        var entityTypeCache = EntityTypeCache.Get( metricPartition.EntityTypeId.Value );
                         if ( entityTypeCache != null && entityTypeCache.SingleValueFieldType != null )
                         {
                             var fieldType = entityTypeCache.SingleValueFieldType;
@@ -263,7 +263,7 @@ namespace RockWeb.Blocks.Reporting
             var entityTypeEntityFilters = new Dictionary<int, int?>();
             foreach ( var metricPartition in metric.MetricPartitions )
             {
-                var metricPartitionEntityType = EntityTypeCache.Read( metricPartition.EntityTypeId ?? 0 );
+                var metricPartitionEntityType = EntityTypeCache.Get( metricPartition.EntityTypeId ?? 0 );
                 var controlId = string.Format( "metricPartition{0}_entityTypeEditControl", metricPartition.Id );
                 Control entityTypeEditControl = phMetricValuePartitions.FindControl( controlId );
 
@@ -487,7 +487,7 @@ namespace RockWeb.Blocks.Reporting
             }
             else
             {
-                qry = qry.OrderBy( s => s.MetricValueDateTime ).ThenBy( s => s.YValue ).ThenBy( s => s.XValue ).ThenByDescending( s => s.ModifiedDateTime );
+                qry = qry.OrderByDescending( s => s.MetricValueDateTime ).ThenBy( s => s.YValue ).ThenBy( s => s.XValue ).ThenByDescending( s => s.ModifiedDateTime );
             }
 
             gMetricValues.SetLinqDataSource( qry );
@@ -510,7 +510,7 @@ namespace RockWeb.Blocks.Reporting
 
                 foreach ( var metricPartition in metric.MetricPartitions.Where( a => a.EntityTypeId.HasValue ) )
                 {
-                    var entityTypeCache = EntityTypeCache.Read( metricPartition.EntityTypeId ?? 0 );
+                    var entityTypeCache = EntityTypeCache.Get( metricPartition.EntityTypeId ?? 0 );
 
                     _entityTypeEntityNameLookup.AddOrIgnore( entityTypeCache.Id, new Dictionary<int, string>() );
                     _entityTypeEntityLookupQry.AddOrIgnore( entityTypeCache.Id, null );

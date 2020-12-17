@@ -7,6 +7,7 @@
         <asp:HiddenField ID="hfGroupTypesInclude" runat="server" />
         <asp:HiddenField ID="hfGroupTypesExclude" runat="server" />
         <asp:HiddenField ID="hfIncludeInactiveGroups" runat="server" />
+        <asp:HiddenField ID="hfLimitPublicGroups" runat="server" />
         <asp:HiddenField ID="hfCountsType" runat="server" />
         <asp:HiddenField ID="hfCampusFilter" runat="server" />
         <asp:HiddenField ID="hfIncludeNoCampus" runat="server" />
@@ -17,9 +18,9 @@
         <asp:HiddenField ID="hfDetailPageUrl" runat="server" />
 
         <div class="treeview js-grouptreeview">
-            <div class="treeview-actions rollover-container" id="divTreeviewActions" runat="server">
+            <asp:Panel ID="pnlTreeviewActions" CssClass="treeview-actions rollover-container" runat="server">
 
-                <div class="btn-group pull-left margin-r-sm">
+                <div id="divAddGroup" runat="server" class="btn-group pull-left margin-r-sm">
                     <button type="button" class="btn btn-action btn-xs dropdown-toggle" data-toggle="dropdown">
                         <i class="fa fa-plus-circle"></i>&nbsp;Add Group <span class="fa fa-caret-down"></span>
                     </button>
@@ -34,10 +35,17 @@
                 <div class="rollover-item" id="pnlRolloverConfig" runat="server">
                     <i class="fa fa-gear clickable js-show-config" onclick="$(this).closest('.js-grouptreeview').find('.js-config-panel').slideToggle()"></i>
                 </div>
-            </div>
+            </asp:Panel>
 
             <div class="js-config-panel" style="display: none" id="pnlConfigPanel" runat="server">
-                <Rock:Toggle ID="tglHideInactiveGroups" runat="server" OnText="Active" OffText="All" Checked="true" ButtonSizeCssClass="btn-xs" OnCheckedChanged="tglHideInactiveGroups_CheckedChanged" Label="Show" />
+                <div class="row">
+                    <div class="col-md-6">
+                        <Rock:Toggle ID="tglHideInactiveGroups" runat="server" OnText="Active" OffText="All" Checked="true" ButtonSizeCssClass="btn-xs" OnCheckedChanged="tglHideInactiveGroups_CheckedChanged" Label="Show" />
+                    </div>
+                    <div class="col-md-6">
+                        <Rock:Toggle ID="tglLimitPublicGroups" runat="server" OnText="Is Public" OffText="All" ButtonSizeCssClass="btn-xs" OnCheckedChanged="tglLimitPublicGroups_CheckedChanged" Label="Public" />
+                    </div>
+                </div>
                 <Rock:RockDropDownList ID="ddlCountsType" runat="server" Label="Show Count For" OnSelectedIndexChanged="ddlCountsType_SelectedIndexChanged" CssClass="input-sm" AutoPostBack="true" />
                 <Rock:CampusPicker ID="ddlCampuses" runat="server" Label="Filter by Campus" OnSelectedIndexChanged="ddlCampuses_SelectedIndexChanged" CssClass="input-sm" AutoPostBack="true" />
                 <Rock:Toggle ID="tglIncludeNoCampus" runat="server" OnText="Yes" OffText="No" ButtonSizeCssClass="btn-xs" OnCheckedChanged="tglIncludeNoCampus_CheckedChanged" Label="Include groups with no campus" />
@@ -46,7 +54,7 @@
                     <asp:Panel ID="pnlSearch" runat="server" DefaultButton="btnSearch" CssClass="input-group">
                         <asp:TextBox ID="tbSearch" runat="server" CssClass="form-control input-sm" />
                         <span class="input-group-btn">
-                            <asp:Button ID="btnSearch" runat="server" Text="Go!" CssClass="btn btn-default btn-sm" OnClick="btnSearch_OnClick" />
+                            <asp:LinkButton ID="btnSearch" runat="server" CssClass="btn btn-default btn-sm" OnClick="btnSearch_OnClick"><i class="fa fa-search"></i></asp:LinkButton>
                         </span>
                     </asp:Panel>
                 </div>
@@ -140,7 +148,7 @@
                             window.location = locationUrl;
                         }
                     })
-                    .on('rockTree:rendered', function () {
+                    .on('rockTree:rendered rockTree:expand rockTree:collapse rockTree:itemClicked', function () {
 
                         // update viewport height
                         resizeScrollbar(scrollbCategory);
@@ -148,14 +156,15 @@
                     })
                     .rockTree({
                         restUrl: '<%=ResolveUrl( "~/api/groups/getchildren/" ) %>',
-                        restParams: '?rootGroupId=' + ($('#<%=hfRootGroupId.ClientID%>').val() || 0)
-                            + '&limitToSecurityRoleGroups=' + ($('#<%=hfLimitToSecurityRoleGroups.ClientID%>').val() || false)
-                            + '&includedGroupTypeIds=' + ($('#<%=hfGroupTypesInclude.ClientID%>').val() || '0')
-                            + '&excludedGroupTypeIds=' + ($('#<%=hfGroupTypesExclude.ClientID%>').val() || '0')
-                            + '&includeInactiveGroups=' + ($('#<%=hfIncludeInactiveGroups.ClientID%>').val() || false)
-                            + '&countsType=' + ($('#<%=hfCountsType.ClientID%>').val() || false)
-                            + '&includeNoCampus=' + ($('#<%=hfIncludeNoCampus.ClientID%>').val() || false)
-                            + '&campusId=' + ($('#<%=hfCampusFilter.ClientID%>').val() || 0),
+                        restParams: '?RootGroupId=' + ($('#<%=hfRootGroupId.ClientID%>').val() || 0)
+                            + '&LimitToSecurityRoleGroups=' + ($('#<%=hfLimitToSecurityRoleGroups.ClientID%>').val() || false)
+                            + '&IncludedGroupTypeIds=' + ($('#<%=hfGroupTypesInclude.ClientID%>').val() || '0')
+                            + '&ExcludedGroupTypeIds=' + ($('#<%=hfGroupTypesExclude.ClientID%>').val() || '0')
+                            + '&IncludeInactiveGroups=' + ($('#<%=hfIncludeInactiveGroups.ClientID%>').val() || false)
+                            + '&CountsType=' + ($('#<%=hfCountsType.ClientID%>').val() || false)
+                            + '&IncludeNoCampus=' + ($('#<%=hfIncludeNoCampus.ClientID%>').val() || false)
+                        + '&CampusId=' + ($('#<%=hfCampusFilter.ClientID%>').val() || 0)
+                        + '&LimitToPublic=' + ($('#<%=hfLimitPublicGroups.ClientID%>').val() || false),
                         multiSelect: false,
                         selectedIds: $selectedId.val() ? $selectedId.val().split(',') : null,
                         expandedIds: $expandedIds.val() ? $expandedIds.val().split(',') : null

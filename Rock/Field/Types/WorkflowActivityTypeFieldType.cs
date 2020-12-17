@@ -16,6 +16,7 @@
 //
 using System;
 using System.Collections.Generic;
+using System.Data.Entity;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
@@ -30,7 +31,7 @@ namespace Rock.Field.Types
     /// Field Type used to display a dropdown list of activity types for a specific workflow type
     /// </summary>
     [Serializable]
-    public class WorkflowActivityFieldType : FieldType
+    public class WorkflowActivityFieldType : FieldType, IEntityFieldType
     {
 
         #region Configuration
@@ -66,6 +67,9 @@ namespace Rock.Field.Types
             ddl.Help = "The Workflow Type to select activities from.";
             var originalValue = ddl.SelectedValue;
 
+            // Add empty field because the default value dropdown list will only be populated after the workflow type index have been changed.
+            ddl.Items.Add( new ListItem( string.Empty, string.Empty ) );
+
             Rock.Model.WorkflowTypeService workflowTypeService = new Model.WorkflowTypeService( new RockContext() );
             foreach ( var workflowType in workflowTypeService.Queryable().OrderBy( w => w.Name ) )
             {
@@ -73,7 +77,7 @@ namespace Rock.Field.Types
             }
 
             var httpContext = System.Web.HttpContext.Current;
-            if ( string.IsNullOrEmpty(originalValue) && httpContext != null && httpContext.Request != null && httpContext.Request.Params["workflowTypeId"] != null && httpContext.Request.Params["workflowTypeId"].AsIntegerOrNull() == 0 )
+            if ( string.IsNullOrEmpty( originalValue ) && httpContext != null && httpContext.Request != null && httpContext.Request.Params["WorkflowTypeId"] != null && httpContext.Request.Params["WorkflowTypeId"].AsIntegerOrNull() == 0 )
             {
 
                 var workflowType = GetContextWorkflowType();
@@ -144,10 +148,15 @@ namespace Rock.Field.Types
 
                 if ( string.IsNullOrWhiteSpace( formattedValue ) )
                 {
-                    formattedValue = new WorkflowActivityTypeService( new RockContext() ).Queryable()
-                        .Where( a => a.Guid.Equals( guid ) )
-                        .Select( a => a.Name )
-                        .FirstOrDefault();
+                    using ( var rockContext = new RockContext() )
+                    {
+                        formattedValue = new WorkflowActivityTypeService( rockContext )
+                            .Queryable()
+                            .AsNoTracking()
+                            .Where( a => a.Guid.Equals( guid ) )
+                            .Select( a => a.Name )
+                            .FirstOrDefault();
+                    }
                 }
             }
 
@@ -202,13 +211,9 @@ namespace Rock.Field.Types
                         editControl.Items.Add( new ListItem( activityType.Name ?? "[New Activity]", activityType.Guid.ToString().ToUpper() ) );
                     }
                 }
-
-                return editControl;
             }
 
-            return null;
-
-
+            return editControl;
         }
 
         /// <summary>
@@ -219,12 +224,13 @@ namespace Rock.Field.Types
         /// <returns></returns>
         public override string GetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues )
         {
-            if ( control != null && control is RockDropDownList )
+            var picker = control as RockDropDownList;
+            if ( picker != null )
             {
-                return ( ( RockDropDownList ) control ).SelectedValue;
+                return picker.SelectedValue;
             }
 
-            return string.Empty;
+            return null;
         }
 
         /// <summary>
@@ -235,12 +241,10 @@ namespace Rock.Field.Types
         /// <param name="value">The value.</param>
         public override void SetEditValue( Control control, Dictionary<string, ConfigurationValue> configurationValues, string value )
         {
-            if ( value != null )
+            var picker = control as RockDropDownList;
+            if ( picker != null )
             {
-                if ( control != null && control is RockDropDownList )
-                {
-                    ( ( RockDropDownList ) control ).SetValue( value?.ToUpper() );
-                }
+                picker.SetValue( value.AsGuidOrNull() );
             }
         }
 
@@ -284,5 +288,60 @@ namespace Rock.Field.Types
 
         #endregion
 
+        #region IEntityFieldType
+        /// <summary>
+        /// Gets the edit value as the IEntity.Id
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <returns></returns>
+        public int? GetEditValueAsEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues )
+        {
+            var guid = GetEditValue( control, configurationValues ).AsGuid();
+            var item = new WorkflowActivityTypeService( new RockContext() ).Get( guid );
+            return item != null ? item.Id : ( int? ) null;
+        }
+
+        /// <summary>
+        /// Sets the edit value from IEntity.Id value
+        /// </summary>
+        /// <param name="control">The control.</param>
+        /// <param name="configurationValues">The configuration values.</param>
+        /// <param name="id">The identifier.</param>
+        public void SetEditValueFromEntityId( Control control, Dictionary<string, ConfigurationValue> configurationValues, int? id )
+        {
+            var item = new WorkflowActivityTypeService( new RockContext() ).Get( id ?? 0 );
+            var guidValue = item != null ? item.Guid.ToString() : string.Empty;
+            SetEditValue( control, configurationValues, guidValue );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value )
+        {
+            return GetEntity( value, null );
+        }
+
+        /// <summary>
+        /// Gets the entity.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="rockContext">The rock context.</param>
+        /// <returns></returns>
+        public IEntity GetEntity( string value, RockContext rockContext )
+        {
+            var guid = value.AsGuidOrNull();
+            if ( guid.HasValue )
+            {
+                rockContext = rockContext ?? new RockContext();
+                return new WorkflowActivityTypeService( rockContext ).Get( guid.Value );
+            }
+
+            return null;
+        }
+        #endregion
     }
 }

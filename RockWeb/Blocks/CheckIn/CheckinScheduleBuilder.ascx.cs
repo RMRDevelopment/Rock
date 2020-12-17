@@ -35,7 +35,7 @@ namespace RockWeb.Blocks.CheckIn
     /// </summary>
     [DisplayName( "Schedule Builder" )]
     [Category( "Check-in" )]
-    [Description( "Helps to build schedules to be used for checkin." )]
+    [Description( "Helps to build schedules used for check-in." )]
     public partial class CheckinScheduleBuilder : RockBlock, ICustomGridOptions
     {
         private int? _groupTypeId = null;
@@ -50,7 +50,7 @@ namespace RockWeb.Blocks.CheckIn
         {
             base.OnInit( e );
 
-            _groupTypeId = this.PageParameter( "groupTypeId" ).AsIntegerOrNull();
+            _groupTypeId = this.PageParameter( "GroupTypeId" ).AsIntegerOrNull();
             btnCancel.Visible = _groupTypeId.HasValue;
 
             gGroupLocationSchedule.DataKeyNames = new string[] { "GroupLocationId" };
@@ -128,7 +128,7 @@ namespace RockWeb.Blocks.CheckIn
         /// <param name="e">The <see cref="GridViewRowEventArgs"/> instance containing the event data.</param>
         protected void gGroupLocationSchedule_RowDataBound( object sender, GridViewRowEventArgs e )
         {
-            // add tooltip to header columns
+            // add tool-tip to header columns
             if ( e.Row.RowType == DataControlRowType.Header )
             {
                 var scheduleService = new ScheduleService( new RockContext() );
@@ -221,7 +221,7 @@ namespace RockWeb.Blocks.CheckIn
 
             rockContext.SaveChanges();
 
-            Rock.CheckIn.KioskDevice.FlushAll();
+            Rock.CheckIn.KioskDevice.Clear();
 
             if ( _groupTypeId.HasValue )
             {
@@ -271,7 +271,7 @@ namespace RockWeb.Blocks.CheckIn
             int? categoryId = GetBlockUserPreference( "Category" ).AsIntegerOrNull();
             if ( !categoryId.HasValue )
             {
-                var categoryCache = CategoryCache.Read( Rock.SystemGuid.Category.SCHEDULE_SERVICE_TIMES.AsGuid() );
+                var categoryCache = CategoryCache.Get( Rock.SystemGuid.Category.SCHEDULE_SERVICE_TIMES.AsGuid() );
                 categoryId = categoryCache != null ? categoryCache.Id : (int?)null;
             }
 
@@ -301,8 +301,8 @@ namespace RockWeb.Blocks.CheckIn
             var groupTypeService = new GroupTypeService( rockContext );
             var groupService = new GroupService( rockContext );
 
-            var groupPaths = new List<GroupTypePath>();
-            var groupLocationQry = groupLocationService.Queryable().Where(gl => gl.Group.IsActive);
+            var groupPaths = new List<CheckinAreaPath>();
+            var groupLocationQry = groupLocationService.Queryable().Where( gl => gl.Group.IsActive && !gl.Group.IsArchived );
             int groupTypeId;
 
             // if this page has a PageParam for groupTypeId use that to limit which groupTypeId to see. Otherwise, use the groupTypeId specified in the filter
@@ -317,12 +317,12 @@ namespace RockWeb.Blocks.CheckIn
 
             if ( groupTypeId != Rock.Constants.All.Id )
             {
-                var descendantGroupTypeIds = groupTypeService.GetAllAssociatedDescendents( groupTypeId ).Select( a => a.Id );
+                var descendantGroupTypeIds = groupTypeService.GetCheckinAreaDescendants( groupTypeId ).Select( a => a.Id );
 
                 // filter to groups that either are of the GroupType or are of a GroupType that has the selected GroupType as a parent (ancestor)
                 groupLocationQry = groupLocationQry.Where( a => a.Group.GroupType.Id == groupTypeId || descendantGroupTypeIds.Contains( a.Group.GroupTypeId ) );
 
-                groupPaths = groupTypeService.GetAllAssociatedDescendentsPath( groupTypeId ).ToList();
+                groupPaths = groupTypeService.GetCheckinAreaDescendantsPath( groupTypeId ).ToList();
             }
             else
             {
@@ -331,11 +331,11 @@ namespace RockWeb.Blocks.CheckIn
                 { 
                     descendantGroupTypeIds.Add( groupType.Id );
 
-                    groupPaths.AddRange( groupTypeService.GetAllAssociatedDescendentsPath( groupType.Id ).ToList() );
+                    groupPaths.AddRange( groupTypeService.GetCheckinAreaDescendantsPath( groupType.Id ).ToList() );
                     foreach ( var childGroupType in groupTypeService.GetChildGroupTypes( groupType.Id ) )
                     {
                         descendantGroupTypeIds.Add( childGroupType.Id );
-                        descendantGroupTypeIds.AddRange( groupTypeService.GetAllAssociatedDescendents( childGroupType.Id ).Select( a => a.Id ).ToList() );
+                        descendantGroupTypeIds.AddRange( groupTypeService.GetCheckinAreaDescendants( childGroupType.Id ).Select( a => a.Id ).ToList() );
                     }
                 }
 
@@ -375,7 +375,7 @@ namespace RockWeb.Blocks.CheckIn
                 qryList = qryList.Where( a => currentAndDescendantLocationIds.Contains( a.Location.Id ) ).ToList();
             }
 
-            // put stuff in a datatable so we can dynamically have columns for each Schedule
+            // put stuff in a DataTable so we can dynamically have columns for each Schedule
             DataTable dataTable = new DataTable();
             dataTable.Columns.Add( "GroupLocationId" );
             dataTable.Columns.Add( "GroupId" );
@@ -434,7 +434,7 @@ namespace RockWeb.Blocks.CheckIn
                 dataTable.Rows.Add( dataRow );
             }
 
-            gGroupLocationSchedule.EntityTypeId = EntityTypeCache.Read<GroupLocation>().Id;
+            gGroupLocationSchedule.EntityTypeId = EntityTypeCache.Get<GroupLocation>().Id;
             gGroupLocationSchedule.DataSource = dataTable;
             gGroupLocationSchedule.DataBind();
         }
@@ -461,16 +461,18 @@ namespace RockWeb.Blocks.CheckIn
                 scheduleQry = scheduleQry.Where( a => a.CategoryId == null );
             }
 
-            // clear out any existing schedule columns and add the ones that match the current filter setting
-            var scheduleList = scheduleQry.ToList().OrderBy( a => a.ToString() ).ToList();
-
             var checkBoxEditableFields = gGroupLocationSchedule.Columns.OfType<CheckBoxEditableField>().ToList();
             foreach ( var field in checkBoxEditableFields )
             {
                 gGroupLocationSchedule.Columns.Remove( field );
             }
 
-            foreach ( var item in scheduleList )
+            // clear out any existing schedule columns and add the ones that match the current filter setting
+            var scheduleList = scheduleQry.ToList().OrderBy( a => a.Name ).ToList();
+
+            var sortedScheduleList = scheduleList.OrderByOrderAndNextScheduledDateTime();
+
+            foreach ( var item in sortedScheduleList )
             {
                 string dataFieldName = string.Format( "scheduleField_{0}", item.Id );
 
@@ -494,9 +496,9 @@ namespace RockWeb.Blocks.CheckIn
         {
             var groupTypes = new List<GroupType>();
 
-            // populate the GroupType DropDownList only with GroupTypes with GroupTypePurpose of Checkin Template
+            // populate the GroupType DropDownList only with GroupTypes with GroupTypePurpose of Check-in Template
             // or with group types that allow multiple locations/schedules and support named locations
-            int groupTypePurposeCheckInTemplateId = DefinedValueCache.Read( new Guid( Rock.SystemGuid.DefinedValue.GROUPTYPE_PURPOSE_CHECKIN_TEMPLATE ) ).Id;
+            int groupTypePurposeCheckInTemplateId = DefinedValueCache.Get( new Guid( Rock.SystemGuid.DefinedValue.GROUPTYPE_PURPOSE_CHECKIN_TEMPLATE ) ).Id;
             GroupTypeService groupTypeService = new GroupTypeService( rockContext );
 
             // First find all the group types that have a purpose of 'Check-in Template'
@@ -507,14 +509,14 @@ namespace RockWeb.Blocks.CheckIn
                 .Select( t => t.Id )
                 .ToList();
 
-            // Now find all their descendents (so we can exclude them in a sec)
+            // Now find all their descendants (so we can exclude them in a sec)
             var descendentGroupTypeIds = new List<int>();
             foreach ( int id in checkInGroupTypeIds )
             {
-                descendentGroupTypeIds.AddRange( groupTypeService.GetAllAssociatedDescendents( id ).Select( a => a.Id ).ToList() );
+                descendentGroupTypeIds.AddRange( groupTypeService.GetCheckinAreaDescendants( id ).Select( a => a.Id ).ToList() );
             }
 
-            // Now query again for all the types that have a purpose of 'Check-in Template' or support check-in outside of being a descendent of the template
+            // Now query again for all the types that have a purpose of 'Check-in Template' or support check-in outside of being a descendant of the template
             var groupTypeList = groupTypeService.Queryable()
                 .Where( a =>
                     checkInGroupTypeIds.Contains( a.Id ) ||
@@ -528,6 +530,7 @@ namespace RockWeb.Blocks.CheckIn
                 .OrderBy( a => a.Order )
                 .ThenBy( a => a.Name )
                 .ToList();
+
             foreach ( var groupType in groupTypeList )
             {
                 // Make sure the group type supports named locations (we can't query on this in the above qry)

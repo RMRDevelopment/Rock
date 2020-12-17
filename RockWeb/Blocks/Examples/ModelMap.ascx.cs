@@ -74,9 +74,7 @@ namespace RockWeb.Blocks.Examples
             base.OnInit( e );
 
             rptCategory.ItemCommand += rptCategory_ItemCommand;
-            //rptCategory.ItemCreated += rptCategory_ItemCreated;
             rptModel.ItemCommand += rptModel_ItemCommand;
-            //rptModel.ItemCreated += rptModel_ItemCreated;
         }
 
         /// <summary>
@@ -89,8 +87,39 @@ namespace RockWeb.Blocks.Examples
 
             if ( !Page.IsPostBack )
             {
+                Guid? categoryGuid = null;
+                int? entityTypeId = null;
+                string categoryName = PageParameter( "Category" );
+
                 LoadCategories();
-                ShowData( null, null );
+                BindFilter( true );
+
+                if ( !string.IsNullOrWhiteSpace( categoryName ) )
+                {
+                    var category = EntityCategories.Where( c => c.Name.Equals( categoryName, StringComparison.CurrentCultureIgnoreCase ) ).FirstOrDefault();
+                    if ( category != null )
+                    {
+                        categoryGuid = category.Guid;
+                    }
+                }
+
+                if ( !string.IsNullOrWhiteSpace( PageParameter( "EntityType" ) ) )
+                {
+                    entityTypeId = PageParameter( "EntityType" ).AsIntegerOrNull();
+
+                    if ( entityTypeId == null )
+                    {
+                        var entityType = EntityTypeCache.Get( PageParameter( "EntityType" ).AsGuid() );
+
+                        if ( entityType != null )
+                        {
+                            entityTypeId = entityType.Id;
+                            categoryGuid = EntityCategories.Where( c => c.RockEntityIds.Contains( entityType.Id ) ).Select( c => c.Guid ).FirstOrDefault();
+                        }
+                    }
+                }
+
+                ShowData( categoryGuid, entityTypeId );
             }
         }
 
@@ -131,9 +160,64 @@ namespace RockWeb.Blocks.Examples
             ShowData( hfSelectedCategoryGuid.Value.AsGuid(), e.CommandArgument.ToString().AsInteger() );
         }
 
+        /// <summary>
+        /// Handles the ApplyFilterClick event of the gfSettings control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void gfSettings_ApplyFilterClick( object sender, EventArgs e )
+        {
+            gfSettings.SaveUserPreference( "IsRequired", ddlIsRequired.SelectedValue );
+            gfSettings.SaveUserPreference( "IsDatabase", ddlIsDatabase.SelectedValue );
+            gfSettings.SaveUserPreference( "IsLava", ddlIsLava.SelectedValue );
+
+            ShowData( hfSelectedCategoryGuid.Value.AsGuidOrNull(), hfSelectedEntityId.Value.AsIntegerOrNull() );
+        }
+
+        /// <summary>
+        /// Handles the ClearFilterClick event of the gfSettings control.
+        /// </summary>
+        /// <param name="sender">The source of the event.</param>
+        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        protected void gfSettings_ClearFilterClick( object sender, EventArgs e )
+        {
+            gfSettings.DeleteUserPreferences();
+            BindFilter();
+
+            ShowData( hfSelectedCategoryGuid.Value.AsGuidOrNull(), hfSelectedEntityId.Value.AsIntegerOrNull() );
+        }
+
         #endregion
 
         #region Methods
+
+        /// <summary>
+        /// Binds the filter.
+        /// </summary>
+        private void BindFilter( bool useQueryString = false )
+        {
+            if ( useQueryString )
+            {
+                if ( !string.IsNullOrWhiteSpace( PageParameter( "IsRequired" ) ) )
+                {
+                    gfSettings.SaveUserPreference( "IsRequired", PageParameter( "IsRequired" ) );
+                }
+
+                if ( !string.IsNullOrWhiteSpace( PageParameter( "IsDatabase" ) ) )
+                {
+                    gfSettings.SaveUserPreference( "IsDatabase", PageParameter( "IsDatabase" ) );
+                }
+
+                if ( !string.IsNullOrWhiteSpace( PageParameter( "IsLava" ) ) )
+                {
+                    gfSettings.SaveUserPreference( "IsLava", PageParameter( "IsLava" ) );
+                }
+            }
+
+            ddlIsRequired.SelectedValue = gfSettings.GetUserPreference( "IsRequired" );
+            ddlIsDatabase.SelectedValue = gfSettings.GetUserPreference( "IsDatabase" );
+            ddlIsLava.SelectedValue = gfSettings.GetUserPreference( "IsLava" );
+        }
 
         private void LoadCategories()
         {
@@ -159,13 +243,13 @@ namespace RockWeb.Blocks.Examples
                 {
                     string category = "Other";
                     var domainAttr = type.GetCustomAttribute<RockDomainAttribute>( false );
-                    if ( domainAttr != null && domainAttr.Name.IsNotNullOrWhitespace() )
+                    if ( domainAttr != null && domainAttr.Name.IsNotNullOrWhiteSpace() )
                     {
                         category = domainAttr.Name;
                     }
 
                     var entityCategory = entityCategories
-                        .Where( c => c.Name == category  )
+                        .Where( c => c.Name == category )
                         .FirstOrDefault();
                     if ( entityCategory == null )
                     {
@@ -209,7 +293,12 @@ namespace RockWeb.Blocks.Examples
                     lCategoryName.Text = category.Name + " Models";
                     pnlModels.Visible = true;
 
-                    entityTypeList = category.RockEntityIds.Select( a => EntityTypeCache.Read( a ) ).Where( a => a != null ).ToList();
+                    entityTypeList = category
+                        .RockEntityIds
+                        .Select( a => EntityTypeCache.Get( a ) )
+                        .Where( a => a != null )
+                        .OrderBy( et => et.FriendlyName )
+                        .ToList();
                     if ( entityTypeId.HasValue )
                     {
                         entityType = entityTypeList.Where( t => t.Id == entityTypeId.Value ).FirstOrDefault();
@@ -229,6 +318,7 @@ namespace RockWeb.Blocks.Examples
 
             string details = string.Empty;
             nbClassesWarning.Visible = false;
+            pnlClassDetail.Visible = false;
             if ( entityType != null )
             {
                 try
@@ -255,6 +345,8 @@ namespace RockWeb.Blocks.Examples
                                 IsInherited = p.DeclaringType != type,
                                 IsVirtual = p.GetGetMethod() != null && p.GetGetMethod().IsVirtual && !p.GetGetMethod().IsFinal,
                                 IsLavaInclude = p.IsDefined( typeof( LavaIncludeAttribute ) ) || p.IsDefined( typeof( DataMemberAttribute ) ),
+                                IsObsolete = p.IsDefined( typeof( ObsoleteAttribute ) ),
+                                ObsoleteMessage = GetObsoleteMessage( p ),
                                 NotMapped = p.IsDefined( typeof( NotMappedAttribute ) ),
                                 Required = p.IsDefined( typeof( RequiredAttribute ) ),
                                 Id = p.MetadataToken,
@@ -276,11 +368,22 @@ namespace RockWeb.Blocks.Examples
                                 IsInherited = m.DeclaringType != type,
                                 Id = m.MetadataToken,
                                 Signature = string.Format( "{0}({1})", m.Name, param ),
-                                Comment = GetComments( m, xmlComments )
+                                Comment = GetComments( m, xmlComments ),
+                                IsObsolete = m.IsDefined( typeof( ObsoleteAttribute ) ),
+                                ObsoleteMessage = GetObsoleteMessage( m )
                             } );
                         }
 
-                        details = ClassNode( mClass );
+                        var pageReference = new Rock.Web.PageReference( CurrentPageReference );
+                        pageReference.QueryString = new System.Collections.Specialized.NameValueCollection();
+                        pageReference.QueryString["EntityType"] = entityType.Guid.ToString();
+
+                        lClassName.Text = mClass.Name;
+                        hlAnchor.NavigateUrl = pageReference.BuildUrl();
+                        lClassDescription.Text = mClass.Comment != null ? mClass.Comment.Summary : string.Empty;
+                        lClasses.Text = ClassNode( mClass );
+
+                        pnlClassDetail.Visible = true;
                     }
                     else
                     {
@@ -298,50 +401,55 @@ namespace RockWeb.Blocks.Examples
                     nbClassesWarning.Visible = true;
                 }
             }
-
-            lClasses.Text = details;
         }
 
         /// <summary>
         /// Build a "node" of the class/model with its properties and methods inside.
         /// </summary>
         /// <param name="aClass"></param>
-        /// <param name="expandedClassNameGuidList"></param>
         /// <returns></returns>
         private string ClassNode( MClass aClass )
         {
             var sb = new StringBuilder();
 
-            var name = HttpUtility.HtmlEncode( aClass.Name );
-            sb.AppendFormat(
-                "<div class='panel panel-block' data-id='{0}'><div class='panel-heading'><h1 class='panel-title rollover-container'>{1}</h1><p class='description'>{2}</p></div>",
-                aClass.Guid,
-                name,
-                aClass.Comment != null ? aClass.Comment.Summary : ""
-                );
-
             if ( aClass.Properties.Any() || aClass.Methods.Any() )
             {
-                sb.AppendFormat( "<div class='panel-body'>" );
-
                 if ( aClass.Properties.Any() )
                 {
-                    sb.AppendLine( "<small class='pull-right js-model-inherited'>Show: <i class='js-model-check fa fa-fw fa-square-o'></i> inherited</small><h4>Properties</h4><ul class='list-unstyled'>" );
+                    sb.AppendLine( "<h4>Properties</h4><ul class='list-unstyled'>" );
                     foreach ( var property in aClass.Properties.OrderBy( p => p.Name ) )
                     {
-                        //  data-expanded='false' data-model='Block' data-id='b{0}'
-                        sb.AppendFormat( "<li data-id='p{0}' class='{6}'><strong>{9}<tt>{1}</tt></strong>{3}{4}{5}{2}{7}</li>{8}",
+                        bool? isRequired = gfSettings.GetUserPreference( "IsRequired" ).AsBooleanOrNull();
+                        bool? isDatabase = gfSettings.GetUserPreference( "IsDatabase" ).AsBooleanOrNull();
+                        bool? isLava = gfSettings.GetUserPreference( "IsLava" ).AsBooleanOrNull();
+
+                        if ( isRequired.HasValue && isRequired.Value != property.Required )
+                        {
+                            continue;
+                        }
+
+                        if ( isDatabase.HasValue && isDatabase.Value != ( !property.NotMapped && !property.IsVirtual ) )
+                        {
+                            continue;
+                        }
+
+                        if ( isLava.HasValue && isLava.Value != property.IsLavaInclude )
+                        {
+                            continue;
+                        }
+
+                        sb.AppendFormat( "<li data-id='p{0}' class='{6}'><strong>{9}<tt>{1}</tt></strong>{3}{4}{5}{10}{2}{7}</li>{8}",
                             property.Id, // 0
                             HttpUtility.HtmlEncode( property.Name ), // 1
-                            ( property.Comment != null && !string.IsNullOrWhiteSpace( property.Comment.Summary ) ) ? " - " + property.Comment.Summary : "", // 2
+                            ( property.Comment != null && !string.IsNullOrWhiteSpace( property.Comment.Summary ) ) ? " - " + property.Comment.Summary : string.Empty, // 2
                             property.Required ? " <strong class='text-danger'>*</strong> " : string.Empty, // 3
                             property.IsLavaInclude ? " <i class='fa fa-bolt fa-fw text-warning'></i> " : string.Empty, // 4
-                            "", // 5
+                            string.Empty, // 5
                             property.IsInherited ? " js-model hidden " : " ", // 6
-                            property.IsInherited ? " (inherited)" : "", // 7
+                            property.IsInherited ? " (inherited)" : string.Empty, // 7
                             Environment.NewLine, // 8
-                            property.NotMapped || property.IsVirtual ? "<i class='fa fa-square-o fa-fw'></i> " : "<i class='fa fa-database fa-fw'></i> " // 9
-
+                            property.NotMapped || property.IsVirtual ? "<i class='fa fa-square-o fa-fw'></i> " : "<i class='fa fa-database fa-fw'></i> ", // 9
+                            property.IsObsolete ? "<i class='fa fa-ban fa-fw text-danger' title='no longer supported'></i> <i>" + property.ObsoleteMessage + " </i> " : string.Empty // 10
                             );
                     }
                     sb.AppendLine( "</ul>" );
@@ -358,23 +466,20 @@ namespace RockWeb.Blocks.Examples
 
                     foreach ( var method in aClass.Methods.OrderBy( m => m.Name ) )
                     {
-                        //<li data-expanded='false' data-model='Block' data-id='b{0}'><span>{1}{2}:{3}</span></li>{4}
-                        sb.AppendFormat( "<li data-id='m{0}' class='{3}'><strong><tt>{1}</tt></strong> {2}{4}</li>{5}",
+                        sb.AppendFormat( "<li data-id='m{0}' class='{3}'><strong><tt>{1}</tt></strong> {2}{4} {6}</li>{5}",
                             method.Id,
                             HttpUtility.HtmlEncode( method.Signature ),
                             ( method.Comment != null && !string.IsNullOrWhiteSpace( method.Comment.Summary ) ) ? " - " + method.Comment.Summary : "",
                             method.IsInherited ? " js-model hidden " : " ",
                             method.IsInherited ? " (inherited)" : "",
-                            Environment.NewLine );
+                            Environment.NewLine, // 5
+                            method.IsObsolete ? "<i class='fa fa-ban fa-fw text-danger' title='no longer supported'></i> <i>" + method.ObsoleteMessage + " </i> " : string.Empty // 6
+                            );
                     }
 
                     sb.AppendLine( "</ul>" );
                 }
-
-                sb.AppendLine( "</div>" );
             }
-
-            sb.AppendLine( "</div>" );
 
             return sb.ToString();
         }
@@ -404,7 +509,7 @@ namespace RockWeb.Blocks.Examples
 
             return null;
         }
-        
+
         /// <summary>
         /// Gets the comments from the data in the assembly's XML file for the 
         /// given member object.
@@ -455,6 +560,35 @@ namespace RockWeb.Blocks.Examples
 
         }
 
+
+        /// <summary>
+        /// Gets the comments from the data in the assembly's XML file for the 
+        /// given member object.
+        /// </summary>
+        /// <param name="p">The MemberInfo instance.</param>
+        /// <returns>an XmlComment object</returns>
+        private string GetObsoleteMessage( MemberInfo p )
+        {
+            if ( !p.IsDefined( typeof( ObsoleteAttribute ) ) )
+            {
+                return null;
+            }
+
+            string message = string.Empty;
+
+            try
+            {
+                var msg = p.CustomAttributes.Where( a => a.AttributeType == typeof( ObsoleteAttribute ) ).Select( r => r.ConstructorArguments.FirstOrDefault() ).FirstOrDefault();
+                if ( msg != null )
+                {
+                    message = msg.Value.ToStringSafe();
+                }
+
+            }
+            catch { }
+            return message;
+
+        }
         /// <summary>
         /// Makes the summary HTML; converting any type/class cref (ex. <see cref="T:Rock.Model.Campus" />) 
         /// references to HTML links (ex <a href="#Campus">Campus</a>)
@@ -473,7 +607,7 @@ namespace RockWeb.Blocks.Examples
             if ( obj is Guid )
             {
                 Guid? selectedCategoryGuid = hfSelectedCategoryGuid.Value.AsGuidOrNull();
-                Guid categoryGuid = (Guid)obj;
+                Guid categoryGuid = ( Guid ) obj;
                 return selectedCategoryGuid.HasValue && selectedCategoryGuid.Value == categoryGuid ? "active" : string.Empty;
             }
             return string.Empty;
@@ -484,14 +618,14 @@ namespace RockWeb.Blocks.Examples
             if ( obj is int )
             {
                 int? selectedEntityId = hfSelectedEntityId.Value.AsIntegerOrNull();
-                int entityId = (int)obj;
+                int entityId = ( int ) obj;
                 return selectedEntityId.HasValue && selectedEntityId.Value == entityId ? "active" : string.Empty;
             }
             return string.Empty;
         }
-    }
 
-    #endregion
+        #endregion
+    }
 
     #region Helper Classes
 
@@ -527,6 +661,8 @@ namespace RockWeb.Blocks.Examples
         public bool IsInherited { get; set; }
         public bool IsVirtual { get; set; }
         public bool IsLavaInclude { get; set; }
+        public bool IsObsolete { get; set; }
+        public string ObsoleteMessage { get; set; }
         public bool NotMapped { get; set; }
         public bool Required { get; set; }
         public XmlComment Comment { get; set; }
@@ -537,6 +673,8 @@ namespace RockWeb.Blocks.Examples
         public string Name { get; set; }
         public int Id { get; set; }
         public bool IsInherited { get; set; }
+        public bool IsObsolete { get; set; }
+        public string ObsoleteMessage { get; set; }
         public string Signature { get; set; }
         public XmlComment Comment { get; set; }
     }
@@ -550,7 +688,7 @@ namespace RockWeb.Blocks.Examples
         public string Returns { get; set; }
     }
 
-    # endregion
+    #endregion
 
     #region Extension Methods
 

@@ -16,9 +16,7 @@
 //
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+
 using Rock.Utility;
 
 namespace Rock.Store
@@ -48,7 +46,7 @@ namespace Rock.Store
         /// Gets or sets the version's label. 
         /// </summary>
         /// <value>
-        /// A <see cref="System.String"/> representing the versions lable.
+        /// A <see cref="System.String"/> representing the versions label.
         /// </value>
         public string VersionLabel { get; set; }
 

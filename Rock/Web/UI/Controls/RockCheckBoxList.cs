@@ -17,8 +17,10 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Text;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Constants;
 
 namespace Rock.Web.UI.Controls
@@ -37,6 +39,22 @@ namespace Rock.Web.UI.Controls
         #endregion
 
         #region IRockControl implementation
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the checkboxlist should be strikedoff when checked
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [display as checklist]; otherwise, <c>false</c>.
+        /// </value>
+        public bool DisplayAsCheckList
+        {
+            get { return ViewState["DisplayAsCheckList"] as bool? ?? false; }
+            set
+            {
+                ViewState["DisplayAsCheckList"] = value;
+                this.CssClass = "checklist";
+            }
+        }
 
         /// <summary>
         /// Gets or sets the label text.
@@ -167,6 +185,24 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
+        /// Gets or sets the help text.
+        /// </summary>
+        /// <value>
+        /// The help text.
+        /// </value>
+        [
+        Bindable( true ),
+        Category( "Appearance" ),
+        DefaultValue( "" ),
+        Description( "The message to display if there are no options in the list." )
+        ]
+        public string EmptyListMessage
+        {
+            get { return ViewState["EmptyListMessage"] as string ?? string.Empty; }
+            set { ViewState["EmptyListMessage"] = value; }
+        }
+
+        /// <summary>
         /// Gets a value indicating whether this instance is valid.
         /// </summary>
         /// <value>
@@ -235,6 +271,35 @@ namespace Rock.Web.UI.Controls
         #endregion
 
         /// <summary>
+        /// Gets or sets the number of columns to display in the <see cref="T:System.Web.UI.WebControls.CheckBoxList" /> control.
+        /// If RepeatDirection is Horizontal, this will default to 4 columns. There is no upper limit in the code so use
+        /// wisely.
+        /// </summary>
+        public override int RepeatColumns
+        {
+            get
+            {
+                if ( this.RepeatDirection == RepeatDirection.Horizontal )
+                {
+                    // unless set specifically, default Horizontal to 4 columns
+                    return _repeatColumns ?? 4;
+                }
+                else
+                {
+                    return _repeatColumns ?? 0;
+                }
+            }
+
+            set
+            {
+                _repeatColumns = value;
+            }
+        }
+
+        private int? _repeatColumns;
+
+
+        /// <summary>
         /// Raises the <see cref="E:System.Web.UI.Control.Init" /> event.
         /// </summary>
         /// <param name="e">An <see cref="T:System.EventArgs" /> object that contains the event data.</param>
@@ -274,7 +339,7 @@ namespace Rock.Web.UI.Controls
             // add custom validator
             CustomValidator.ID = this.ID + "_cfv";
             CustomValidator.ClientValidationFunction = "Rock.controls.rockCheckBoxList.clientValidate";
-            CustomValidator.ErrorMessage = this.Label != string.Empty ? this.Label + " is Required." : string.Empty;
+            CustomValidator.ErrorMessage = this.Label != string.Empty ? this.Label + " is required." : string.Empty;
             CustomValidator.CssClass = "validation-error help-inline";
             CustomValidator.Enabled = this.Required;
             CustomValidator.Display = ValidatorDisplay.Dynamic;
@@ -295,17 +360,25 @@ namespace Rock.Web.UI.Controls
         protected override bool LoadPostData( string postDataKey, System.Collections.Specialized.NameValueCollection postCollection )
         {
             EnsureChildControls();
-            
+
             // make sure we are dealing with a postback for this control by seeing if the hidden field is included
             if ( postDataKey == _hfCheckListBoxId.UniqueID )
             {
-                // Hack to get the selected items on postback.  
+                bool hasChanged = false;
+
+                // Hack to get the selected items on postback.
                 for ( int i = 0; i < this.Items.Count; i++ )
                 {
-                    this.Items[i].Selected = ( postCollection[string.Format( "{0}${1}", this.UniqueID, i )] != null );
+                    bool newCheckState = ( postCollection[string.Format( "{0}${1}", this.UniqueID, i )] != null );
+
+                    if ( this.Items[i].Selected != newCheckState )
+                    {
+                        this.Items[i].Selected = newCheckState;
+                        hasChanged = true;
+                    }
                 }
 
-                return false;
+                return hasChanged;
             }
             else
             {
@@ -332,18 +405,79 @@ namespace Rock.Web.UI.Controls
         public void RenderBaseControl( HtmlTextWriter writer )
         {
             _hfCheckListBoxId.RenderControl( writer );
-            
-            writer.AddAttribute( "class", "controls js-rockcheckboxlist" );
+
+            StringBuilder cssClassBuilder = new StringBuilder( "controls js-rockcheckboxlist rockcheckboxlist" );
+            if ( this.RepeatDirection == RepeatDirection.Horizontal )
+            {
+                cssClassBuilder.Append( " rockcheckboxlist-horizontal" );
+
+                if ( this.RepeatColumns > 0 )
+                {
+                    cssClassBuilder.Append( string.Format(" in-columns in-columns-{0}", RepeatColumns ) );
+                }
+
+            }
+            else
+            {
+                cssClassBuilder.Append( " rockcheckboxlist-vertical" );
+            }
+
+
+            writer.AddAttribute( "class", cssClassBuilder.ToString() );
             writer.RenderBeginTag( HtmlTextWriterTag.Div );
 
             if ( Items.Count == 0 )
             {
-                writer.Write( None.TextHtml );
+                writer.Write( this.EmptyListMessage );
             }
 
             base.RenderControl( writer );
+
+            if ( this.Required )
+            {
+                this.CustomValidator.Enabled = true;
+                if ( string.IsNullOrWhiteSpace( this.CustomValidator.ErrorMessage ) )
+                {
+                    this.CustomValidator.ErrorMessage = this.Label + " is required.";
+                }
+            }
+            else
+            {
+                this.CustomValidator.Enabled = false;
+            }
             CustomValidator.RenderControl( writer );
+
             writer.RenderEndTag();
+
+            if ( DisplayAsCheckList )
+            {
+                string script = string.Format( @"
+   function StrikeOffCheckbox( checkboxControl ){{
+                if ( checkboxControl.prop( 'checked' ) )
+                {{
+                    checkboxControl.parent('label').addClass( 'line-through' );
+                }}
+                else
+                {{
+                    checkboxControl.parent('label').removeClass( 'line-through' );
+                }}
+
+            }}
+
+        $( "".checklist .checkbox input[type=checkbox]"").on('click', function() {{
+                StrikeOffCheckbox($( this ) );
+            }})
+
+            var checkboxes = $(""input[id ^= '{0}']:checked"");
+
+            for ( var i = 0; i < checkboxes.length; i++ )
+            {{
+                    StrikeOffCheckbox( $(checkboxes[i]) );
+            }}
+", this.ClientID );
+
+                ScriptManager.RegisterStartupScript( this, typeof( RockCheckBoxList ), "RockCheckBoxListScript_" + this.ClientID, script, true );
+            }
         }
 
         /// <summary>
@@ -383,6 +517,29 @@ namespace Rock.Web.UI.Controls
             }
         }
 
+        /// <summary>
+        /// Gets the names of the selected items.
+        /// </summary>
+        /// <value>
+        /// The names of the selected items.
+        /// </value>
+        public List<string> SelectedNames
+        {
+            get
+            {
+                return this.Items.OfType<ListItem>().Where( l => l.Selected ).Select( a => a.Text ).ToList();
+            }
+        }
+
+        /// <summary>
+        /// Shows the error message.
+        /// </summary>
+        /// <param name="errorMessage">The error message.</param>
+        public virtual void ShowErrorMessage( string errorMessage )
+        {
+            this.CustomValidator.ErrorMessage = errorMessage;
+            this.CustomValidator.IsValid = false;
+        }
     }
 }
- 
+

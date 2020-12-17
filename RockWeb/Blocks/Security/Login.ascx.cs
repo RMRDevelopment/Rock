@@ -43,16 +43,16 @@ namespace RockWeb.Blocks.Security
     [LinkedPage( "New Account Page", "Page to navigate to when user selects 'Create New Account' (if blank will use 'NewAccountPage' page route)", false, "", "", 0 )]
     [LinkedPage( "Help Page", "Page to navigate to when user selects 'Help' option (if blank will use 'ForgotUserName' page route)", false, "", "", 1 )]
     [CodeEditorField( "Confirm Caption", "The text (HTML) to display when a user's account needs to be confirmed.", CodeEditorMode.Html, CodeEditorTheme.Rock, 100, false, @"
-Thank you for logging in, however, we need to confirm the email associated with this account belongs to you. We've sent you an email that contains a link for confirming.  Please click the link in your email to continue.
+Thank you for logging in, however, we need to confirm the email associated with this account belongs to you. We’ve sent you an email that contains a link for confirming.  Please click the link in your email to continue.
 ", "", 2 )]
     [LinkedPage( "Confirmation Page", "Page for user to confirm their account (if blank will use 'ConfirmAccount' page route)", false, "", "", 3 )]
-    [SystemEmailField( "Confirm Account Template", "Confirm Account Email Template", false, Rock.SystemGuid.SystemEmail.SECURITY_CONFIRM_ACCOUNT, "", 4 )]
+    [SystemCommunicationField( "Confirm Account Template", "Confirm Account Email Template", false, Rock.SystemGuid.SystemCommunication.SECURITY_CONFIRM_ACCOUNT, "", 4 )]
     [CodeEditorField( "Locked Out Caption", "The text (HTML) to display when a user's account has been locked.", CodeEditorMode.Html, CodeEditorTheme.Rock, 100, false, @"
-Sorry, your account has been locked.  Please contact our office at {{ 'Global' | Attribute:'OrganizationPhone' }} or email {{ 'Global' | Attribute:'OrganizationEmail' }} to resolve this.  Thank you. 
+{%- assign phone = Global' | Attribute:'OrganizationPhone' | Trim -%} Sorry, your account has been locked.  Please {% if phone != '' %}contact our office at {{ 'Global' | Attribute:'OrganizationPhone' }} or email{% else %}email us at{% endif %} <a href='mailto:{{ 'Global' | Attribute:'OrganizationEmail' }}'>{{ 'Global' | Attribute:'OrganizationEmail' }}</a> for help. Thank you.
 ", "", 5 )]
-    [BooleanField( "Hide New Account Option", "Should 'New Account' option be hidden?  For site's that require user to be in a role (Internal Rock Site for example), users shouldn't be able to create their own account.", false, "", 6, "HideNewAccount" )]
+    [BooleanField( "Hide New Account Option", "Should 'New Account' option be hidden?  For sites that require user to be in a role (Internal Rock Site for example), users shouldn't be able to create their own account.", false, "", 6, "HideNewAccount" )]
     [TextField( "New Account Text", "The text to show on the New Account button.", false, "Register", "", 7, "NewAccountButtonText" )]
-    [CodeEditorField( "No Account Text", "The text to show when no account exists. <span class='tip tip-lava'></span>.", CodeEditorMode.Html, CodeEditorTheme.Rock, 100, false, @"Sorry, we couldn't find an account matching that username/password. Can we help you <a href='{{HelpPage}}'>recover your account information</a>?", "", 8, "NoAccountText" )]
+    [CodeEditorField( "No Account Text", "The text to show when no account exists. <span class='tip tip-lava'></span>.", CodeEditorMode.Html, CodeEditorTheme.Rock, 100, false, @"We couldn’t find an account with that username and password combination. Can we help you recover your <a href='{{HelpPage}}'>account information</a>?", "", 8, "NoAccountText" )]
 
     [CodeEditorField( "Remote Authorization Prompt Message", "Optional text (HTML) to display above remote authorization options.", CodeEditorMode.Html, CodeEditorTheme.Rock, 100, false, defaultValue: "Login with social account", order: 9 )]
     [RemoteAuthsField( "Remote Authorization Types", "Which of the active remote authorization types should be displayed as an option for user to use for authentication.", false, "", "", 10 )]
@@ -88,7 +88,7 @@ Sorry, your account has been locked.  Please contact our office at {{ 'Global' |
         {
             btnNewAccount.Visible = !GetAttributeValue( "HideNewAccount" ).AsBoolean();
             btnNewAccount.Text = this.GetAttributeValue( "NewAccountButtonText" ) ?? "Register";
-            
+
             phExternalLogins.Controls.Clear();
 
             List<AuthenticationComponent> activeAuthProviders = new List<AuthenticationComponent>();
@@ -162,7 +162,7 @@ Sorry, your account has been locked.  Please contact our office at {{ 'Global' |
             {
                 var singleAuthProvider = activeAuthProviders[0];
                 bool redirecttoSingleExternalAuthProvider = this.GetAttributeValue( "RedirecttoSingleExternalAuthProvider" ).AsBoolean();
-                
+
                 if ( redirecttoSingleExternalAuthProvider )
                 {
                     Uri remoteAuthLoginUri = singleAuthProvider.GenerateLoginUrl( this.Request );
@@ -219,7 +219,7 @@ Sorry, your account has been locked.  Please contact our office at {{ 'Global' |
             {
                 lPromptMessage.Text = GetAttributeValue( "PromptMessage" );
 
-                if ( ( bool? ) Session["InvalidPersonToken"] == true )
+                if ( (bool?)Session["InvalidPersonToken"] == true )
                 {
                     var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( this.RockPage, this.CurrentPerson );
                     lInvalidPersonTokenText.Text = GetAttributeValue( "InvalidPersonTokenText" ).ResolveMergeFields( mergeFields );
@@ -253,10 +253,21 @@ Sorry, your account has been locked.  Please contact our office at {{ 'Global' |
                     var component = AuthenticationContainer.GetComponent( userLogin.EntityType.Name );
                     if ( component != null && component.IsActive && !component.RequiresRemoteAuthentication )
                     {
-                        if ( component.Authenticate( userLogin, tbPassword.Text ) )
+                        var isSuccess = component.AuthenticateAndTrack( userLogin, tbPassword.Text );
+                        rockContext.SaveChanges();
+
+                        if ( isSuccess )
                         {
                             CheckUser( userLogin, Request.QueryString["returnurl"], cbRememberMe.Checked );
                             return;
+                        }
+                        else if ( component.Authenticate( userLogin, tbPassword.Text ) )
+                        {
+                            // If the password authenticates, check to see if this user is locked out.
+                            if ( CheckUserLockout( userLogin ) )
+                            {
+                                return;
+                            }
                         }
                     }
                 }
@@ -307,26 +318,56 @@ Sorry, your account has been locked.  Please contact our office at {{ 'Global' |
                 }
                 else
                 {
-                    var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( RockPage, CurrentPerson );
-
-                    if ( userLogin.IsLockedOut ?? false )
-                    {
-                        lLockedOutCaption.Text = GetAttributeValue( "LockedOutCaption" ).ResolveMergeFields( mergeFields );
-
-                        pnlLogin.Visible = false;
-                        pnlLockedOut.Visible = true;
-                    }
-                    else
-                    {
-                        SendConfirmation( userLogin );
-
-                        lConfirmCaption.Text = GetAttributeValue( "ConfirmCaption" ).ResolveMergeFields( mergeFields );
-
-                        pnlLogin.Visible = false;
-                        pnlConfirmation.Visible = true;
-                    }
+                    CheckUserLockoutAndConfirmation( userLogin );
                 }
             }
+        }
+
+        /// <summary>
+        /// Checks to see if the user is locked out and then verifies that their account has been confirmed.
+        /// </summary>
+        /// <param name="userLogin">The user login.</param>
+        private void CheckUserLockoutAndConfirmation( UserLogin userLogin )
+        {
+            var mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( RockPage, CurrentPerson );
+
+            if ( CheckUserLockout( userLogin, mergeFields ) )
+            {
+                return;
+            }
+            else
+            {
+                SendConfirmation( userLogin );
+
+                lConfirmCaption.Text = GetAttributeValue( "ConfirmCaption" ).ResolveMergeFields( mergeFields );
+                pnlLogin.Visible = false;
+                pnlConfirmation.Visible = true;
+            }
+        }
+
+        /// <summary>
+        /// Checks to see if the user is locked out and shows an appropriate message if they are.
+        /// </summary>
+        /// <param name="userLogin">The user login.</param>
+        /// <param name="mergeFields">The merge fields.</param>
+        /// <returns>True if the user is locked out.</returns>
+        private bool CheckUserLockout( UserLogin userLogin, Dictionary<string, object> mergeFields = null )
+        {
+            if ( mergeFields == null )
+            {
+                mergeFields = Rock.Lava.LavaHelper.GetCommonMergeFields( RockPage, CurrentPerson );
+            }
+
+            bool isLockedOut = ( userLogin.IsLockedOut ?? false );
+
+            if ( isLockedOut )
+            {
+                lLockedOutCaption.Text = GetAttributeValue( "LockedOutCaption" ).ResolveMergeFields( mergeFields );
+                pnlLogin.Visible = false;
+                pnlLockedOut.Visible = true;
+            }
+
+            return isLockedOut;
         }
 
         /// <summary>
@@ -340,7 +381,7 @@ Sorry, your account has been locked.  Please contact our office at {{ 'Global' |
         {
             if ( sender is LinkButton )
             {
-                LinkButton lb = ( LinkButton ) sender;
+                LinkButton lb = (LinkButton)sender;
 
                 foreach ( var serviceEntry in AuthenticationContainer.Instance.Components )
                 {
@@ -450,13 +491,14 @@ Sorry, your account has been locked.  Please contact our office at {{ 'Global' |
 
             if ( !string.IsNullOrWhiteSpace( returnUrl ) )
             {
-                string redirectUrl = Server.UrlDecode( returnUrl );
-                Response.Redirect( redirectUrl );
+                string redirectUrl = ExtensionMethods.ScrubEncodedStringForXSSObjects(returnUrl);
+                redirectUrl =  Server.UrlDecode( redirectUrl );
+                Response.Redirect( redirectUrl, false );
                 Context.ApplicationInstance.CompleteRequest();
             }
             else if ( !string.IsNullOrWhiteSpace( redirectUrlSetting ) )
             {
-                Response.Redirect( redirectUrlSetting );
+                Response.Redirect( redirectUrlSetting, false );
                 Context.ApplicationInstance.CompleteRequest();
             }
             else
@@ -482,8 +524,8 @@ Sorry, your account has been locked.  Please contact our office at {{ 'Global' |
             mergeFields.Add( "Person", userLogin.Person );
             mergeFields.Add( "User", userLogin );
 
-            var recipients = new List<RecipientData>();
-            recipients.Add( new RecipientData( userLogin.Person.Email, mergeFields ) );
+            var recipients = new List<RockEmailMessageRecipient>();
+            recipients.Add( new RockEmailMessageRecipient( userLogin.Person, mergeFields ) );
 
             var message = new RockEmailMessage( GetAttributeValue( "ConfirmAccountTemplate" ).AsGuid() );
             message.SetRecipients( recipients );

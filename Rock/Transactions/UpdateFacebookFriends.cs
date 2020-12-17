@@ -14,7 +14,6 @@
 // limitations under the License.
 // </copyright>
 //
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -64,7 +63,7 @@ namespace Rock.Transactions
         {
             using ( var rockContext = new RockContext() )
             {
-                var relationshipGroupType = GroupTypeCache.Read( Rock.SystemGuid.GroupType.GROUPTYPE_KNOWN_RELATIONSHIPS.AsGuid() );
+                var relationshipGroupType = GroupTypeCache.Get( Rock.SystemGuid.GroupType.GROUPTYPE_KNOWN_RELATIONSHIPS.AsGuid() );
                 if ( relationshipGroupType != null )
                 {
                     var ownerRole = relationshipGroupType.Roles

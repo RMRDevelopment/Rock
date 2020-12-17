@@ -23,6 +23,7 @@ using System.Web.Configuration;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
+
 using Rock.Data;
 using Rock.Model;
 
@@ -34,22 +35,22 @@ namespace Rock.Web.UI.Controls
     /// </summary>
     /// <remarks>
     /// To bind an image to the control set the BinaryFileId property to an existing file id.
-    /// 
+    ///
     /// An OnFileSaved event will be raised after the photo is uploaded and cropped
-    /// allowing another control to handle this event to presumably do something 
+    /// allowing another control to handle this event to presumably do something
     /// immediately with the image.  The PhotoRequest's Upload block uses this feature.
     /// <example>
     /// <code>
     /// <![CDATA[
-    ///     <Rock:ImageEditor ID="imgedPhoto" runat="server" ButtonText="<i class='fa fa-pencil'></i> Select Photo" 
-    ///             ButtonCssClass="btn btn-primary margin-t-sm" CommandArgument='<%# Eval("Id") %>' 
+    ///     <Rock:ImageEditor ID="imgedPhoto" runat="server" ButtonText="<i class='fa fa-pencil'></i> Select Photo"
+    ///             ButtonCssClass="btn btn-primary margin-t-sm" CommandArgument='<%# Eval("Id") %>'
     ///             OnFileSaved="imageEditor_FileSaved" ShowDeleteButton="false" />
     /// ]]>
     /// </code>
     /// </example>
-    /// 
+    ///
     /// By setting the ShowDeleteButton to false, a more simplified UX occurs which is intended
-    /// for normal end-users. The remove button is not shown and the image upload button is 
+    /// for normal end-users. The remove button is not shown and the image upload button is
     /// always shown. This is allows for the existing image to always be replaced when the
     /// upload button is clicked.
     /// </remarks>
@@ -197,8 +198,14 @@ namespace Rock.Web.UI.Controls
         /// </value>
         public string ValidationGroup
         {
-            get { return ViewState["ValidationGroup"] as string; }
-            set { ViewState["ValidationGroup"] = value; }
+            get
+            {
+                return RequiredFieldValidator.ValidationGroup;
+            }
+            set
+            {
+                RequiredFieldValidator.ValidationGroup = value;
+            }
         }
 
         /// <summary>
@@ -257,6 +264,24 @@ namespace Rock.Web.UI.Controls
         {
             get { return ViewState["ButtonText"] as string ?? "<i class='fa fa-pencil'></i>"; }
             set { ViewState["ButtonText"] = value; }
+        }
+
+        /// <summary>
+        /// Gets or sets the edit button tool tip.
+        /// </summary>
+        /// <value>
+        /// The edit button tool tip.
+        /// </value>
+        [
+        Bindable( true ),
+        Category( "Appearance" ),
+        DefaultValue( "" ),
+        Description( "The title attribute for the edit button." )
+        ]
+        public string ButtonToolTip
+        {
+            get { return ViewState["ButtonToolTip"] as string ?? string.Empty; }
+            set { ViewState["ButtonToolTip"] = value; }
         }
 
         /// <summary>
@@ -329,6 +354,7 @@ namespace Rock.Web.UI.Controls
         private ModalDialog _mdImageDialog;
         private Panel _pnlCropContainer;
         private NotificationBox _nbImageWarning;
+        private NotificationBox _nbErrorMessage;
         private Image _imgCropSource;
         private HiddenField _hfCropCoords;
 
@@ -342,8 +368,13 @@ namespace Rock.Web.UI.Controls
         public ImageEditor()
             : base()
         {
+            RequiredFieldValidator = new HiddenFieldValidator();
             HelpBlock = new HelpBlock();
             WarningBlock = new WarningBlock();
+            _hfBinaryFileId = new HiddenField();
+            _hfBinaryFileTypeGuid = new HiddenField();
+            _hfOriginalBinaryFileId = new HiddenField();
+            _hfCropBinaryFileId = new HiddenField();
         }
 
         #endregion
@@ -400,7 +431,15 @@ namespace Rock.Web.UI.Controls
             set
             {
                 EnsureChildControls();
-                _hfBinaryFileId.Value = value.ToString();
+
+                if ( value.HasValue )
+                {
+                    _hfBinaryFileId.Value = value.ToString();
+                }
+                else
+                {
+                    _hfBinaryFileId.Value = "0";
+                }
 
                 // only set the OriginalBinaryFileId once...
                 if ( string.IsNullOrEmpty( _hfOriginalBinaryFileId.Value ) )
@@ -519,7 +558,7 @@ namespace Rock.Web.UI.Controls
                 string nopictureUrl = ViewState["NoPictureUrl"] as string;
                 if ( string.IsNullOrWhiteSpace( nopictureUrl ) )
                 {
-                    return System.Web.VirtualPathUtility.ToAbsolute( "~/Assets/Images/person-no-photo-male.svg" );
+                    return System.Web.VirtualPathUtility.ToAbsolute( "~/Assets/Images/person-no-photo-unknown.svg" );
                 }
                 else
                 {
@@ -545,19 +584,21 @@ namespace Rock.Web.UI.Controls
         /// </summary>
         protected override void CreateChildControls()
         {
-            _hfBinaryFileId = new HiddenField();
-            _hfBinaryFileId.ID = this.ID + "_hfBinaryFileId";
-            Controls.Add( _hfBinaryFileId );
+            //_hfBinaryFileId = new HiddenField();
+            base.CreateChildControls();
+            Controls.Clear();
+            RockControlHelper.CreateChildControls( this, Controls );
 
-            _hfOriginalBinaryFileId = new HiddenField();
+            Controls.Add( _hfBinaryFileId );
+            _hfBinaryFileId.ID = this.ID + "_hfBinaryFileId";
+            _hfBinaryFileId.Value = "0";
+
             _hfOriginalBinaryFileId.ID = this.ID + "_hfOriginalBinaryFileId";
             Controls.Add( _hfOriginalBinaryFileId );
 
-            _hfCropBinaryFileId = new HiddenField();
             _hfCropBinaryFileId.ID = this.ID + "_hfCropBinaryFileId";
             Controls.Add( _hfCropBinaryFileId );
 
-            _hfBinaryFileTypeGuid = new HiddenField();
             _hfBinaryFileTypeGuid.ID = this.ID + "_hfBinaryFileTypeGuid";
             Controls.Add( _hfBinaryFileTypeGuid );
 
@@ -570,6 +611,7 @@ namespace Rock.Web.UI.Controls
             _lbShowModal.ID = this.ID + "_lbShowModal";
             _lbShowModal.CssClass = this.ButtonCssClass;
             _lbShowModal.Text = this.ButtonText;
+            _lbShowModal.ToolTip = this.ButtonToolTip;
             _lbShowModal.Click += _lbShowModal_Click;
             _lbShowModal.CausesValidation = false;
             Controls.Add( _lbShowModal );
@@ -586,6 +628,7 @@ namespace Rock.Web.UI.Controls
             _lbUploadImage.ID = this.ID + "_lbUploadImage";
             _lbUploadImage.CssClass = this.ButtonCssClass;
             _lbUploadImage.Text = this.ButtonText;
+            _lbUploadImage.ToolTip = this.ButtonToolTip;
             _lbUploadImage.CausesValidation = false;
             Controls.Add( _lbUploadImage );
 
@@ -614,6 +657,12 @@ namespace Rock.Web.UI.Controls
             _nbImageWarning.NotificationBoxType = NotificationBoxType.Warning;
             _nbImageWarning.Text = "SVG image cropping is not supported.";
 
+            _nbErrorMessage = new NotificationBox();
+            _nbErrorMessage.ID = this.ID + "_nbErrorMessage";
+            _nbErrorMessage.NotificationBoxType = NotificationBoxType.Danger;
+            _nbErrorMessage.Text = "File Type is not supported.";
+            _nbErrorMessage.Visible = false;
+
             _imgCropSource = new Image();
             _imgCropSource.ID = this.ID + "_imgCropSource";
             _imgCropSource.CssClass = "image-editor-crop-source";
@@ -628,6 +677,10 @@ namespace Rock.Web.UI.Controls
             _pnlCropContainer.Controls.Add( _hfCropCoords );
 
             Controls.Add( _mdImageDialog );
+
+            RequiredFieldValidator.InitialValue = "0";
+            RequiredFieldValidator.ControlToValidate = _hfBinaryFileId.ID;
+            RequiredFieldValidator.Display = ValidatorDisplay.Dynamic;
         }
 
         /// <summary>
@@ -640,7 +693,7 @@ namespace Rock.Web.UI.Controls
             try
             {
                 var rockContext = new RockContext();
-                BinaryFileService binaryFileService = new BinaryFileService(rockContext);
+                BinaryFileService binaryFileService = new BinaryFileService( rockContext );
 
                 // load image from database
                 var binaryFile = binaryFileService.Get( CropBinaryFileId ?? 0 );
@@ -771,7 +824,7 @@ namespace Rock.Web.UI.Controls
             // return if there's no image to crop or if this is a new upload before the image is replaced
             if ( !BinaryFileId.HasValue || ( sender == _lbUploadImage && OriginalBinaryFileId == BinaryFileId ) )
             {
-                // no image to crop. they probably cancelled the image upload dialog
+                // no image to crop. they probably canceled the image upload dialog
                 return;
             }
 
@@ -784,7 +837,7 @@ namespace Rock.Web.UI.Controls
             }
 
             _nbImageWarning.Visible = false;
-            
+            _nbErrorMessage.Visible = false;
             var binaryFile = new BinaryFileService( new RockContext() ).Get( CropBinaryFileId ?? 0 );
             if ( binaryFile != null )
             {
@@ -795,9 +848,21 @@ namespace Rock.Web.UI.Controls
                     {
                         if ( stream != null )
                         {
-                            var bitMap = new System.Drawing.Bitmap( stream );
-                            _imgCropSource.Width = bitMap.Width;
-                            _imgCropSource.Height = bitMap.Height;
+                            try
+                            {
+                                var bitMap = new System.Drawing.Bitmap( stream );
+                                _imgCropSource.Width = bitMap.Width;
+                                _imgCropSource.Height = bitMap.Height;
+                            }
+                            catch ( Exception ex )
+                            {
+                                ExceptionLogService.LogException( ex );
+                                _imgCropSource.Width = Unit.Empty;
+                                _imgCropSource.Height = Unit.Empty;
+                                _nbErrorMessage.Visible = true;
+                                BinaryFileId = null;
+                                return;
+                            }
                         }
                     }
                 }
@@ -830,12 +895,13 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
-        /// This is where you implment the simple aspects of rendering your control.  The rest
+        /// This is where you implement the simple aspects of rendering your control.  The rest
         /// will be handled by calling RenderControlHelper's RenderControl() method.
         /// </summary>
         /// <param name="writer">The writer.</param>
         public void RenderBaseControl( HtmlTextWriter writer )
         {
+            _nbErrorMessage.RenderControl( writer );
             writer.AddAttribute( "id", this.ClientID );
             writer.AddAttribute( "class", "image-editor-group imageupload-group" );
             writer.RenderBeginTag( HtmlTextWriterTag.Div );
@@ -845,7 +911,7 @@ namespace Rock.Web.UI.Controls
 
             writer.Write( @"
                 <div class='js-upload-progress' style='display:none'>
-                    <i class='fa fa-refresh fa-3x fa-spin'></i>                    
+                    <i class='fa fa-refresh fa-3x fa-spin'></i>
                 </div>" );
 
             string backgroundImageFormat = "<div class='image-container' id='{0}' style='background-image:url({1});background-size:cover;background-position:50%'></div>";
@@ -857,14 +923,14 @@ namespace Rock.Web.UI.Controls
             }
             else
             {
-                imageDivHtml = string.Format( backgroundImageFormat, this.ClientID + "_divPhoto", this.NoPictureUrl);
+                imageDivHtml = string.Format( backgroundImageFormat, this.ClientID + "_divPhoto", this.NoPictureUrl );
             }
 
             writer.Write( imageDivHtml );
             writer.WriteLine();
 
             if ( string.IsNullOrEmpty( ButtonCssClass ) )
-            { 
+            {
                 writer.AddAttribute( HtmlTextWriterAttribute.Class, "options" );
             }
             writer.RenderBeginTag( HtmlTextWriterTag.Div );
@@ -892,8 +958,13 @@ namespace Rock.Web.UI.Controls
             writer.WriteLine();
             _lSaveStatus.RenderControl( writer );
 
-            writer.WriteLine();
-            _aRemove.RenderControl( writer );
+            // Don't render the _aRemove control if there is no BinaryFile to remove.
+            if ( BinaryFileId != null )
+            {
+                writer.WriteLine();
+                _aRemove.RenderControl( writer );
+            }
+
             writer.WriteLine();
             writer.RenderEndTag();
             writer.WriteLine();
@@ -944,8 +1015,8 @@ namespace Rock.Web.UI.Controls
                 // intentionally ignore and don't tell the fileUploader the limit
             }
 
-            var jsDoneFunction = string.Format("window.location = $('#{0}').prop('href');", _lbUploadImage.ClientID);
-            
+            var jsDoneFunction = string.Format( "window.location = $('#{0}').prop('href');", _lbUploadImage.ClientID );
+
             var script = string.Format(
 @"
 Rock.controls.imageUploader.initialize({{
@@ -971,7 +1042,7 @@ Rock.controls.imageUploader.initialize({{
 
 $('#{6}').Jcrop({{
     aspectRatio:1,
-    setSelect: [ 0,0,300,300 ],
+    setSelect:   [0,0, $('#{6}').width(), $('#{6}').height() ],
     boxWidth:480,
     boxHeight:480,
     onSelect: function(c) {{
@@ -980,14 +1051,15 @@ $('#{6}').Jcrop({{
 }});
 
 // prompt to upload image
-$('#{8}').click( function (e, data) {{
-    $('#{0}').click();
+$('#{8}').on('click', function (e, data) {{
+    $('#{0}').trigger('click');
 }});
 
-// hide/show buttons when remove is clicked (note: imageUploader.js also does stuff when remove is clicked)
-$('#{5}').click(function () {{
+// hide/show buttons and remove this button when remove is clicked (note: imageUploader.js also does stuff when remove is clicked)
+$('#{5}').on('click', function () {{
     $('#{8}').show();
     $('#{9}').hide();
+    $('#{5}').remove();
 }});
 
 ",
@@ -1005,7 +1077,6 @@ $('#{5}').click(function () {{
                 this.NoPictureUrl, // {11}
                 maxUploadBytes.HasValue ? maxUploadBytes.Value.ToString() : "null"  // {12}
                 );
-
 
             _lbUploadImage.Enabled = false;
 

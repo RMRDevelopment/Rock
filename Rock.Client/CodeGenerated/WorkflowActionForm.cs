@@ -56,7 +56,7 @@ namespace Rock.Client
         public string Header { get; set; }
 
         /// <summary />
-        public bool IncludeActionsInNotification { get; set; }
+        public bool IncludeActionsInNotification { get; set; } = true;
 
         /// <summary>
         /// If the ModifiedByPersonAliasId is being set manually and should not be overwritten with current user when saved, set this value to true
@@ -64,6 +64,11 @@ namespace Rock.Client
         public bool ModifiedAuditValuesAlreadyUpdated { get; set; }
 
         /// <summary />
+        public int? NotificationSystemCommunicationId { get; set; }
+
+        /// <summary />
+        // Made Obsolete in Rock "1.10"
+        [Obsolete( "Use NotificationSystemCommunicationId instead.", false )]
         public int? NotificationSystemEmailId { get; set; }
 
         /// <summary>
@@ -108,7 +113,10 @@ namespace Rock.Client
             this.Header = source.Header;
             this.IncludeActionsInNotification = source.IncludeActionsInNotification;
             this.ModifiedAuditValuesAlreadyUpdated = source.ModifiedAuditValuesAlreadyUpdated;
+            this.NotificationSystemCommunicationId = source.NotificationSystemCommunicationId;
+            #pragma warning disable 612, 618
             this.NotificationSystemEmailId = source.NotificationSystemEmailId;
+            #pragma warning restore 612, 618
             this.CreatedDateTime = source.CreatedDateTime;
             this.ModifiedDateTime = source.ModifiedDateTime;
             this.CreatedByPersonAliasId = source.CreatedByPersonAliasId;

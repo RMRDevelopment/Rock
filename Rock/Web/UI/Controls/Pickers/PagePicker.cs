@@ -20,14 +20,16 @@ using System.ComponentModel;
 using System.Linq;
 using System.Web.UI;
 using System.Web.UI.WebControls;
+
 using Rock.Constants;
 using Rock.Data;
 using Rock.Model;
+using Rock.Web.Cache;
 
 namespace Rock.Web.UI.Controls
 {
     /// <summary>
-    /// 
+    /// Control that can be used to select a page
     /// </summary>
     public class PagePicker : ItemPicker
     {
@@ -65,7 +67,7 @@ namespace Rock.Web.UI.Controls
             {
                 if ( ViewState["PromptForPageRoute"] != null )
                 {
-                    return (bool)ViewState["PromptForPageRoute"];
+                    return ( bool ) ViewState["PromptForPageRoute"];
                 }
 
                 // default to true
@@ -104,14 +106,90 @@ namespace Rock.Web.UI.Controls
             set
             {
                 ViewState["HiddenPageIds"] = value;
-                if ( value != null && value.Length > 0 )
+                UpdateItemRestUrlExtraParams();
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the site type.
+        /// </summary>
+        /// <value>
+        /// The site type.
+        /// </value>
+        [
+        Bindable( true ),
+        Category( "Behavior" ),
+        Description( "Narrow the pages to the specified site type." )
+        ]
+        public SiteType? SiteType
+        {
+            get
+            {
+                var result = ViewState["SiteType"];
+                if ( result == null )
                 {
-                    this.ItemRestUrlExtraParams = "?hidePageIds=" + System.Web.HttpUtility.UrlEncode( value.ToList().AsDelimited( "," ) );
+                    return null;
                 }
-                else
+
+                return ( Rock.Model.SiteType ) Convert.ToInt32( result );
+            }
+
+            set
+            {
+                ViewState["SiteType"] = value.ConvertToInt();
+                UpdateItemRestUrlExtraParams();
+            }
+        }
+
+        private void UpdateItemRestUrlExtraParams()
+        {
+            var extraParams = "";
+
+            if ( SiteType != null )
+            {
+                extraParams = $"siteType={SiteType.ConvertToInt().ToString()}";
+            }
+
+            if ( HiddenPageIds != null && HiddenPageIds.Length > 0 )
+            {
+                if ( extraParams.IsNotNullOrWhiteSpace() )
                 {
-                    this.ItemRestUrlExtraParams = string.Empty;
+                    extraParams += "&";
                 }
+                extraParams += $"hidePageIds={System.Web.HttpUtility.UrlEncode( HiddenPageIds.ToList().AsDelimited( "," ) )}";
+            }
+
+            ItemRestUrlExtraParams = $"?{extraParams}";
+        }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether [show select current page].
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [show select current page]; otherwise, <c>false</c>.
+        /// </value>
+        [
+        Bindable( true ),
+        Category( "Behavior" ),
+        DefaultValue( "true" ),
+        Description( "Should the option to select the current page be displayed?" )
+        ]
+        public bool ShowSelectCurrentPage
+        {
+            get
+            {
+                if ( ViewState["ShowSelectCurrentPage"] != null )
+                {
+                    return ( bool ) ViewState["ShowSelectCurrentPage"];
+                }
+
+                // default to true
+                return true;
+            }
+
+            set
+            {
+                ViewState["ShowSelectCurrentPage"] = value;
             }
         }
 
@@ -142,17 +220,17 @@ namespace Rock.Web.UI.Controls
         {
             string scriptFormat = @"
 
-                $('#{0}').click(function () {{
-                    $('#page-route-picker_{3}').find('.js-page-route-picker-menu').toggle(function () {{
+                $('#{0}').on('click', function () {{
+                    $('#page-route-picker_{3}').find('.js-page-route-picker-menu').toggle(0, function () {{
                         Rock.dialogs.updateModalScrollBar('page-route-picker_{3}');
                     }});
                 }});
 
-                $('#{1}').click(function () {{
+                $('#{1}').on('click', function () {{
                     $(this).closest('.picker-menu').slideUp();
                 }});
 
-                $('#{2}').click(function () {{
+                $('#{2}').on('click', function () {{
                     $(this).closest('.picker-menu').slideUp();
                 }});";
 
@@ -420,14 +498,17 @@ namespace Rock.Web.UI.Controls
             _btnCancelPageRoute.ID = string.Format( "btnCancelPageRoute_{0}", this.ID );
             _btnCancelPageRoute.Text = "Cancel";
 
-            _btnSelectCurrentPage = new LinkButton();
-            _btnSelectCurrentPage.ID = this.ID + "_btnSelectCurrentPage";
-            _btnSelectCurrentPage.CssClass = "btn btn-xs btn-link pull-right";
-            _btnSelectCurrentPage.Text = "<i class='fa fa-file-o'></i>";
-            _btnSelectCurrentPage.ToolTip = "Select Current Page";
-            _btnSelectCurrentPage.CausesValidation = false;
-            _btnSelectCurrentPage.Click += _btnSelectCurrentPage_Click;
-            Controls.Add( _btnSelectCurrentPage );
+            if ( ShowSelectCurrentPage )
+            {
+                _btnSelectCurrentPage = new LinkButton();
+                _btnSelectCurrentPage.ID = this.ID + "_btnSelectCurrentPage";
+                _btnSelectCurrentPage.CssClass = "btn btn-xs btn-link pull-right";
+                _btnSelectCurrentPage.Text = "<i class='fa fa-file-o'></i>";
+                _btnSelectCurrentPage.ToolTip = "Select Current Page";
+                _btnSelectCurrentPage.CausesValidation = false;
+                _btnSelectCurrentPage.Click += _btnSelectCurrentPage_Click;
+                Controls.Add( _btnSelectCurrentPage );
+            }
 
             Controls.Add( _hfPageRouteId );
             Controls.Add( _rblSelectPageRoute );
@@ -449,10 +530,14 @@ namespace Rock.Web.UI.Controls
             {
                 // if the BlockProperties block is the current block, we'll treat the page that this block properties is for as the current page
                 int blockId = rockBlock.PageParameter( "BlockId" ).AsInteger();
-                var block = new BlockService( new RockContext() ).Get( blockId );
-                if ( block != null )
+                var block = BlockCache.Get( blockId );
+                if ( block?.PageId != null )
                 {
                     pageId = block.PageId;
+                }
+                else
+                {
+                    pageId = rockBlock.PageParameter( "CurrentPageId" ).AsIntegerOrNull();
                 }
             }
             else
@@ -477,7 +562,10 @@ namespace Rock.Web.UI.Controls
         {
             base.RenderCustomPickerActions( writer );
 
-            _btnSelectCurrentPage.RenderControl( writer );
+            if ( ShowSelectCurrentPage )
+            {
+                _btnSelectCurrentPage.RenderControl( writer );
+            }
         }
 
         /// <summary>
@@ -496,7 +584,7 @@ namespace Rock.Web.UI.Controls
         }
 
         /// <summary>
-        /// This is where you implment the simple aspects of rendering your control.  The rest
+        /// This is where you implement the simple aspects of rendering your control.  The rest
         /// will be handled by calling RenderControlHelper's RenderControl() method.
         /// </summary>
         /// <param name="writer">The writer.</param>

@@ -23,8 +23,6 @@ using System.Linq;
 using Rock.Attribute;
 using Rock.Data;
 using Rock.Model;
-using Rock.Security;
-using Rock.Web.Cache;
 
 namespace Rock.Workflow.Action
 {
@@ -58,7 +56,7 @@ namespace Rock.Workflow.Action
 
             // Get the connection request
             ConnectionRequest request = null;
-            Guid connectionRequestGuid = action.GetWorklowAttributeValue( GetAttributeValue( action, "ConnectionRequestAttribute" ).AsGuid() ).AsGuid();
+            Guid connectionRequestGuid = action.GetWorkflowAttributeValue( GetAttributeValue( action, "ConnectionRequestAttribute" ).AsGuid() ).AsGuid();
             request = new ConnectionRequestService( rockContext ).Get( connectionRequestGuid );
             if ( request == null )
             {
@@ -72,7 +70,7 @@ namespace Rock.Workflow.Action
             Guid? connectionStatusAttributeGuid = GetAttributeValue( action, "ConnectionStatusAttribute" ).AsGuidOrNull();
             if ( connectionStatusAttributeGuid.HasValue )
             {
-                connectionStatusGuid = action.GetWorklowAttributeValue( connectionStatusAttributeGuid.Value ).AsGuidOrNull();
+                connectionStatusGuid = action.GetWorkflowAttributeValue( connectionStatusAttributeGuid.Value ).AsGuidOrNull();
                 if ( connectionStatusGuid.HasValue )
                 {
                     status = request.ConnectionOpportunity.ConnectionType.ConnectionStatuses

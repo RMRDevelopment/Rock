@@ -190,8 +190,7 @@ namespace RockWeb.Blocks.CheckIn.Config
 
                     rockContext.SaveChanges();
 
-                    GroupTypeCache.Flush( parentGroupType.Id );
-                    Rock.CheckIn.KioskDevice.FlushAll();
+                    Rock.CheckIn.KioskDevice.Clear();
 
                     SelectArea( newGuid );
                 }
@@ -233,8 +232,7 @@ namespace RockWeb.Blocks.CheckIn.Config
 
                     rockContext.SaveChanges();
 
-                    GroupTypeCache.Flush( parentArea.Id );
-                    Rock.CheckIn.KioskDevice.FlushAll();
+                    Rock.CheckIn.KioskDevice.Clear();
 
                     SelectArea( newGuid );
                 }
@@ -268,8 +266,7 @@ namespace RockWeb.Blocks.CheckIn.Config
 
                     rockContext.SaveChanges();
 
-                    GroupTypeCache.Flush( parentArea.Id );
-                    Rock.CheckIn.KioskDevice.FlushAll();
+                    Rock.CheckIn.KioskDevice.Clear();
 
                     SelectGroup( newGuid );
                 }
@@ -305,7 +302,7 @@ namespace RockWeb.Blocks.CheckIn.Config
 
                     rockContext.SaveChanges();
 
-                    Rock.CheckIn.KioskDevice.FlushAll();
+                    Rock.CheckIn.KioskDevice.Clear();
 
                     SelectGroup( newGuid );
                 }
@@ -339,7 +336,7 @@ namespace RockWeb.Blocks.CheckIn.Config
                     else
                     {
                         var attendanceQry = new AttendanceService( rockContext ).Queryable();
-                        var didAttend = attendanceQry.Where( a => a.GroupId == group.Id ).Any();
+                        var didAttend = attendanceQry.Where( a => a.Occurrence.GroupId == group.Id ).Any();
 
                         if ( !didAttend )
                         {
@@ -352,7 +349,7 @@ namespace RockWeb.Blocks.CheckIn.Config
                     }
                     rockContext.SaveChanges();
 
-                    Rock.CheckIn.KioskDevice.FlushAll();
+                    Rock.CheckIn.KioskDevice.Clear();
 
                     SelectGroup( null );
                 }
@@ -527,15 +524,11 @@ namespace RockWeb.Blocks.CheckIn.Config
                             rockContext.SaveChanges();
                             groupType.SaveAttributeValues( rockContext );
 
-                            bool AttributesUpdated = false;
-
                             // rebuild the CheckinLabel attributes from the UI (brute-force)
                             foreach ( var labelAttribute in CheckinArea.GetCheckinLabelAttributes( groupType.Attributes ) )
                             {
                                 var attribute = attributeService.Get( labelAttribute.Value.Guid );
-                                Rock.Web.Cache.AttributeCache.Flush( attribute.Id );
                                 attributeService.Delete( attribute );
-                                AttributesUpdated = true;
                             }
 
                             // Make sure default role is set
@@ -547,7 +540,7 @@ namespace RockWeb.Blocks.CheckIn.Config
                             rockContext.SaveChanges();
 
                             int labelOrder = 0;
-                            int binaryFileFieldTypeID = FieldTypeCache.Read( Rock.SystemGuid.FieldType.LABEL.AsGuid() ).Id;
+                            int binaryFileFieldTypeID = FieldTypeCache.Get( Rock.SystemGuid.FieldType.LABEL.AsGuid() ).Id;
                             foreach ( var checkinLabelAttributeInfo in checkinArea.CheckinLabels )
                             {
                                 var attribute = new Rock.Model.Attribute();
@@ -568,19 +561,11 @@ namespace RockWeb.Blocks.CheckIn.Config
                                 }
 
                                 attributeService.Add( attribute );
-                                AttributesUpdated = true;
-
                             }
 
                             rockContext.SaveChanges();
 
-                            GroupTypeCache.Flush( groupType.Id );
-                            Rock.CheckIn.KioskDevice.FlushAll();
-
-                            if ( AttributesUpdated )
-                            {
-                                AttributeCache.FlushEntityAttributes();
-                            }
+                            Rock.CheckIn.KioskDevice.Clear();
 
                             nbSaveSuccess.Visible = true;
                             BuildRows();
@@ -607,6 +592,8 @@ namespace RockWeb.Blocks.CheckIn.Config
                         var newLocationIds = checkinGroup.Locations.Select( l => l.LocationId ).ToList();
                         foreach ( var groupLocation in group.GroupLocations.Where( l => !newLocationIds.Contains( l.LocationId ) ).ToList() )
                         {
+                            groupLocation.GroupLocationScheduleConfigs.Clear();
+
                             groupLocationService.Delete( groupLocation );
                             group.GroupLocations.Remove( groupLocation );
                         }
@@ -631,7 +618,7 @@ namespace RockWeb.Blocks.CheckIn.Config
                             rockContext.SaveChanges();
                             group.SaveAttributeValues( rockContext );
 
-                            Rock.CheckIn.KioskDevice.FlushAll();
+                            Rock.CheckIn.KioskDevice.Clear();
                             nbSaveSuccess.Visible = true;
                             BuildRows();
                         }
@@ -647,7 +634,7 @@ namespace RockWeb.Blocks.CheckIn.Config
         }
 
         /// <summary>
-        /// Handels the Delete button click
+        /// Handles the Delete button click
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
@@ -682,8 +669,7 @@ namespace RockWeb.Blocks.CheckIn.Config
                         groupType.ChildGroupTypes.Clear();
                         groupTypeService.Delete( groupType );
                         rockContext.SaveChanges();
-                        GroupTypeCache.Flush( id );
-                        Rock.CheckIn.KioskDevice.FlushAll();
+                        Rock.CheckIn.KioskDevice.Clear();
 
                     }
                     SelectArea( null );
@@ -706,7 +692,7 @@ namespace RockWeb.Blocks.CheckIn.Config
 
                         groupService.Delete( group ); //Delete if group isn't active
                         rockContext.SaveChanges();
-                        Rock.CheckIn.KioskDevice.FlushAll();
+                        Rock.CheckIn.KioskDevice.Clear();
                         SelectGroup( null );
                     }
                 }
@@ -716,7 +702,7 @@ namespace RockWeb.Blocks.CheckIn.Config
         }
 
         /// <summary>
-        /// Handels the the Check Changed event of the Show Inactive button.
+        /// Handles the Check Changed event of the Show Inactive button.
         /// </summary>
         /// <param name="sender">The source of the event.</param>
         /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
@@ -939,12 +925,7 @@ namespace RockWeb.Blocks.CheckIn.Config
                 rockContext.SaveChanges();
             }
 
-            foreach ( int id in groupTypeIds )
-            {
-                GroupTypeCache.Flush( id );
-            }
-
-            Rock.CheckIn.KioskDevice.FlushAll();
+            Rock.CheckIn.KioskDevice.Clear();
 
             BuildRows();
         }
@@ -1129,7 +1110,7 @@ namespace RockWeb.Blocks.CheckIn.Config
             string script = string.Format( @"
     window.addEventListener('beforeunload', function(e) {{
         if ( $('#{0}').val() == 'true' ) {{
-            return 'You have not saved your changes. Are you sure you want to continue?';    
+            return 'You have not saved your changes. Are you sure you want to continue?';
         }}
         return;
     }});
@@ -1148,7 +1129,7 @@ namespace RockWeb.Blocks.CheckIn.Config
         return false;
     }}
 
-    $('#{1}').click( function() {{
+    $('#{1}').on('click', function() {{
         if ( isDirty() ) {{
             return false;
         }}

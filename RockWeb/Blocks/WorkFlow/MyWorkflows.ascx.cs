@@ -45,7 +45,13 @@ namespace RockWeb.Blocks.WorkFlow
     {
         #region Fields
 
+        /// <summary>
+        /// The role toggle setting
+        /// True = 'Initiated By Me',
+        /// False = 'Assigned To Me'
+        /// </summary>
         private const string ROLE_TOGGLE_SETTING = "MyWorkflows_RoleToggle";
+
         private const string DISPLAY_TOGGLE_SETTING = "MyWorkflows_DisplayToggle";
 
         #endregion
@@ -54,6 +60,14 @@ namespace RockWeb.Blocks.WorkFlow
 
         protected bool? StatusFilter { get; set; }
 
+        /// <summary>
+        /// Gets or sets the role filter.
+        /// True = 'Initiated By Me',
+        /// False = 'Assigned To Me'
+        /// </summary>
+        /// <value>
+        /// The role filter.
+        /// </value>
         protected bool? RoleFilter { get; set; }
 
         protected int? SelectedWorkflowTypeId { get; set; }
@@ -118,7 +132,7 @@ namespace RockWeb.Blocks.WorkFlow
         {
             base.OnLoad( e );
 
-            RockPage.AddScriptLink( ResolveRockUrl( "~/Scripts/jquery.visible.min.js" ) );
+            RockPage.AddScriptLink( "~/Scripts/jquery.visible.min.js" );
 
             if ( !Page.IsPostBack )
             {
@@ -236,13 +250,17 @@ namespace RockWeb.Blocks.WorkFlow
             if ( workflow != null )
             {
                 var qryParam = new Dictionary<string, string>();
-                qryParam.Add( "WorkflowId", workflow.Id.ToString() );
+                
                 if ( tglRole.Checked )
                 {
+                    // 'Initiated By Me'
+                    qryParam.Add( "WorkflowId", workflow.Id.ToString() );
                     NavigateToLinkedPage( "DetailPage", qryParam );
                 }
                 else
                 {
+                    // 'Assigned To Me'
+                    qryParam.Add( "WorkflowGuid", workflow.Guid.ToString() );
                     qryParam.Add( "WorkflowTypeId", workflow.WorkflowTypeId.ToString() );
                     NavigateToLinkedPage( "EntryPage", qryParam );
                 }
@@ -299,6 +317,7 @@ namespace RockWeb.Blocks.WorkFlow
 
             if ( RoleFilter.HasValue && RoleFilter.Value )
             {
+                // 'Initiated By Me'
                 workflows = new WorkflowService( rockContext ).Queryable()
                     .Where( w =>
                         w.ActivatedDateTime.HasValue &&
@@ -311,7 +330,7 @@ namespace RockWeb.Blocks.WorkFlow
             }
             else
             {
-                // Get all the active forms for any of the authorized activities
+                // 'Assigned To Me'. Get all the active forms for any of the authorized activities
                 var activeForms = new WorkflowActionService( rockContext ).Queryable( "ActionType.ActivityType.WorkflowType, Activity.Workflow" )
                     .Where( a =>
                         a.ActionType.WorkflowFormId.HasValue &&
@@ -328,7 +347,7 @@ namespace RockWeb.Blocks.WorkFlow
                     )
                     .ToList();
 
-                // Get any workflow types that have authorized activites and get the form count
+                // Get any workflow types that have authorized activities and get the form count
                 workflowTypeIds.ForEach( w =>
                     workflowTypeCounts.Add( w, activeForms.Where( a => a.Activity.Workflow.WorkflowTypeId == w ).Count() ) );
 
@@ -411,7 +430,7 @@ namespace RockWeb.Blocks.WorkFlow
 
             foreach ( var workflowType in allWorkflowTypes )
             {
-                if ( ( workflowType.IsActive ?? true ) && workflowType.IsAuthorized( Authorization.VIEW, CurrentPerson ) )
+                if ( workflowType.IsActive == true  && workflowType.IsAuthorized( Authorization.VIEW, CurrentPerson ) )
                 {
                     foreach ( var activityType in workflowType.ActivityTypes.Where( a => a.ActionTypes.Any( f => f.WorkflowFormId.HasValue ) ) )
                     {
@@ -457,7 +476,7 @@ namespace RockWeb.Blocks.WorkFlow
                         boundField.AttributeId = attribute.Id;
                         boundField.HeaderText = attribute.Name;
 
-                        var attributeCache = Rock.Web.Cache.AttributeCache.Read( attribute.Id );
+                        var attributeCache = Rock.Web.Cache.AttributeCache.Get( attribute.Id );
                         if ( attributeCache != null )
                         {
                             boundField.ItemStyle.HorizontalAlign = attributeCache.FieldType.Field.AlignValue;

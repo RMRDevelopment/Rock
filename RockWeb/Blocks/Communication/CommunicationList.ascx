@@ -21,29 +21,31 @@
                         <Rock:RockDropDownList ID="ddlType" runat="server" Label="Communication Type" />
                         <Rock:RockDropDownList ID="ddlStatus" runat="server" Label="Status" />
                         <Rock:PersonPicker ID="ppSender" runat="server" Label="Created By" />
-                        <Rock:DateRangePicker ID="drpDates" runat="server" Label="Date Range" Help="Note: Leaving dates blank will default to last 7 days." />
+                        <Rock:DateRangePicker ID="drpCreatedDates" runat="server" Label="Created Date Range" Help="Note: Leaving dates blank will default to last 7 days." />
+                        <Rock:DateRangePicker ID="drpSentDates" runat="server" Label="Sent Date Range" />
                         <Rock:RockTextBox ID="tbContent" runat="server" Label="Content" />
                     </Rock:GridFilter>
 
-                    <Rock:Grid ID="gCommunication" runat="server" AllowSorting="true" OnRowSelected="gCommunication_RowSelected" OnRowDataBound="gCommunication_RowDataBound">
+                    <Rock:Grid ID="gCommunication" runat="server" AllowSorting="true" OnRowSelected="gCommunication_RowSelected" OnRowDataBound="gCommunication_RowDataBound" PageSizes="50,500">
                         <Columns>
-                            <Rock:RockBoundField DataField="Subject" SortExpression="Subject" HeaderText="Subject" />
-                            <Rock:EnumField DataField="CommunicationType" SortExpression="CommunicationType" HeaderText="Type" />
-                            <Rock:DateTimeField DataField="CreatedDateTime" SortExpression="CreatedDateTime" ColumnPriority="DesktopLarge" HeaderText="Created" />
-                            <Rock:RockBoundField DataField="Sender.FullName" HeaderText="Created By" SortExpression="Sender.LastName,Sender.NickName" />
-                            <Rock:EnumField DataField="Status" SortExpression="Status" HeaderText="Status" />
-                            <Rock:DateTimeField DataField="ReviewedDateTime" SortExpression="ReviewedDateTime" ColumnPriority="DesktopLarge" HeaderText="Reviewed" />
-                            <Rock:RockBoundField DataField="Reviewer.FullName" HeaderText="Reviewed By" ColumnPriority="DesktopLarge" SortExpression="Reviewer.LastName,Reviewer.NickName"  />
-                            <Rock:RockTemplateField HeaderText="Recipients" ItemStyle-HorizontalAlign="Center" SortExpression="Recipients">
+                             <Rock:RockTemplateField SortExpression="CommunicationType" >
                                 <ItemTemplate>
-                                    <span class="badge badge-success" title="Opened" data-toggle="tooltip" style='<%# (int)Eval("OpenedRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("OpenedRecipients") %></span>
-                                    <span class="badge badge-info" title="Delivered" data-toggle="tooltip" style='<%# (int)Eval("DeliveredRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("DeliveredRecipients") %></span>
-                                    <span class="badge badge-none" title="Pending" data-toggle="tooltip" style='<%# (int)Eval("PendingRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("PendingRecipients") %></span>
-                                    <span class="badge badge-warning" title="Cancelled" data-toggle="tooltip" style='<%# (int)Eval("CancelledRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("CancelledRecipients") %></span>
-                                    <span class="badge badge-danger" title="Failed" data-toggle="tooltip" style='<%# (int)Eval("FailedRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("FailedRecipients") %></span>
+                                   <div class="text-center"><i class="<%# Eval( "TypeIconCssClass" ) %>"></i></div>
                                 </ItemTemplate>
                             </Rock:RockTemplateField>
-                            <Rock:RockLiteralField HeaderText="" ID="lEmailAnalyticsLink" HeaderStyle-CssClass="grid-columncommand" ItemStyle-CssClass="grid-columncommand" />
+                            <Rock:RockBoundField DataField="Subject" SortExpression="Subject" HeaderText="Subject" />
+                            <Rock:EnumField DataField="Status" SortExpression="Status" HeaderText="Status" />
+                            <Rock:RockLiteralField HeaderText="Details" ID="lDetails" HeaderStyle-CssClass="grid-columncommand" ItemStyle-CssClass="grid-columncommand" />
+                            <Rock:RockBoundField  DataField="SendDateTimeFormat" HtmlEncode="false" HeaderStyle-HorizontalAlign="Right" ItemStyle-HorizontalAlign="Right" SortExpression="SendDateTime" ColumnPriority="Desktop" HeaderText="Sent" />
+                            <Rock:RockTemplateField HeaderText="Recipients" HeaderStyle-HorizontalAlign="Center" ItemStyle-HorizontalAlign="Center" SortExpression="Recipients">
+                                <ItemTemplate>
+                                    <span class="badge badge-success" title="Opened" style='<%# (int)Eval("OpenedRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("OpenedRecipients") %></span>
+                                    <span class="badge badge-info" title="Delivered" style='<%# (int)Eval("DeliveredRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("DeliveredRecipients") %></span>
+                                    <span class="badge badge-none" title="Pending" style='<%# (int)Eval("PendingRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("PendingRecipients") %></span>
+                                    <span class="badge badge-warning" title="Cancelled" style='<%# (int)Eval("CancelledRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("CancelledRecipients") %></span>
+                                    <span class="badge badge-danger" title="Failed" style='<%# (int)Eval("FailedRecipients") > 0 ? "display:inline-block" : "display:none" %>'><%# Eval("FailedRecipients") %></span>
+                                </ItemTemplate>
+                            </Rock:RockTemplateField>
                             <Rock:DeleteField OnClick="gCommunication_Delete" />
                         </Columns>
                     </Rock:Grid>

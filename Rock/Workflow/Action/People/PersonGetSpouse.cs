@@ -18,8 +18,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
-using System.Linq;
 using System.Data.Entity;
+using System.Linq;
 
 using Rock;
 using Rock.Attribute;
@@ -55,8 +55,8 @@ namespace Rock.Workflow.Action
 
             var adultRoleGuid = SystemGuid.GroupRole.GROUPROLE_FAMILY_MEMBER_ADULT.AsGuid();
 
-            var maritalStatusMarried = DefinedValueCache.Read( SystemGuid.DefinedValue.PERSON_MARITAL_STATUS_MARRIED.AsGuid() );
-            var familyGroupType = GroupTypeCache.Read( SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() );
+            var maritalStatusMarried = DefinedValueCache.Get( SystemGuid.DefinedValue.PERSON_MARITAL_STATUS_MARRIED.AsGuid() );
+            var familyGroupType = GroupTypeCache.Get( SystemGuid.GroupType.GROUPTYPE_FAMILY.AsGuid() );
             var adultRole = familyGroupType.Roles.Where( r => r.Guid == adultRoleGuid ).FirstOrDefault();
 
             var person = GetPersonAliasFromActionAttribute("Person", rockContext, action, errorMessages);
@@ -98,10 +98,10 @@ namespace Rock.Workflow.Action
             Guid guidPersonAttribute = value.AsGuid();
             if (!guidPersonAttribute.IsEmpty())
             {
-                var attributePerson = AttributeCache.Read( guidPersonAttribute, rockContext );
+                var attributePerson = AttributeCache.Get( guidPersonAttribute, rockContext );
                 if (attributePerson != null)
                 {
-                    string attributePersonValue = action.GetWorklowAttributeValue(guidPersonAttribute);
+                    string attributePersonValue = action.GetWorkflowAttributeValue(guidPersonAttribute);
                     if (!string.IsNullOrWhiteSpace(attributePersonValue))
                     {
                         if (attributePerson.FieldType.Class == "Rock.Field.Types.PersonFieldType")

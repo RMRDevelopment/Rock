@@ -33,9 +33,16 @@ namespace RockWeb.Blocks.Core
     [Category( "Core" )]
     [Description( "Displays a list of all campuses." )]
 
-    [LinkedPage( "Detail Page" )]
+    [LinkedPage( "Detail Page",
+        Key = AttributeKey.DetailPage )]
+
     public partial class Campuses : RockBlock, ICustomGridColumns
     {
+        public static class AttributeKey
+        {
+            public const string DetailPage = "DetailPage";
+        }
+
         #region fields
 
         /// <summary>
@@ -120,7 +127,7 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="EventArgs" /> instance containing the event data.</param>
         protected void gCampuses_Add( object sender, EventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "campusId", 0 );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "CampusId", 0 );
         }
 
         /// <summary>
@@ -130,7 +137,7 @@ namespace RockWeb.Blocks.Core
         /// <param name="e">The <see cref="RowEventArgs" /> instance containing the event data.</param>
         protected void gCampuses_Edit( object sender, RowEventArgs e )
         {
-            NavigateToLinkedPage( "DetailPage", "campusId", e.RowKeyId );
+            NavigateToLinkedPage( AttributeKey.DetailPage, "CampusId", e.RowKeyId );
         }
 
         /// <summary>
@@ -158,8 +165,6 @@ namespace RockWeb.Blocks.Core
                     mdGridWarning.Show( errorMessage, ModalAlertType.Information );
                     return;
                 }
-
-                CampusCache.Flush( campus.Id );
 
                 campusService.Delete( campus );
                 rockContext.SaveChanges();
@@ -192,8 +197,6 @@ namespace RockWeb.Blocks.Core
             {
                 new CampusService( rockContext ).Reorder( campuses, e.OldIndex, e.NewIndex );
                 rockContext.SaveChanges();
-
-                campuses.ForEach( t => CampusCache.Flush( t.Id ) );
             }
 
             BindGrid();
@@ -219,7 +222,7 @@ namespace RockWeb.Blocks.Core
                 .OrderBy( a => a.Order )
                 .ThenBy( a => a.Name ) )
             {
-                AvailableAttributes.Add( AttributeCache.Read( attributeModel ) );
+                AvailableAttributes.Add( AttributeCache.Get( attributeModel ) );
             }
         }
 
@@ -246,7 +249,7 @@ namespace RockWeb.Blocks.Core
                         boundField.AttributeId = attribute.Id;
                         boundField.HeaderText = attribute.Name;
 
-                        var attributeCache = Rock.Web.Cache.AttributeCache.Read( attribute.Id );
+                        var attributeCache = Rock.Web.Cache.AttributeCache.Get( attribute.Id );
                         if ( attributeCache != null )
                         {
                             boundField.ItemStyle.HorizontalAlign = attributeCache.FieldType.Field.AlignValue;

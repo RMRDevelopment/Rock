@@ -14,10 +14,10 @@
 // limitations under the License.
 // </copyright>
 //
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.Serialization;
-
-using Newtonsoft.Json;
 
 namespace Rock.CheckIn
 {
@@ -25,7 +25,7 @@ namespace Rock.CheckIn
     /// Object for maintaining the state of a check-in kiosk and workflow
     /// </summary>
     [DataContract]
-    public class CheckInState 
+    public class CheckInState
     {
         /// <summary>
         /// Gets or sets the device id
@@ -45,13 +45,18 @@ namespace Rock.CheckIn
         [DataMember]
         public int? CheckinTypeId
         {
-            get { return _checkinTypeId; }
+            get
+            {
+                return _checkinTypeId;
+            }
+
             set
             {
                 _checkinTypeId = value;
                 _checkinType = null;
             }
         }
+
         private int? _checkinTypeId;
 
         /// <summary>
@@ -72,6 +77,7 @@ namespace Rock.CheckIn
                 if ( CheckinTypeId.HasValue )
                 {
                     _checkinType = new CheckinType( CheckinTypeId.Value );
+
                     return _checkinType;
                 }
 
@@ -96,7 +102,16 @@ namespace Rock.CheckIn
         public bool ManagerLoggedIn { get; set; }
 
         /// <summary>
-        /// Gets or sets the configured group types.
+        /// Gets a value indicating whether checkout is allowed
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if [allow checkout]; otherwise, <c>false</c>.
+        /// </value>
+        [DataMember]
+        public bool AllowCheckout { get; private set; }
+
+        /// <summary>
+        /// Gets or sets the configured group types (Checkin Areas)
         /// </summary>
         /// <value>
         /// The configured group types.
@@ -114,7 +129,7 @@ namespace Rock.CheckIn
         {
             get
             {
-                return KioskDevice.Read( DeviceId, ConfiguredGroupTypes );
+                return KioskDevice.Get( DeviceId, ConfiguredGroupTypes );
             }
         }
 
@@ -128,17 +143,42 @@ namespace Rock.CheckIn
         public CheckInStatus CheckIn { get; set; }
 
         /// <summary>
+        /// Gets or sets the messages.
+        /// </summary>
+        /// <value>
+        /// The messages.
+        /// </value>
+        public List<CheckInMessage> Messages { get; set; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="CheckInState" /> class.
         /// </summary>
         /// <param name="deviceId">The device id.</param>
         /// <param name="checkinTypeId">The checkin type identifier.</param>
         /// <param name="configuredGroupTypes">The configured group types.</param>
+        [RockObsolete( "1.11" )]
+        [Obsolete( "Use the other constructor" )]
         public CheckInState( int deviceId, int? checkinTypeId, List<int> configuredGroupTypes )
         {
             DeviceId = deviceId;
             CheckinTypeId = checkinTypeId;
             ConfiguredGroupTypes = configuredGroupTypes;
             CheckIn = new CheckInStatus();
+            Messages = new List<CheckInMessage>();
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CheckInState"/> class.
+        /// </summary>
+        /// <param name="localDeviceConfiguration">The local device configuration.</param>
+        public CheckInState( LocalDeviceConfiguration localDeviceConfiguration )
+        {
+            DeviceId = localDeviceConfiguration.CurrentKioskId ?? 0;
+            CheckinTypeId = localDeviceConfiguration.CurrentCheckinTypeId;
+            AllowCheckout = localDeviceConfiguration.AllowCheckout ?? this.CheckInType?.AllowCheckoutDefault ?? false;
+            ConfiguredGroupTypes = ( localDeviceConfiguration.CurrentGroupTypeIds == null ) ? new List<int>() : localDeviceConfiguration.CurrentGroupTypeIds.ToList();
+            CheckIn = new CheckInStatus();
+            Messages = new List<CheckInMessage>();
         }
 
         /// <summary>
@@ -146,11 +186,11 @@ namespace Rock.CheckIn
         /// </summary>
         /// <param name="json">The json.</param>
         /// <returns></returns>
+        [RockObsolete( "1.10" )]
+        [Obsolete( "use the FromJson() string extension instead" )]
         public static CheckInState FromJson( string json )
         {
-            return JsonConvert.DeserializeObject( json, typeof( CheckInState ) ) as CheckInState;
-          
+            return json.FromJsonOrNull<CheckInState>();
         }
-
     }
 }
